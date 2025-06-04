@@ -310,7 +310,16 @@
                         </div>
                         <div class="card-body">
                             <div x-data="radiotrackingConfig()" x-init="init()">
-                                <form @submit.prevent="saveConfig">
+                                <!-- Loading State -->
+                                <div x-show="!configLoaded" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <div class="mt-2">Loading configuration...</div>
+                                </div>
+
+                                <!-- Configuration Form -->
+                                <form x-show="configLoaded" @submit.prevent="saveConfig">
                                     <!-- RTL-SDR Section -->
                                     <div class="mb-4">
                                         <h6 class="border-bottom pb-2">RTL-SDR Settings</h6>
@@ -324,7 +333,8 @@
                                                         <label class="form-label">Number of Devices</label>
                                                         <select class="form-select" 
                                                                 x-model="deviceCount"
-                                                                @change="updateDeviceList">
+                                                                @change="updateDeviceList"
+                                                                x-bind:disabled="!configLoaded">
                                                             <template x-for="i in 8" :key="i">
                                                                 <option :value="i" x-text="i"></option>
                                                             </template>
@@ -342,130 +352,137 @@
                                                     <h6 class="mb-0">Devices</h6>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-primary" 
-                                                            @click="addDevice">
+                                                            @click="addDevice"
+                                                            x-bind:disabled="!configLoaded">
                                                         Add Device
                                                     </button>
                                                 </div>
                                                 <div class="form-text mb-3">
                                                     Configure multiple RTL-SDR devices. Each device needs a device index and calibration offset.
                                                 </div>
-                                                <template x-for="(device, index) in config.rtl_sdr.device" :key="index">
-                                                    <div class="card mb-2">
-                                                        <div class="card-body">
-                                                            <div class="row align-items-center">
-                                                                <div class="col-md-5">
-                                                                    <label class="form-label">Device Index</label>
-                                                                    <input type="text" 
-                                                                           class="form-control" 
-                                                                           x-model="config.rtl_sdr.device[index]"
-                                                                           :placeholder="index.toString()"
-                                                                           required>
-                                                                </div>
-                                                                <div class="col-md-5">
-                                                                    <label class="form-label">Calibration Offset (dBm)</label>
-                                                                    <input type="number" 
-                                                                           class="form-control" 
-                                                                           x-model.number="config.rtl_sdr.calibration[index]"
-                                                                           step="0.1"
-                                                                           required>
-                                                                    <div class="form-text">Signal strength calibration offset in dBm</div>
-                                                                </div>
-                                                                <div class="col-md-2 d-flex align-items-end">
-                                                                    <button type="button" 
-                                                                            class="btn btn-outline-danger w-100"
-                                                                            @click="removeDevice(index)"
-                                                                            :disabled="config.rtl_sdr.device.length <= 1">
-                                                                        Remove
-                                                                    </button>
+                                                <template x-if="configLoaded">
+                                                    <template x-for="(device, index) in config['rtl-sdr'].device" :key="index">
+                                                        <div class="card mb-2">
+                                                            <div class="card-body">
+                                                                <div class="row align-items-center">
+                                                                    <div class="col-md-5">
+                                                                        <label class="form-label">Device Index</label>
+                                                                        <input type="text" 
+                                                                               class="form-control" 
+                                                                               x-model="config['rtl-sdr'].device[index]"
+                                                                               :placeholder="index.toString()"
+                                                                               required>
+                                                                    </div>
+                                                                    <div class="col-md-5">
+                                                                        <label class="form-label">Calibration Offset (dBm)</label>
+                                                                        <input type="number" 
+                                                                               class="form-control" 
+                                                                               x-model.number="config['rtl-sdr'].calibration[index]"
+                                                                               step="0.1"
+                                                                               required>
+                                                                        <div class="form-text">Signal strength calibration offset in dBm</div>
+                                                                    </div>
+                                                                    <div class="col-md-2 d-flex align-items-end">
+                                                                        <button type="button" 
+                                                                                class="btn btn-outline-danger w-100"
+                                                                                @click="removeDevice(index)"
+                                                                                :disabled="!configLoaded || config['rtl-sdr'].device.length <= 1">
+                                                                            Remove
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </template>
                                                 </template>
                                             </div>
                                         </div>
 
                                         <!-- Common Settings -->
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Center Frequency (MHz)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="centerFreqMHz"
-                                                           min="24"
-                                                           max="1766"
-                                                           step="0.001"
-                                                           @input="updateCenterFreq"
-                                                           required>
-                                                    <div class="form-text">Center frequency in MHz (24-1766 MHz)</div>
+                                        <template x-if="configLoaded">
+                                            <div>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Center Frequency (MHz)</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model.number="centerFreqMHz"
+                                                                   min="24"
+                                                                   max="1766"
+                                                                   step="0.001"
+                                                                   @input="updateCenterFreq"
+                                                                   required>
+                                                            <div class="form-text">Center frequency in MHz (24-1766 MHz)</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Sample Rate (kHz)</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model.number="sampleRateKHz"
+                                                                   min="230"
+                                                                   max="3200"
+                                                                   step="1"
+                                                                   @input="updateSampleRate"
+                                                                   required>
+                                                            <div class="form-text">Must be either 230-300 kHz or 900-3200 kHz</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="row">
+                                                    <div class="col-md-3">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">LNA Gain Stage</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model.number="config['rtl-sdr'].lna_gain"
+                                                                   min="0"
+                                                                   max="15"
+                                                                   required>
+                                                            <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Mixer Gain Stage</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model.number="config['rtl-sdr'].mixer_gain"
+                                                                   min="0"
+                                                                   max="15"
+                                                                   required>
+                                                            <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">VGA Gain Stage</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model.number="config['rtl-sdr'].vga_gain"
+                                                                   min="0"
+                                                                   max="15"
+                                                                   required>
+                                                            <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Gain (deprecated)</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model.number="config['rtl-sdr'].gain"
+                                                                   min="0"
+                                                                   step="0.1"
+                                                                   required>
+                                                            <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Sample Rate (kHz)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="sampleRateKHz"
-                                                           min="230"
-                                                           max="3200"
-                                                           step="1"
-                                                           @input="updateSampleRate"
-                                                           required>
-                                                    <div class="form-text">Must be either 230-300 kHz or 900-3200 kHz</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">LNA Gain Stage</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config.rtl_sdr.lna_gain"
-                                                           min="0"
-                                                           max="15"
-                                                           required>
-                                                    <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Mixer Gain Stage</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config.rtl_sdr.mixer_gain"
-                                                           min="0"
-                                                           max="15"
-                                                           required>
-                                                    <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">VGA Gain Stage</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config.rtl_sdr.vga_gain"
-                                                           min="0"
-                                                           max="15"
-                                                           required>
-                                                    <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Gain (deprecated)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config.rtl_sdr.gain"
-                                                           min="0"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        </template>
 
                                         <!-- Expert Mode RTL-SDR Settings -->
                                         <div x-show="expertMode" x-transition>
@@ -475,7 +492,7 @@
                                                         <label class="form-label">Max Restart Attempts</label>
                                                         <input type="number" 
                                                                class="form-control" 
-                                                               x-model.number="config.rtl_sdr.sdr_max_restart"
+                                                               x-model.number="config['rtl-sdr'].sdr_max_restart"
                                                                min="0"
                                                                required>
                                                         <div class="form-text">Maximum number of restart attempts for the RTL-SDR device</div>
@@ -486,7 +503,7 @@
                                                         <label class="form-label">Timeout (seconds)</label>
                                                         <input type="number" 
                                                                class="form-control" 
-                                                               x-model.number="config.rtl_sdr.sdr_timeout_s"
+                                                               x-model.number="config['rtl-sdr'].sdr_timeout_s"
                                                                min="0.1"
                                                                step="0.1"
                                                                required>
@@ -507,9 +524,10 @@
                                                     <label class="form-label">Signal Threshold (dBW)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.analysis.signal_threshold_dbw"
+                                                           x-model.number="config['analysis'].signal_threshold_dbw"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Minimum signal power level to trigger detection. Lower values (e.g., -100 dBW) detect weaker signals but may increase noise. Typical range: -100 to -80 dBW.</div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -517,33 +535,36 @@
                                                     <label class="form-label">SNR Threshold (dB)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.analysis.snr_threshold_db"
+                                                           x-model.number="config['analysis'].snr_threshold_db"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Signal-to-Noise Ratio threshold for valid detection. Higher values reduce false positives but may miss weak signals. Typical range: 3-8 dB.</div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="mb-3">
-                                                    <label class="form-label">Min Signal Duration (ms)</label>
+                                                    <label class="form-label">Minimum Signal Duration (ms)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.analysis.signal_min_duration_ms"
+                                                           x-model.number="config['analysis'].signal_min_duration_ms"
                                                            min="0"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Minimum duration for a valid signal. Filters out brief noise spikes. For radio tags, typically 5-15 ms depending on tag pulse characteristics.</div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="mb-3">
-                                                    <label class="form-label">Max Signal Duration (ms)</label>
+                                                    <label class="form-label">Maximum Signal Duration (ms)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.analysis.signal_max_duration_ms"
+                                                           x-model.number="config['analysis'].signal_max_duration_ms"
                                                            min="0"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Maximum duration for a valid signal. Prevents detection of continuous interference. For radio tags, typically 20-80 ms depending on tag specifications.</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -556,24 +577,24 @@
                                                         <label class="form-label">FFT Segment Size</label>
                                                         <input type="number" 
                                                                class="form-control" 
-                                                               x-model.number="config.analysis.fft_nperseg"
+                                                               x-model.number="config['analysis'].fft_nperseg"
                                                                min="1"
                                                                required>
-                                                        <div class="form-text">Size of FFT segments for signal analysis</div>
+                                                        <div class="form-text">Number of samples per FFT segment. Larger values improve frequency resolution but reduce time resolution. Power of 2 values (256, 512, 1024) are most efficient. Typical: 256-1024.</div>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">FFT Window</label>
                                                         <select class="form-select" 
-                                                                x-model="config.analysis.fft_window"
+                                                                x-model="config['analysis'].fft_window"
                                                                 required>
                                                             <option value="hamming">Hamming</option>
                                                             <option value="hanning">Hanning</option>
                                                             <option value="blackman">Blackman</option>
                                                             <option value="bartlett">Bartlett</option>
                                                         </select>
-                                                        <div class="form-text">Window function used for FFT analysis</div>
+                                                        <div class="form-text">Window function for FFT analysis. Hamming provides good balance of frequency resolution and spectral leakage reduction. Blackman has better leakage suppression but lower resolution.</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -583,16 +604,20 @@
                                     <!-- Matching Section -->
                                     <div class="mb-4">
                                         <h6 class="border-bottom pb-2">Signal Matching</h6>
+                                        <div class="form-text mb-3">
+                                            Signal matching identifies the same radio signal detected across multiple SDR devices. This enables signal confirmation, reduces false positives, and supports triangulation for location tracking.
+                                        </div>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="mb-3">
                                                     <label class="form-label">Matching Timeout (s)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.matching.matching_timeout_s"
+                                                           x-model.number="config['matching'].matching_timeout_s"
                                                            min="0"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Maximum time to wait for matching signals from other SDRs. Longer timeouts catch more matches but increase processing delay. Typical: 1-5 seconds.</div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -600,22 +625,26 @@
                                                     <label class="form-label">Time Difference (s)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.matching.matching_time_diff_s"
+                                                           x-model.number="config['matching'].matching_time_diff_s"
                                                            min="0"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Maximum time difference between signals to be considered a match. Accounts for clock drift and processing delays between SDRs. Typical: 0.1-1.0 seconds.</div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="mb-3">
-                                                    <label class="form-label">Bandwidth (Hz)</label>
+                                                    <label class="form-label">Bandwidth (kHz)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.matching.matching_bandwidth_hz"
-                                                           min="0"
+                                                           x-model.number="bandwidthKHz"
+                                                           min="0.1"
+                                                           step="0.1"
+                                                           @input="updateBandwidth"
                                                            required>
+                                                    <div class="form-text">Frequency tolerance for matching signals. Allows for Doppler shift, oscillator drift, and frequency estimation errors. For VHF tags, typical: 2-8 kHz.</div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -623,10 +652,11 @@
                                                     <label class="form-label">Duration Difference (ms)</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.matching.matching_duration_diff_ms"
+                                                           x-model.number="config['matching'].matching_duration_diff_ms"
                                                            min="0"
                                                            step="0.1"
                                                            required>
+                                                    <div class="form-text">Maximum difference in signal duration to be considered a match. Accounts for varying signal strength and detection thresholds across SDRs. Typical: 2-10 ms.</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -640,14 +670,39 @@
                                             <small class="text-muted ms-2">(Expert Mode)</small>
                                         </h6>
                                         <div class="row">
-                                            <div class="col-md-6">
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">&nbsp;</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config['publish'].csv" 
+                                                               id="csv">
+                                                        <label class="form-check-label" for="csv">CSV Export</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-9">
                                                 <div class="mb-3">
                                                     <label class="form-label">Data Path</label>
                                                     <input type="text" 
                                                            class="form-control" 
-                                                           x-model="config.publish.path"
+                                                           x-model="config['publish'].path"
                                                            required>
-                                                    <div class="form-text">Directory for storing data files</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">&nbsp;</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config['publish'].mqtt" 
+                                                               id="mqtt">
+                                                        <label class="form-check-label" for="mqtt">MQTT</label>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -655,18 +710,16 @@
                                                     <label class="form-label">MQTT Host</label>
                                                     <input type="text" 
                                                            class="form-control" 
-                                                           x-model="config.publish.mqtt_host"
+                                                           x-model="config['publish'].mqtt_host"
                                                            required>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
+                                            <div class="col-md-3">
                                                 <div class="mb-3">
                                                     <label class="form-label">MQTT Port</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.publish.mqtt_port"
+                                                           x-model.number="config['publish'].mqtt_port"
                                                            min="1"
                                                            max="65535"
                                                            required>
@@ -674,47 +727,25 @@
                                             </div>
                                         </div>
                                         <div class="row">
-                                            <div class="col-md-3">
+                                            <div class="col-md-6">
                                                 <div class="mb-3">
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" 
                                                                type="checkbox" 
-                                                               x-model="config.publish.sig_stdout" 
+                                                               x-model="config['publish'].sig_stdout" 
                                                                id="sig_stdout">
                                                         <label class="form-check-label" for="sig_stdout">Signal to stdout</label>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-6">
                                                 <div class="mb-3">
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" 
                                                                type="checkbox" 
-                                                               x-model="config.publish.match_stdout" 
+                                                               x-model="config['publish'].match_stdout" 
                                                                id="match_stdout">
                                                         <label class="form-check-label" for="match_stdout">Matches to stdout</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config.publish.csv" 
-                                                               id="csv">
-                                                        <label class="form-check-label" for="csv">CSV Export</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config.publish.mqtt" 
-                                                               id="mqtt">
-                                                        <label class="form-check-label" for="mqtt">MQTT</label>
                                                     </div>
                                                 </div>
                                             </div>
@@ -729,48 +760,47 @@
                                             <small class="text-muted ms-2">(Expert Mode)</small>
                                         </h6>
                                         <div class="row">
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="mb-3">
+                                                    <label class="form-label">&nbsp;</label>
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" 
                                                                type="checkbox" 
-                                                               x-model="config.dashboard.dashboard" 
+                                                               x-model="config['dashboard'].dashboard" 
                                                                id="dashboard">
                                                         <label class="form-check-label" for="dashboard">Enable Dashboard</label>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="mb-3">
                                                     <label class="form-label">Host</label>
                                                     <input type="text" 
                                                            class="form-control" 
-                                                           x-model="config.dashboard.dashboard_host"
+                                                           x-model="config['dashboard'].dashboard_host"
                                                            required>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="mb-3">
                                                     <label class="form-label">Port</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.dashboard.dashboard_port"
+                                                           x-model.number="config['dashboard'].dashboard_port"
                                                            min="1"
                                                            max="65535"
                                                            required>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
+                                            <div class="col-md-3">
                                                 <div class="mb-3">
                                                     <label class="form-label">Max Signals</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.dashboard.dashboard_signals"
+                                                           x-model.number="config['dashboard'].dashboard_signals"
                                                            min="1"
                                                            required>
-                                                    <div class="form-text">Maximum number of signals to display in dashboard</div>
+                                                    <div class="form-text">Maximum number of signals to display</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -784,15 +814,15 @@
                                             <small class="text-muted ms-2">(Expert Mode)</small>
                                         </h6>
                                         <div class="row">
-                                            <div class="col-md-6">
+                                            <div class="col-md-3">
                                                 <div class="mb-3">
                                                     <label class="form-label">Verbose Level</label>
                                                     <input type="number" 
                                                            class="form-control" 
-                                                           x-model.number="config.optional_arguments.verbose"
+                                                           x-model.number="config['optional arguments'].verbose"
                                                            min="0"
                                                            required>
-                                                    <div class="form-text">Set the verbosity level (0 = quiet, higher = more verbose)</div>
+                                                    <div class="form-text">(0=warning, 1=info, 2=debug)</div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -800,20 +830,23 @@
                                                     <label class="form-label">Station Name</label>
                                                     <input type="text" 
                                                            class="form-control" 
-                                                           x-model="config.optional_arguments.station"
+                                                           x-model="config['optional arguments'].station"
                                                            placeholder="Optional station identifier">
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div class="mb-3">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" 
-                                                       type="checkbox" 
-                                                       x-model="config.optional_arguments.calibrate" 
-                                                       id="calibrate">
-                                                <label class="form-check-label" for="calibrate">Calibration Mode</label>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">&nbsp;</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config['optional arguments'].calibrate" 
+                                                               id="calibrate">
+                                                        <label class="form-check-label" for="calibrate">Calibration Mode</label>
+                                                    </div>
+                                                    <div class="form-text">Enable calibration mode for the radio receiver</div>
+                                                </div>
                                             </div>
-                                            <div class="form-text">Enable calibration mode for the radio receiver</div>
                                         </div>
                                     </div>
 
@@ -821,11 +854,13 @@
                                     <div class="d-flex justify-content-end gap-2">
                                         <button type="button" 
                                                 class="btn btn-outline-secondary" 
-                                                @click="loadConfig()">
+                                                @click="resetConfig()"
+                                                :disabled="!configLoaded">
                                             Reset
                                         </button>
                                         <button type="submit" 
-                                                class="btn btn-success">
+                                                class="btn btn-success"
+                                                :disabled="!configLoaded">
                                             Save Configuration
                                         </button>
                                 </div>
@@ -836,10 +871,11 @@
             </div>
         </div>
     </div>
+    </div>
     </main>
 
     <!-- Footer -->
-    <footer class="footer mt-auto bg-light">
+    <footer class="footer mt-3 bg-light">
         <div class="container py-3">
             <div class="row align-items-center h-100">
                 <div class="col-sm py-2">
@@ -1019,70 +1055,45 @@
                 },
 
                 async loadConfig() {
-                    console.log('loadConfig called');
                     try {
-                        // Clear any existing message before loading
-                        this.message = '';
-                        this.error = false;
-                        this.warning = false;
-
-                        console.log('Fetching schedule config from server...');
-                        const response = await fetch('/api/schedule', {
-                            method: 'GET',
-                            headers: {
-                                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                                'Pragma': 'no-cache',
-                                'Expires': '0'
-                            }
-                        });
-                        console.log('Server response:', response.status);
-                        
+                        const response = await fetch('/api/schedule');
                         if (response.status === 404) {
-                            // Initialize with default values when no config exists
+                            // Set default configuration for schedule
                             this.config = {
-                                lat: 0.0,
-                                lon: 0.0,
+                                lat: 40.7128,
+                                lon: -74.0060,
                                 force_on: false,
-                                button_delay: "00:00",
+                                button_delay: "01:00",
                                 schedule: []
                             };
-                            this.warning = true;
-                            this.showMessage("No configuration found. Please set up your schedule and save it.", false);
+                            this.updateMarkerFromInputs();
+                            this.showMessage("No schedule configuration found. Using default values.", false);
                             return;
                         }
-                        
                         if (!response.ok) {
-                            const error = await response.json();
-                            throw new Error(error.detail || 'Failed to load configuration');
+                            throw new Error('Failed to load schedule configuration');
                         }
-                        
                         const data = await response.json();
-                        console.log('Received data:', data);
+                        this.config = data;
                         
-                        // Process schedule entries to split time strings
-                        data.schedule = data.schedule.map(entry => {
-                            const start = this.parseTimeString(entry.start);
-                            const stop = this.parseTimeString(entry.stop);
-                            return {
-                                ...entry,
-                                startReference: start.reference,
-                                startOffset: start.offset,
-                                startSign: start.sign,
-                                stopReference: stop.reference,
-                                stopOffset: stop.offset,
-                                stopSign: stop.sign
-                            };
+                        // Process schedule entries to add UI helper properties
+                        this.config.schedule.forEach(entry => {
+                            const startParts = this.parseTimeString(entry.start);
+                            entry.startReference = startParts.reference;
+                            entry.startSign = startParts.sign;
+                            entry.startOffset = startParts.offset;
+                            
+                            const stopParts = this.parseTimeString(entry.stop);
+                            entry.stopReference = stopParts.reference;
+                            entry.stopSign = stopParts.sign;
+                            entry.stopOffset = stopParts.offset;
                         });
                         
-                        // Update the config with new data
-                        this.config = { ...data };  // Create a new object to ensure reactivity
-                        
                         // Update map if it exists
-                        if (this.map) {
+                        if (this.map && this.marker) {
                             this.updateMarkerFromInputs();
                         }
                     } catch (error) {
-                        console.error('Error loading schedule config:', error);
                         this.showMessage(error.message, true);
                     }
                 },
@@ -1198,13 +1209,31 @@
                         });
                         if (!response.ok) {
                             const error = await response.json();
-                            throw new Error(error.detail?.message || 'Failed to save schedule configuration');
+                            console.error('Detailed error:', error);
+                            let errorMessage = error.detail?.message || 'Failed to save schedule configuration';
+                            if (error.detail?.errors) {
+                                errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                            }
+                            if (error.detail?.validation_errors) {
+                                const validationErrors = error.detail.validation_errors.map(err => 
+                                    `${err.loc.join('.')}: ${err.msg}`
+                                ).join(', ');
+                                errorMessage += '\nValidation errors: ' + validationErrors;
+                            }
+                            throw new Error(errorMessage);
                         }
                         const data = await response.json();
                         this.showMessage(data.message, false);  // false means not an error, so it will be success
                     } catch (error) {
                         this.showMessage(error.message, true);
                     }
+                },
+
+                showMessage(message, isError) {
+                    // Dispatch a custom event that the parent can listen for
+                    window.dispatchEvent(new CustomEvent('show-message', {
+                        detail: { message, isError }
+                    }));
                 }
             }
         }
@@ -1212,65 +1241,142 @@
         function radiotrackingConfig() {
             return {
                 config: {
-                    optional_arguments: {
-                        verbose: 0,
-                        calibrate: false,
-                        config: '/boot/firmware/radiotracking.ini',
-                        station: null,
-                        schedule: []
-                    },
-                    rtl_sdr: {
-                        device: ['0'],
-                        calibration: [0.0],
-                        center_freq: 150155000,
-                        sample_rate: 300000,
+                    "rtl-sdr": {
+                        device: [],
+                        calibration: [],
+                        center_freq: 0,
+                        sample_rate: 0,
                         sdr_callback_length: null,
-                        gain: 49.6,
-                        lna_gain: 15,
-                        mixer_gain: 14,
-                        vga_gain: 7,
-                        sdr_max_restart: 3,
-                        sdr_timeout_s: 2
+                        lna_gain: 0,
+                        mixer_gain: 0,
+                        vga_gain: 0,
+                        gain: 0,
+                        sdr_max_restart: 0,
+                        sdr_timeout_s: 0
                     },
-                    analysis: {
-                        fft_nperseg: 256,
-                        fft_window: 'hamming',
-                        signal_threshold_dbw: -95.0,
-                        snr_threshold_db: 3.0,
-                        signal_min_duration_ms: 8.0,
-                        signal_max_duration_ms: 50.0
+                    "analysis": {
+                        signal_threshold_dbw: 0,
+                        snr_threshold_db: 0,
+                        signal_min_duration_ms: 0,
+                        signal_max_duration_ms: 0,
+                        fft_nperseg: 0,
+                        fft_window: ""
                     },
-                    matching: {
-                        matching_timeout_s: 2.0,
-                        matching_time_diff_s: 0.1,
-                        matching_bandwidth_hz: 4000,
-                        matching_duration_diff_ms: 5.0
+                    "matching": {
+                        matching_timeout_s: 0,
+                        matching_time_diff_s: 0,
+                        matching_bandwidth_hz: 0,
+                        matching_duration_diff_ms: 0
                     },
-                    publish: {
+                    "publish": {
+                        path: "",
+                        mqtt_host: "",
+                        mqtt_port: 0,
                         sig_stdout: false,
                         match_stdout: false,
-                        path: 'data',
-                        csv: true,
+                        csv: false,
                         export_config: true,
-                        mqtt: true,
-                        mqtt_host: 'localhost',
-                        mqtt_port: 1883
+                        mqtt: false
                     },
-                    dashboard: {
-                        dashboard: true,
-                        dashboard_host: 'localhost',
-                        dashboard_port: 8050,
-                        dashboard_signals: 100
+                    "dashboard": {
+                        dashboard: false,
+                        dashboard_host: "",
+                        dashboard_port: 0,
+                        dashboard_signals: 0
+                    },
+                    "optional arguments": {
+                        verbose: 0,
+                        calibrate: false,
+                        config: "/boot/firmware/radiotracking.ini",
+                        station: null,
+                        schedule: []
                     }
                 },
+                configLoaded: false,
                 deviceCount: 1,
+                isLoading: true,
+
+                dispatchMessage(message, isError) {
+                    // Dispatch a custom event that the parent can listen for
+                    window.dispatchEvent(new CustomEvent('show-message', {
+                        detail: { message, isError }
+                    }));
+                },
+
+                addDevice() {
+                    // Add a new device with default values
+                    if (!this.configLoaded) return;
+                    this.config["rtl-sdr"].device.push('0');
+                    this.config["rtl-sdr"].calibration.push(0.0);
+                },
+
+                removeDevice(index) {
+                    // Only remove if there's more than one device
+                    if (!this.configLoaded) return;
+                    if (this.config["rtl-sdr"].device.length > 1) {
+                        this.config["rtl-sdr"].device.splice(index, 1);
+                        this.config["rtl-sdr"].calibration.splice(index, 1);
+                    }
+                },
+
+                updateDeviceList() {
+                    // Update device list based on deviceCount
+                    if (!this.configLoaded) return;
+                    
+                    const currentLength = this.config["rtl-sdr"].device.length;
+                    const targetLength = parseInt(this.deviceCount);
+                    
+                    if (targetLength > currentLength) {
+                        // Add new devices
+                        for (let i = currentLength; i < targetLength; i++) {
+                            this.config["rtl-sdr"].device.push(i.toString());
+                            this.config["rtl-sdr"].calibration.push(0.0);
+                        }
+                    } else if (targetLength < currentLength) {
+                        // Remove devices
+                        this.config["rtl-sdr"].device.splice(targetLength);
+                        this.config["rtl-sdr"].calibration.splice(targetLength);
+                    }
+                },
+
+                init() {
+                    // Load configuration when component is initialized
+                    this.loadConfig();
+                },
+
+                async loadConfig() {
+                    try {
+                        this.isLoading = true;
+                        this.configLoaded = false;
+                        const response = await fetch('/api/radiotracking');
+                        if (response.status === 404) {
+                            this.dispatchMessage("No radio tracking configuration found. Please create a configuration file first.", true);
+                            this.isLoading = false;
+                            return;
+                        }
+                        if (!response.ok) {
+                            throw new Error('Failed to load radio tracking configuration');
+                        }
+                        const data = await response.json();
+                        // Update the existing config object instead of replacing it
+                        Object.assign(this.config, data);
+                        this.configLoaded = true;
+                        this.deviceCount = this.config["rtl-sdr"].device.length;
+                    } catch (error) {
+                        this.dispatchMessage(error.message, true);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
 
                 // Add computed property for center frequency in MHz
                 get centerFreqMHz() {
-                    return this.config.rtl_sdr.center_freq / 1000000;
+                    if (!this.configLoaded) return 0;
+                    return this.config["rtl-sdr"].center_freq / 1000000;
                 },
                 set centerFreqMHz(value) {
-                    this.config.rtl_sdr.center_freq = Math.round(value * 1000000);
+                    if (!this.configLoaded) return;
+                    this.config["rtl-sdr"].center_freq = Math.round(value * 1000000);
                 },
 
                 // Add method to update center frequency
@@ -1286,10 +1392,33 @@
 
                 // Add computed property for sample rate in kHz
                 get sampleRateKHz() {
-                    return Math.round(this.config.rtl_sdr.sample_rate / 1000);
+                    if (!this.configLoaded) return 0;
+                    return Math.round(this.config["rtl-sdr"].sample_rate / 1000);
                 },
                 set sampleRateKHz(value) {
-                    this.config.rtl_sdr.sample_rate = value * 1000;
+                    if (!this.configLoaded) return;
+                    this.config["rtl-sdr"].sample_rate = value * 1000;
+                },
+
+                // Add method to update center frequency
+                updateCenterFreq() {
+                    // Ensure the value is within valid ranges
+                    const value = this.centerFreqMHz;
+                    if (value < 24) {
+                        this.centerFreqMHz = 24;
+                    } else if (value > 1766) {
+                        this.centerFreqMHz = 1766;
+                    }
+                },
+
+                // Add computed property for bandwidth in kHz
+                get bandwidthKHz() {
+                    if (!this.configLoaded) return 0;
+                    return this.config["matching"].matching_bandwidth_hz / 1000;
+                },
+                set bandwidthKHz(value) {
+                    if (!this.configLoaded) return;
+                    this.config["matching"].matching_bandwidth_hz = Math.round(value * 1000);
                 },
 
                 updateSampleRate() {
@@ -1307,165 +1436,101 @@
                     }
                 },
 
-                init() {
-                    // Initialize device count based on current device list length
-                    this.deviceCount = this.config.rtl_sdr.device.length;
-                },
-
-                updateDeviceList() {
-                    // Update device list based on selected count
-                    const currentLength = this.config.rtl_sdr.device.length;
-                    const targetLength = this.deviceCount;
-
-                    if (targetLength > currentLength) {
-                        // Add devices
-                        for (let i = currentLength; i < targetLength; i++) {
-                            this.config.rtl_sdr.device.push(i.toString());
-                            this.config.rtl_sdr.calibration.push(0.0);
-                        }
-                    } else if (targetLength < currentLength) {
-                        // Remove devices
-                        this.config.rtl_sdr.device = this.config.rtl_sdr.device.slice(0, targetLength);
-                        this.config.rtl_sdr.calibration = this.config.rtl_sdr.calibration.slice(0, targetLength);
+                updateBandwidth() {
+                    // Ensure the value is valid (minimum 0.1 kHz)
+                    const value = this.bandwidthKHz;
+                    if (value < 0.1) {
+                        this.bandwidthKHz = 0.1;
                     }
                 },
 
-                async loadConfig() {
-                    try {
-                        // Initialize with default values first
-                        this.config = {
-                            optional_arguments: {
-                                verbose: 0,
-                                calibrate: false,
-                                config: '/boot/firmware/radiotracking.ini',
-                                station: null,
-                                schedule: []
-                            },
-                            rtl_sdr: {
-                                device: ['0'],
-                                calibration: [0.0],
-                                center_freq: 150155000,
-                                sample_rate: 300000,
-                                sdr_callback_length: null,
-                                gain: 49.6,
-                                lna_gain: 15,
-                                mixer_gain: 14,
-                                vga_gain: 7,
-                                sdr_max_restart: 3,
-                                sdr_timeout_s: 2
-                            },
-                            analysis: {
-                                fft_nperseg: 256,
-                                fft_window: 'hamming',
-                                signal_threshold_dbw: -95.0,
-                                snr_threshold_db: 3.0,
-                                signal_min_duration_ms: 8.0,
-                                signal_max_duration_ms: 50.0
-                            },
-                            matching: {
-                                matching_timeout_s: 2.0,
-                                matching_time_diff_s: 0.1,
-                                matching_bandwidth_hz: 4000,
-                                matching_duration_diff_ms: 5.0
-                            },
-                            publish: {
-                                sig_stdout: false,
-                                match_stdout: false,
-                                path: 'data',
-                                csv: true,
-                                export_config: true,
-                                mqtt: true,
-                                mqtt_host: 'localhost',
-                                mqtt_port: 1883
-                            },
-                            dashboard: {
-                                dashboard: true,
-                                dashboard_host: 'localhost',
-                                dashboard_port: 8050,
-                                dashboard_signals: 100
-                            }
-                        };
-
-                        const response = await fetch('/api/radiotracking');
-                        if (response.status === 404) {
-                            this.dispatchMessage("No radio tracking configuration found. Please set up your configuration and save it.", false);
-                            return;
-                        }
-                        if (!response.ok) {
-                            throw new Error('Failed to load radio tracking configuration');
-                        }
-                        const data = await response.json();
-                        
-                        // Deep merge the loaded data with our default config
-                        this.config = this.deepMerge(this.config, data);
-
-                        // Initialize device count after loading config
-                        this.deviceCount = this.config.rtl_sdr.device.length;
-                    } catch (error) {
-                        this.dispatchMessage(error.message, true);
-                    }
-                },
-
-                deepMerge(target, source) {
-                    const output = { ...target };
-                    if (this.isObject(target) && this.isObject(source)) {
-                        Object.keys(source).forEach(key => {
-                            if (this.isObject(source[key])) {
-                                if (!(key in target)) {
-                                    Object.assign(output, { [key]: source[key] });
-                                } else {
-                                    output[key] = this.deepMerge(target[key], source[key]);
-                                }
-                            } else {
-                                Object.assign(output, { [key]: source[key] });
-                            }
-                        });
-                    }
-                    return output;
-                },
-
-                isObject(item) {
-                    return (item && typeof item === 'object' && !Array.isArray(item));
+                async resetConfig() {
+                    // Reset by reloading from file
+                    await this.loadConfig();
                 },
 
                 async saveConfig() {
                     try {
+                        // Convert the frontend config format to the API format
+                        const apiConfig = {
+                            optional_arguments: {
+                                verbose: this.config["optional arguments"].verbose,
+                                calibrate: this.config["optional arguments"].calibrate,
+                                config: "/boot/firmware/radiotracking.ini", // Required field
+                                station: this.config["optional arguments"].station || null,
+                                schedule: this.config["optional arguments"].schedule || []
+                            },
+                            rtl_sdr: {
+                                device: this.config["rtl-sdr"].device,
+                                calibration: this.config["rtl-sdr"].calibration,
+                                center_freq: this.config["rtl-sdr"].center_freq,
+                                sample_rate: this.config["rtl-sdr"].sample_rate,
+                                sdr_callback_length: this.config["rtl-sdr"].sdr_callback_length,
+                                gain: this.config["rtl-sdr"].gain,
+                                lna_gain: this.config["rtl-sdr"].lna_gain,
+                                mixer_gain: this.config["rtl-sdr"].mixer_gain,
+                                vga_gain: this.config["rtl-sdr"].vga_gain,
+                                sdr_max_restart: this.config["rtl-sdr"].sdr_max_restart,
+                                sdr_timeout_s: this.config["rtl-sdr"].sdr_timeout_s
+                            },
+                            analysis: {
+                                fft_nperseg: this.config["analysis"].fft_nperseg,
+                                fft_window: this.config["analysis"].fft_window,
+                                signal_threshold_dbw: this.config["analysis"].signal_threshold_dbw,
+                                snr_threshold_db: this.config["analysis"].snr_threshold_db,
+                                signal_min_duration_ms: this.config["analysis"].signal_min_duration_ms,
+                                signal_max_duration_ms: this.config["analysis"].signal_max_duration_ms
+                            },
+                            matching: {
+                                matching_timeout_s: this.config["matching"].matching_timeout_s,
+                                matching_time_diff_s: this.config["matching"].matching_time_diff_s,
+                                matching_bandwidth_hz: this.config["matching"].matching_bandwidth_hz,
+                                matching_duration_diff_ms: this.config["matching"].matching_duration_diff_ms
+                            },
+                            publish: {
+                                sig_stdout: this.config["publish"].sig_stdout,
+                                match_stdout: this.config["publish"].match_stdout,
+                                path: this.config["publish"].path,
+                                csv: this.config["publish"].csv,
+                                export_config: this.config["publish"].export_config || true,
+                                mqtt: this.config["publish"].mqtt,
+                                mqtt_host: this.config["publish"].mqtt_host,
+                                mqtt_port: this.config["publish"].mqtt_port
+                            },
+                            dashboard: {
+                                dashboard: this.config["dashboard"].dashboard,
+                                dashboard_host: this.config["dashboard"].dashboard_host,
+                                dashboard_port: this.config["dashboard"].dashboard_port,
+                                dashboard_signals: this.config["dashboard"].dashboard_signals
+                            }
+                        };
+
                         const response = await fetch('/api/radiotracking', {
                             method: 'PUT',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify(this.config)
+                            body: JSON.stringify(apiConfig)
                         });
                         if (!response.ok) {
                             const error = await response.json();
-                            throw new Error(error.detail?.message || 'Failed to save radio tracking configuration');
+                            console.error('Detailed error:', error);
+                            let errorMessage = error.detail?.message || 'Failed to save radio tracking configuration';
+                            if (error.detail?.errors) {
+                                errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                            }
+                            if (error.detail?.validation_errors) {
+                                const validationErrors = error.detail.validation_errors.map(err => 
+                                    `${err.loc.join('.')}: ${err.msg}`
+                                ).join(', ');
+                                errorMessage += '\nValidation errors: ' + validationErrors;
+                            }
+                            throw new Error(errorMessage);
                         }
                         const data = await response.json();
-                        this.dispatchMessage(data.message, false);
+                        this.dispatchMessage(data.message, false);  // false means not an error, so it will be success
                     } catch (error) {
                         this.dispatchMessage(error.message, true);
-                    }
-                },
-
-                dispatchMessage(message, isError) {
-                    // Dispatch a custom event that the parent can listen for
-                    window.dispatchEvent(new CustomEvent('show-message', {
-                        detail: { message, isError }
-                    }));
-                },
-
-                addDevice() {
-                    // Add a new device with default values
-                    this.config.rtl_sdr.device.push('0');
-                    this.config.rtl_sdr.calibration.push(0.0);
-                },
-
-                removeDevice(index) {
-                    // Only remove if there's more than one device
-                    if (this.config.rtl_sdr.device.length > 1) {
-                        this.config.rtl_sdr.device.splice(index, 1);
-                        this.config.rtl_sdr.calibration.splice(index, 1);
                     }
                 }
             }

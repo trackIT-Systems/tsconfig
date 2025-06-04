@@ -93,12 +93,19 @@ class RadioTrackingConfig(BaseConfig):
     def config_file(self) -> Path:
         return self.config_dir / "radiotracking.ini"
 
-    def _convert_value(self, value: str) -> Union[str, int, float, bool, List[str], List[float]]:
+    def _convert_value(self, value: str) -> Union[str, int, float, bool, List[str], List[float], None]:
         """Convert string value from INI to appropriate Python type."""
+        # Handle None values
+        if value.lower() == "none":
+            return None
+
         # Handle lists
         if value.startswith("[") and value.endswith("]"):
             # Remove brackets and split by comma
             items = value[1:-1].split(",")
+            # Special handling for device lists - keep as strings
+            if all(item.strip().isdigit() for item in items):
+                return [item.strip() for item in items]
             # Try to convert each item to float, if fails keep as string
             try:
                 return [float(item.strip()) for item in items]
