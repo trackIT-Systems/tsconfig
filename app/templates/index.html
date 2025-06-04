@@ -20,225 +20,822 @@
     <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
+        .nav-tabs .nav-link { color: #495057; }
+        .nav-tabs .nav-link.active { 
+            font-weight: 500;
+            color: #0d6efd;
+            background-color: #fff;
+            border-color: #dee2e6 #dee2e6 #fff;
+        }
+        .navbar .nav-link.active {
+            color: #fff !important;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 0.25rem;
+        }
+        .navbar .nav-link {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        .navbar .nav-link:hover {
+            color: #fff !important;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 0.25rem;
+        }
+        .config-section { display: none; }
+        .config-section.active { display: block; }
     </style>
 </head>
 <body class="d-flex flex-column h-100">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="/">{{ title }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#schedule" 
+                           @click.prevent="activeConfig = 'schedule'"
+                           :class="{ 'active': activeConfig === 'schedule', 'fw-bold': activeConfig === 'schedule' }">
+                            Schedule
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#radiotracking" 
+                           @click.prevent="activeConfig = 'radiotracking'"
+                           :class="{ 'active': activeConfig === 'radiotracking', 'fw-bold': activeConfig === 'radiotracking' }">
+                            Radio Tracking
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
     </nav>
 
     <main>
-        <div class="container mt-4">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">Schedule Configuration</h5>
-                </div>
-                <div class="card-body">
-                    <div x-data="configManager()" x-init="loadConfig(); initMap()">
-                        <!-- Alert for messages -->
-                        <template x-if="message !== ''">
-                            <div x-cloak
-                                 x-transition
-                                 x-init="if (message && !error) setTimeout(() => message = '', 10000)"
-                                 :class="{'alert-success': !error, 'alert-danger': error}"
-                                 class="alert d-flex justify-content-between align-items-center" 
-                                 role="alert">
-                                <span x-text="message"></span>
-                                <button type="button" 
-                                        class="btn-close" 
-                                        x-on:click="message = ''; error = false"
-                                        aria-label="Close">
-                                </button>
-                            </div>
-                        </template>
+    <div class="container mt-4">
+            <div x-data="configManager()" x-init="init()">
+                <!-- Alert for messages -->
+                <template x-if="message !== ''">
+                    <div x-cloak
+                         x-transition
+                         x-init="if (message && !error && !warning) setTimeout(() => message = '', 10000)"
+                         :class="{
+                             'alert-success': !error && !warning,
+                             'alert-danger': error,
+                             'alert-warning': warning
+                         }"
+                         class="alert d-flex justify-content-between align-items-center" 
+                         role="alert">
+                        <span x-text="message"></span>
+                        <button type="button" 
+                                class="btn-close" 
+                                x-on:click="message = ''; error = false; warning = false"
+                                aria-label="Close">
+                        </button>
+                    </div>
+                </template>
 
-                        <!-- Main Configuration Form -->
-                        <form @submit.prevent="saveConfig">
-                            <div class="row">
-                                <!-- Left Column -->
-                                <div class="col-md-4">
-                                    <!-- Location -->
-                                    <div class="mb-3">
-                                        <h6>Location</h6>
-                                        <div class="form-text mb-2">
-                                            This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and golden/blue hours for scheduling.
+                <!-- Schedule Configuration -->
+                <div x-show="activeConfig === 'schedule'" x-cloak>
+                <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Schedule Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                            <div x-data="scheduleConfig()" x-init="loadConfig(); initMap()">
+                                <!-- Schedule Configuration Form -->
+                            <form @submit.prevent="saveConfig">
+                                    <div class="row">
+                                        <!-- Left Column -->
+                                        <div class="col-md-4">
+                                <!-- Location -->
+                                <div class="mb-3">
+                                    <h6>Location</h6>
+                                                <div class="form-text mb-2">
+                                                    This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and golden/blue hours for scheduling.
+                                                </div>
+                                    <div class="row">
+                                                    <div class="col-6">
+                                            <label class="form-label">Latitude</label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   x-model="config.lat" 
+                                                               @input="updateMarkerFromInputs()"
+                                                               step="0.00000001" 
+                                                               max="90"
+                                                               min="-90"
+                                                   required>
                                         </div>
-                                        <div class="row">
-                                            <div class="col-6">
-                                                <label class="form-label">Latitude</label>
-                                                <input type="number" 
-                                                       class="form-control" 
-                                                       x-model="config.lat" 
-                                                       @input="updateMarkerFromInputs()"
-                                                       step="0.00000001" 
-                                                       max="90"
-                                                       min="-90"
-                                                       required>
-                                            </div>
-                                            <div class="col-6">
-                                                <label class="form-label">Longitude</label>
-                                                <input type="number" 
-                                                       class="form-control" 
-                                                       x-model="config.lon" 
-                                                       @input="updateMarkerFromInputs()"
-                                                       step="0.00000001" 
-                                                       max="180"
-                                                       min="-180"
-                                                       required>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Force On -->
-                                    <div class="mb-3">
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" 
-                                                   type="checkbox" 
-                                                   x-model="config.force_on" 
-                                                   id="forceOn">
-                                            <label class="form-check-label" for="forceOn">Force On</label>
-                                        </div>
-                                        <div class="form-text">
-                                            When enabled, this disables all scheduling and makes the tracker stay on permanently.
-                                        </div>
-                                    </div>
-
-                                    <!-- Button Delay -->
-                                    <div class="mb-3">
-                                        <label class="form-label">Button Delay (HH:MM)</label>
-                                        <input type="text" 
-                                               class="form-control" 
-                                               x-model="config.button_delay" 
-                                               pattern="[0-9]{2}:[0-9]{2}" 
-                                               required>
-                                        <div class="form-text">
-                                            This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
+                                                    <div class="col-6">
+                                            <label class="form-label">Longitude</label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   x-model="config.lon" 
+                                                               @input="updateMarkerFromInputs()"
+                                                               step="0.00000001" 
+                                                               max="180"
+                                                               min="-180"
+                                                   required>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Right Column (Map) -->
-                                <div class="col-md-8">
-                                    <div id="map" class="map-container"></div>
-                                </div>
-                            </div>
-
-                            <!-- Schedule Entries -->
-                            <div class="mt-4">
-                                <h6>Schedule Entries</h6>
-                                <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
-                                <template x-for="(entry, index) in config.schedule" :key="index">
-                                    <div class="schedule-entry">
-                                        <div class="row mb-2">
-                                            <div class="col">
-                                                <label class="form-label">Name</label>
-                                                <input type="text" 
-                                                       class="form-control" 
-                                                       x-model="entry.name" 
-                                                       required>
-                                            </div>
-                                            <div class="col-auto d-flex align-items-end">
-                                                <button type="button" 
-                                                        class="btn btn-danger" 
-                                                        @click="removeSchedule(index)">
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <label class="form-label">Start Time</label>
-                                                <div class="time-input-group">
-                                                    <select class="form-select" 
-                                                            x-model="entry.startReference"
-                                                            @change="updateTimeString(entry, 'start')">
-                                                        <option value="time">Clock Time</option>
-                                                        <option value="sunrise">Sunrise</option>
-                                                        <option value="sunset">Sunset</option>
-                                                        <option value="dawn">Dawn</option>
-                                                        <option value="dusk">Dusk</option>
-                                                        <option value="noon">Solar Noon</option>
-                                                        <option value="midnight">Solar Midnight</option>
-                                                        <option value="blue_hour_morning">Blue Hour (Morning)</option>
-                                                        <option value="blue_hour_evening">Blue Hour (Evening)</option>
-                                                        <option value="golden_hour_morning">Golden Hour (Morning)</option>
-                                                        <option value="golden_hour_evening">Golden Hour (Evening)</option>
-                                                    </select>
-                                                    <select class="form-select" 
-                                                            x-model="entry.startSign"
-                                                            @change="updateTimeString(entry, 'start')"
-                                                            :disabled="entry.startReference === 'time'"
-                                                            :value="entry.startReference === 'time' ? '+' : entry.startSign">
-                                                        <option value="+">+</option>
-                                                        <option value="-">-</option>
-                                                    </select>
-                                                    <input type="time" 
-                                                           class="form-control" 
-                                                           x-model="entry.startOffset"
-                                                           @change="updateTimeString(entry, 'start')">
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <label class="form-label">Stop Time</label>
-                                                <div class="time-input-group">
-                                                    <select class="form-select" 
-                                                            x-model="entry.stopReference"
-                                                            @change="updateTimeString(entry, 'stop')">
-                                                        <option value="time">Clock Time</option>
-                                                        <option value="sunrise">Sunrise</option>
-                                                        <option value="sunset">Sunset</option>
-                                                        <option value="dawn">Dawn</option>
-                                                        <option value="dusk">Dusk</option>
-                                                        <option value="noon">Solar Noon</option>
-                                                        <option value="midnight">Solar Midnight</option>
-                                                        <option value="blue_hour_morning">Blue Hour (Morning)</option>
-                                                        <option value="blue_hour_evening">Blue Hour (Evening)</option>
-                                                        <option value="golden_hour_morning">Golden Hour (Morning)</option>
-                                                        <option value="golden_hour_evening">Golden Hour (Evening)</option>
-                                                    </select>
-                                                    <select class="form-select" 
-                                                            x-model="entry.stopSign"
-                                                            @change="updateTimeString(entry, 'stop')"
-                                                            :disabled="entry.stopReference === 'time'"
-                                                            :value="entry.stopReference === 'time' ? '+' : entry.stopSign">
-                                                        <option value="+">+</option>
-                                                        <option value="-">-</option>
-                                                    </select>
-                                                    <input type="time" 
-                                                           class="form-control" 
-                                                           x-model="entry.stopOffset"
-                                                           @change="updateTimeString(entry, 'stop')">
-                                                </div>
-                                            </div>
-                                        </div>
+                                <!-- Force On -->
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               x-model="config.force_on" 
+                                               id="forceOn">
+                                        <label class="form-check-label" for="forceOn">Force On</label>
                                     </div>
-                                </template>
-                                <div class="mt-4 mb-3 d-flex flex-column flex-sm-row justify-content-between gap-2">
+                                                <div class="form-text">
+                                                    When enabled, this disables all scheduling and makes the tracker stay on permanently.
+                                    </div>
+                                </div>
+
+                                <!-- Button Delay -->
+                                <div class="mb-3">
+                                    <label class="form-label">Button Delay (HH:MM)</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           x-model="config.button_delay" 
+                                           pattern="[0-9]{2}:[0-9]{2}" 
+                                           required>
+                                                <div class="form-text">
+                                                    This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Column (Map) -->
+                                        <div class="col-md-8">
+                                            <div id="map" class="map-container"></div>
+                                        </div>
+                                </div>
+
+                                <!-- Schedule Entries -->
+                                    <div class="mt-4">
+                                    <h6>Schedule Entries</h6>
+                                        <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
+                                    <template x-for="(entry, index) in config.schedule" :key="index">
+                                        <div class="schedule-entry">
+                                            <div class="row mb-2">
+                                                <div class="col">
+                                                    <label class="form-label">Name</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           x-model="entry.name" 
+                                                           required>
+                                                </div>
+                                                <div class="col-auto d-flex align-items-end">
+                                                    <button type="button" 
+                                                            class="btn btn-danger" 
+                                                            @click="removeSchedule(index)">
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Start Time</label>
+                                                    <div class="time-input-group">
+                                                        <select class="form-select" 
+                                                                x-model="entry.startReference"
+                                                                @change="updateTimeString(entry, 'start')">
+                                                            <option value="time">Clock Time</option>
+                                                            <option value="sunrise">Sunrise</option>
+                                                            <option value="sunset">Sunset</option>
+                                                            <option value="dawn">Dawn</option>
+                                                            <option value="dusk">Dusk</option>
+                                                            <option value="noon">Solar Noon</option>
+                                                            <option value="midnight">Solar Midnight</option>
+                                                            <option value="blue_hour_morning">Blue Hour (Morning)</option>
+                                                            <option value="blue_hour_evening">Blue Hour (Evening)</option>
+                                                            <option value="golden_hour_morning">Golden Hour (Morning)</option>
+                                                            <option value="golden_hour_evening">Golden Hour (Evening)</option>
+                                                        </select>
+                                                        <select class="form-select" 
+                                                                x-model="entry.startSign"
+                                                                @change="updateTimeString(entry, 'start')"
+                                                                :disabled="entry.startReference === 'time'"
+                                                                    :value="entry.startReference === 'time' ? '+' : entry.startSign">
+                                                            <option value="+">+</option>
+                                                            <option value="-">-</option>
+                                                        </select>
+                                                        <input type="time" 
+                                                               class="form-control" 
+                                                               x-model="entry.startOffset"
+                                                               @change="updateTimeString(entry, 'start')">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Stop Time</label>
+                                                    <div class="time-input-group">
+                                                        <select class="form-select" 
+                                                                x-model="entry.stopReference"
+                                                                @change="updateTimeString(entry, 'stop')">
+                                                            <option value="time">Clock Time</option>
+                                                            <option value="sunrise">Sunrise</option>
+                                                            <option value="sunset">Sunset</option>
+                                                            <option value="dawn">Dawn</option>
+                                                            <option value="dusk">Dusk</option>
+                                                            <option value="noon">Solar Noon</option>
+                                                            <option value="midnight">Solar Midnight</option>
+                                                            <option value="blue_hour_morning">Blue Hour (Morning)</option>
+                                                            <option value="blue_hour_evening">Blue Hour (Evening)</option>
+                                                            <option value="golden_hour_morning">Golden Hour (Morning)</option>
+                                                            <option value="golden_hour_evening">Golden Hour (Evening)</option>
+                                                        </select>
+                                                        <select class="form-select" 
+                                                                x-model="entry.stopSign"
+                                                                @change="updateTimeString(entry, 'stop')"
+                                                                :disabled="entry.stopReference === 'time'"
+                                                                    :value="entry.stopReference === 'time' ? '+' : entry.stopSign">
+                                                            <option value="+">+</option>
+                                                            <option value="-">-</option>
+                                                        </select>
+                                                        <input type="time" 
+                                                               class="form-control" 
+                                                               x-model="entry.stopOffset"
+                                                               @change="updateTimeString(entry, 'stop')">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                        <div class="mt-4 mb-3 d-flex flex-column flex-sm-row justify-content-between gap-2">
                                     <button type="button" 
-                                            class="btn btn-secondary" 
+                                                    class="btn btn-secondary" 
                                             @click="addSchedule">
                                         Add Schedule Entry
+                                            </button>
+                                            <div class="d-flex gap-2">
+                                                <button type="button" 
+                                                        class="btn btn-outline-secondary" 
+                                                        @click="refreshConfig()">
+                                                    Reset
+                                                </button>
+                                                <button type="submit" 
+                                                        class="btn btn-success">
+                                                    Save Configuration
                                     </button>
-                                    <div class="d-flex gap-2">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                                </div>
+
+                <!-- Radio Tracking Configuration -->
+                <div x-show="activeConfig === 'radiotracking'" x-cloak>
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">Radio Tracking Configuration</h5>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       x-model="expertMode" 
+                                       id="expertMode">
+                                <label class="form-check-label" for="expertMode">
+                                    <i class="fas fa-flask" title="Expert Mode"></i>
+                                    Expert Mode
+                                </label>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div x-data="radiotrackingConfig()" x-init="init()">
+                                <form @submit.prevent="saveConfig">
+                                    <!-- RTL-SDR Section -->
+                                    <div class="mb-4">
+                                        <h6 class="border-bottom pb-2">RTL-SDR Settings</h6>
+                                        
+                                        <!-- Device Configuration -->
+                                        <div class="mb-3">
+                                            <!-- Normal Mode: Device Count -->
+                                            <div x-show="!expertMode">
+                                                <div class="row align-items-center">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Number of Devices</label>
+                                                        <select class="form-select" 
+                                                                x-model="deviceCount"
+                                                                @change="updateDeviceList">
+                                                            <template x-for="i in 8" :key="i">
+                                                                <option :value="i" x-text="i"></option>
+                                                            </template>
+                                                        </select>
+                                                        <div class="form-text">
+                                                            Select the number of RTL-SDR devices to use (1-8)
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Expert Mode: Detailed Device List -->
+                                            <div x-show="expertMode" x-transition>
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <h6 class="mb-0">Devices</h6>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-primary" 
+                                                            @click="addDevice">
+                                                        Add Device
+                                                    </button>
+                                                </div>
+                                                <div class="form-text mb-3">
+                                                    Configure multiple RTL-SDR devices. Each device needs a device index and calibration offset.
+                                                </div>
+                                                <template x-for="(device, index) in config.rtl_sdr.device" :key="index">
+                                                    <div class="card mb-2">
+                                                        <div class="card-body">
+                                                            <div class="row align-items-center">
+                                                                <div class="col-md-5">
+                                                                    <label class="form-label">Device Index</label>
+                                                                    <input type="text" 
+                                                                           class="form-control" 
+                                                                           x-model="config.rtl_sdr.device[index]"
+                                                                           :placeholder="index.toString()"
+                                                                           required>
+                                                                </div>
+                                                                <div class="col-md-5">
+                                                                    <label class="form-label">Calibration Offset (dBm)</label>
+                                                                    <input type="number" 
+                                                                           class="form-control" 
+                                                                           x-model.number="config.rtl_sdr.calibration[index]"
+                                                                           step="0.1"
+                                                                           required>
+                                                                    <div class="form-text">Signal strength calibration offset in dBm</div>
+                                                                </div>
+                                                                <div class="col-md-2 d-flex align-items-end">
+                                                                    <button type="button" 
+                                                                            class="btn btn-outline-danger w-100"
+                                                                            @click="removeDevice(index)"
+                                                                            :disabled="config.rtl_sdr.device.length <= 1">
+                                                                        Remove
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <!-- Common Settings -->
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Center Frequency (MHz)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="centerFreqMHz"
+                                                           min="24"
+                                                           max="1766"
+                                                           step="0.001"
+                                                           @input="updateCenterFreq"
+                                                           required>
+                                                    <div class="form-text">Center frequency in MHz (24-1766 MHz)</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Sample Rate (kHz)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="sampleRateKHz"
+                                                           min="230"
+                                                           max="3200"
+                                                           step="1"
+                                                           @input="updateSampleRate"
+                                                           required>
+                                                    <div class="form-text">Must be either 230-300 kHz or 900-3200 kHz</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">LNA Gain Stage</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.rtl_sdr.lna_gain"
+                                                           min="0"
+                                                           max="15"
+                                                           required>
+                                                    <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Mixer Gain Stage</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.rtl_sdr.mixer_gain"
+                                                           min="0"
+                                                           max="15"
+                                                           required>
+                                                    <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">VGA Gain Stage</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.rtl_sdr.vga_gain"
+                                                           min="0"
+                                                           max="15"
+                                                           required>
+                                                    <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Gain (deprecated)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.rtl_sdr.gain"
+                                                           min="0"
+                                                           step="0.1"
+                                                           required>
+                                                    <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Expert Mode RTL-SDR Settings -->
+                                        <div x-show="expertMode" x-transition>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Max Restart Attempts</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.rtl_sdr.sdr_max_restart"
+                                                               min="0"
+                                                               required>
+                                                        <div class="form-text">Maximum number of restart attempts for the RTL-SDR device</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Timeout (seconds)</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.rtl_sdr.sdr_timeout_s"
+                                                               min="0.1"
+                                                               step="0.1"
+                                                               required>
+                                                        <div class="form-text">Timeout for RTL-SDR operations in seconds</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Analysis Section -->
+                                    <div class="mb-4">
+                                        <h6 class="border-bottom pb-2">Signal Analysis</h6>
+                                        <!-- Basic Analysis Settings -->
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Signal Threshold (dBW)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.analysis.signal_threshold_dbw"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">SNR Threshold (dB)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.analysis.snr_threshold_db"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Min Signal Duration (ms)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.analysis.signal_min_duration_ms"
+                                                           min="0"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Max Signal Duration (ms)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.analysis.signal_max_duration_ms"
+                                                           min="0"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Expert Mode Analysis Settings -->
+                                        <div x-show="expertMode" x-transition>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">FFT Segment Size</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.analysis.fft_nperseg"
+                                                               min="1"
+                                                               required>
+                                                        <div class="form-text">Size of FFT segments for signal analysis</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">FFT Window</label>
+                                                        <select class="form-select" 
+                                                                x-model="config.analysis.fft_window"
+                                                                required>
+                                                            <option value="hamming">Hamming</option>
+                                                            <option value="hanning">Hanning</option>
+                                                            <option value="blackman">Blackman</option>
+                                                            <option value="bartlett">Bartlett</option>
+                                                        </select>
+                                                        <div class="form-text">Window function used for FFT analysis</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Matching Section -->
+                                    <div class="mb-4">
+                                        <h6 class="border-bottom pb-2">Signal Matching</h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Matching Timeout (s)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.matching.matching_timeout_s"
+                                                           min="0"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Time Difference (s)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.matching.matching_time_diff_s"
+                                                           min="0"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Bandwidth (Hz)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.matching.matching_bandwidth_hz"
+                                                           min="0"
+                                                           required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Duration Difference (ms)</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.matching.matching_duration_diff_ms"
+                                                           min="0"
+                                                           step="0.1"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Data Publishing Section (Expert Mode) -->
+                                    <div class="mb-4" x-show="expertMode" x-transition>
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-paper-plane text-muted me-2"></i>
+                                            Data Publishing
+                                            <small class="text-muted ms-2">(Expert Mode)</small>
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Data Path</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           x-model="config.publish.path"
+                                                           required>
+                                                    <div class="form-text">Directory for storing data files</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">MQTT Host</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           x-model="config.publish.mqtt_host"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">MQTT Port</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.publish.mqtt_port"
+                                                           min="1"
+                                                           max="65535"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.publish.sig_stdout" 
+                                                               id="sig_stdout">
+                                                        <label class="form-check-label" for="sig_stdout">Signal to stdout</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.publish.match_stdout" 
+                                                               id="match_stdout">
+                                                        <label class="form-check-label" for="match_stdout">Matches to stdout</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.publish.csv" 
+                                                               id="csv">
+                                                        <label class="form-check-label" for="csv">CSV Export</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.publish.mqtt" 
+                                                               id="mqtt">
+                                                        <label class="form-check-label" for="mqtt">MQTT</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dashboard Section (Expert Mode) -->
+                                    <div class="mb-4" x-show="expertMode" x-transition>
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-chart-line text-muted me-2"></i>
+                                            Dashboard
+                                            <small class="text-muted ms-2">(Expert Mode)</small>
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.dashboard.dashboard" 
+                                                               id="dashboard">
+                                                        <label class="form-check-label" for="dashboard">Enable Dashboard</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Host</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           x-model="config.dashboard.dashboard_host"
+                                                           required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Port</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.dashboard.dashboard_port"
+                                                           min="1"
+                                                           max="65535"
+                                                           required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Max Signals</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.dashboard.dashboard_signals"
+                                                           min="1"
+                                                           required>
+                                                    <div class="form-text">Maximum number of signals to display in dashboard</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Optional Arguments Section (Expert Mode) -->
+                                    <div class="mb-4" x-show="expertMode" x-transition>
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-cogs text-muted me-2"></i>
+                                            Optional Arguments
+                                            <small class="text-muted ms-2">(Expert Mode)</small>
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Verbose Level</label>
+                                                    <input type="number" 
+                                                           class="form-control" 
+                                                           x-model.number="config.optional_arguments.verbose"
+                                                           min="0"
+                                                           required>
+                                                    <div class="form-text">Set the verbosity level (0 = quiet, higher = more verbose)</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Station Name</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           x-model="config.optional_arguments.station"
+                                                           placeholder="Optional station identifier">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       x-model="config.optional_arguments.calibrate" 
+                                                       id="calibrate">
+                                                <label class="form-check-label" for="calibrate">Calibration Mode</label>
+                                            </div>
+                                            <div class="form-text">Enable calibration mode for the radio receiver</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Form Actions -->
+                                    <div class="d-flex justify-content-end gap-2">
                                         <button type="button" 
                                                 class="btn btn-outline-secondary" 
-                                                @click="refreshConfig()">
+                                                @click="loadConfig()">
                                             Reset
                                         </button>
                                         <button type="submit" 
                                                 class="btn btn-success">
                                             Save Configuration
                                         </button>
-                                    </div>
                                 </div>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
     </main>
 
     <!-- Footer -->
@@ -265,9 +862,53 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Alpine.js Component -->
+    <!-- Alpine.js Components -->
     <script>
         function configManager() {
+            return {
+                activeConfig: 'schedule',  // Default to schedule configuration
+                message: '',
+                error: false,
+                warning: false,
+                expertMode: false,  // Add expert mode state
+
+                init() {
+                    // Set initial active config based on URL hash
+                    const hash = window.location.hash.slice(1);
+                    if (hash === 'radiotracking') {
+                        this.activeConfig = 'radiotracking';
+                    } else {
+                        this.activeConfig = 'schedule';
+                    }
+
+                    // Update URL hash when active config changes
+                    this.$watch('activeConfig', (value) => {
+                        window.location.hash = value;
+                    });
+
+                    // Listen for hash changes
+                    window.addEventListener('hashchange', () => {
+                        const hash = window.location.hash.slice(1);
+                        if (hash === 'radiotracking' || hash === 'schedule') {
+                            this.activeConfig = hash;
+                        }
+                    });
+
+                    // Listen for message events from child components
+                    window.addEventListener('show-message', (event) => {
+                        this.showMessage(event.detail.message, event.detail.isError);
+                    });
+                },
+
+                showMessage(message, isError) {
+                    this.message = message;
+                    this.error = isError;
+                    this.warning = !isError && message.includes("No configuration found");
+                }
+            }
+        }
+
+        function scheduleConfig() {
             return {
                 config: {
                     lat: 0,
@@ -276,8 +917,6 @@
                     button_delay: "00:00",
                     schedule: []
                 },
-                message: '',
-                error: false,
                 map: null,
                 marker: null,
 
@@ -367,6 +1006,7 @@
                         // Clear any existing messages
                         this.message = '';
                         this.error = false;
+                        this.warning = false;
                         
                         console.log('About to load config');
                         // Reload the configuration
@@ -384,9 +1024,10 @@
                         // Clear any existing message before loading
                         this.message = '';
                         this.error = false;
+                        this.warning = false;
 
-                        console.log('Fetching config from server...');
-                        const response = await fetch('/api/config', {
+                        console.log('Fetching schedule config from server...');
+                        const response = await fetch('/api/schedule', {
                             method: 'GET',
                             headers: {
                                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -395,7 +1036,26 @@
                             }
                         });
                         console.log('Server response:', response.status);
-                        if (!response.ok) throw new Error('Failed to load configuration');
+                        
+                        if (response.status === 404) {
+                            // Initialize with default values when no config exists
+                            this.config = {
+                                lat: 0.0,
+                                lon: 0.0,
+                                force_on: false,
+                                button_delay: "00:00",
+                                schedule: []
+                            };
+                            this.warning = true;
+                            this.showMessage("No configuration found. Please set up your schedule and save it.", false);
+                            return;
+                        }
+                        
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.detail || 'Failed to load configuration');
+                        }
+                        
                         const data = await response.json();
                         console.log('Received data:', data);
                         
@@ -422,7 +1082,7 @@
                             this.updateMarkerFromInputs();
                         }
                     } catch (error) {
-                        console.error('Error loading config:', error);
+                        console.error('Error loading schedule config:', error);
                         this.showMessage(error.message, true);
                     }
                 },
@@ -529,27 +1189,287 @@
 
                 async saveConfig() {
                     try {
-                        const response = await fetch('/api/config', {
+                        const response = await fetch('/api/schedule', {
                             method: 'PUT',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
                             body: JSON.stringify(this.config)
                         });
-                        if (!response.ok) throw new Error('Failed to save configuration');
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.detail?.message || 'Failed to save schedule configuration');
+                        }
                         const data = await response.json();
-                        this.showMessage(data.message, !data.error);
+                        this.showMessage(data.message, false);  // false means not an error, so it will be success
                     } catch (error) {
                         this.showMessage(error.message, true);
                     }
+                }
+            }
+        }
+
+        function radiotrackingConfig() {
+            return {
+                config: {
+                    optional_arguments: {
+                        verbose: 0,
+                        calibrate: false,
+                        config: '/boot/firmware/radiotracking.ini',
+                        station: null,
+                        schedule: []
+                    },
+                    rtl_sdr: {
+                        device: ['0'],
+                        calibration: [0.0],
+                        center_freq: 150155000,
+                        sample_rate: 300000,
+                        sdr_callback_length: null,
+                        gain: 49.6,
+                        lna_gain: 15,
+                        mixer_gain: 14,
+                        vga_gain: 7,
+                        sdr_max_restart: 3,
+                        sdr_timeout_s: 2
+                    },
+                    analysis: {
+                        fft_nperseg: 256,
+                        fft_window: 'hamming',
+                        signal_threshold_dbw: -95.0,
+                        snr_threshold_db: 3.0,
+                        signal_min_duration_ms: 8.0,
+                        signal_max_duration_ms: 50.0
+                    },
+                    matching: {
+                        matching_timeout_s: 2.0,
+                        matching_time_diff_s: 0.1,
+                        matching_bandwidth_hz: 4000,
+                        matching_duration_diff_ms: 5.0
+                    },
+                    publish: {
+                        sig_stdout: false,
+                        match_stdout: false,
+                        path: 'data',
+                        csv: true,
+                        export_config: true,
+                        mqtt: true,
+                        mqtt_host: 'localhost',
+                        mqtt_port: 1883
+                    },
+                    dashboard: {
+                        dashboard: true,
+                        dashboard_host: 'localhost',
+                        dashboard_port: 8050,
+                        dashboard_signals: 100
+                    }
+                },
+                deviceCount: 1,
+
+                // Add computed property for center frequency in MHz
+                get centerFreqMHz() {
+                    return this.config.rtl_sdr.center_freq / 1000000;
+                },
+                set centerFreqMHz(value) {
+                    this.config.rtl_sdr.center_freq = Math.round(value * 1000000);
                 },
 
-                showMessage(message, isSuccess) {
-                    this.message = message;
-                    this.error = !isSuccess;
+                // Add method to update center frequency
+                updateCenterFreq() {
+                    // Ensure the value is within valid ranges
+                    const value = this.centerFreqMHz;
+                    if (value < 24) {
+                        this.centerFreqMHz = 24;
+                    } else if (value > 1766) {
+                        this.centerFreqMHz = 1766;
+                    }
+                },
+
+                // Add computed property for sample rate in kHz
+                get sampleRateKHz() {
+                    return Math.round(this.config.rtl_sdr.sample_rate / 1000);
+                },
+                set sampleRateKHz(value) {
+                    this.config.rtl_sdr.sample_rate = value * 1000;
+                },
+
+                updateSampleRate() {
+                    // Ensure the value is within valid ranges
+                    const value = this.sampleRateKHz;
+                    if (value < 230 || (value > 300 && value < 900) || value > 3200) {
+                        // If outside valid ranges, set to nearest valid value
+                        if (value < 230) {
+                            this.sampleRateKHz = 230;
+                        } else if (value > 300 && value < 900) {
+                            this.sampleRateKHz = 300;
+                        } else if (value > 3200) {
+                            this.sampleRateKHz = 3200;
+                        }
+                    }
+                },
+
+                init() {
+                    // Initialize device count based on current device list length
+                    this.deviceCount = this.config.rtl_sdr.device.length;
+                },
+
+                updateDeviceList() {
+                    // Update device list based on selected count
+                    const currentLength = this.config.rtl_sdr.device.length;
+                    const targetLength = this.deviceCount;
+
+                    if (targetLength > currentLength) {
+                        // Add devices
+                        for (let i = currentLength; i < targetLength; i++) {
+                            this.config.rtl_sdr.device.push(i.toString());
+                            this.config.rtl_sdr.calibration.push(0.0);
+                        }
+                    } else if (targetLength < currentLength) {
+                        // Remove devices
+                        this.config.rtl_sdr.device = this.config.rtl_sdr.device.slice(0, targetLength);
+                        this.config.rtl_sdr.calibration = this.config.rtl_sdr.calibration.slice(0, targetLength);
+                    }
+                },
+
+                async loadConfig() {
+                    try {
+                        // Initialize with default values first
+                        this.config = {
+                            optional_arguments: {
+                                verbose: 0,
+                                calibrate: false,
+                                config: '/boot/firmware/radiotracking.ini',
+                                station: null,
+                                schedule: []
+                            },
+                            rtl_sdr: {
+                                device: ['0'],
+                                calibration: [0.0],
+                                center_freq: 150155000,
+                                sample_rate: 300000,
+                                sdr_callback_length: null,
+                                gain: 49.6,
+                                lna_gain: 15,
+                                mixer_gain: 14,
+                                vga_gain: 7,
+                                sdr_max_restart: 3,
+                                sdr_timeout_s: 2
+                            },
+                            analysis: {
+                                fft_nperseg: 256,
+                                fft_window: 'hamming',
+                                signal_threshold_dbw: -95.0,
+                                snr_threshold_db: 3.0,
+                                signal_min_duration_ms: 8.0,
+                                signal_max_duration_ms: 50.0
+                            },
+                            matching: {
+                                matching_timeout_s: 2.0,
+                                matching_time_diff_s: 0.1,
+                                matching_bandwidth_hz: 4000,
+                                matching_duration_diff_ms: 5.0
+                            },
+                            publish: {
+                                sig_stdout: false,
+                                match_stdout: false,
+                                path: 'data',
+                                csv: true,
+                                export_config: true,
+                                mqtt: true,
+                                mqtt_host: 'localhost',
+                                mqtt_port: 1883
+                            },
+                            dashboard: {
+                                dashboard: true,
+                                dashboard_host: 'localhost',
+                                dashboard_port: 8050,
+                                dashboard_signals: 100
+                            }
+                        };
+
+                        const response = await fetch('/api/radiotracking');
+                        if (response.status === 404) {
+                            this.dispatchMessage("No radio tracking configuration found. Please set up your configuration and save it.", false);
+                            return;
+                        }
+                        if (!response.ok) {
+                            throw new Error('Failed to load radio tracking configuration');
+                        }
+                        const data = await response.json();
+                        
+                        // Deep merge the loaded data with our default config
+                        this.config = this.deepMerge(this.config, data);
+
+                        // Initialize device count after loading config
+                        this.deviceCount = this.config.rtl_sdr.device.length;
+                    } catch (error) {
+                        this.dispatchMessage(error.message, true);
+                    }
+                },
+
+                deepMerge(target, source) {
+                    const output = { ...target };
+                    if (this.isObject(target) && this.isObject(source)) {
+                        Object.keys(source).forEach(key => {
+                            if (this.isObject(source[key])) {
+                                if (!(key in target)) {
+                                    Object.assign(output, { [key]: source[key] });
+                                } else {
+                                    output[key] = this.deepMerge(target[key], source[key]);
+                                }
+                            } else {
+                                Object.assign(output, { [key]: source[key] });
+                            }
+                        });
+                    }
+                    return output;
+                },
+
+                isObject(item) {
+                    return (item && typeof item === 'object' && !Array.isArray(item));
+                },
+
+                async saveConfig() {
+                    try {
+                        const response = await fetch('/api/radiotracking', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.config)
+                        });
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.detail?.message || 'Failed to save radio tracking configuration');
+                        }
+                        const data = await response.json();
+                        this.dispatchMessage(data.message, false);
+                    } catch (error) {
+                        this.dispatchMessage(error.message, true);
+                    }
+                },
+
+                dispatchMessage(message, isError) {
+                    // Dispatch a custom event that the parent can listen for
+                    window.dispatchEvent(new CustomEvent('show-message', {
+                        detail: { message, isError }
+                    }));
+                },
+
+                addDevice() {
+                    // Add a new device with default values
+                    this.config.rtl_sdr.device.push('0');
+                    this.config.rtl_sdr.calibration.push(0.0);
+                },
+
+                removeDevice(index) {
+                    // Only remove if there's more than one device
+                    if (this.config.rtl_sdr.device.length > 1) {
+                        this.config.rtl_sdr.device.splice(index, 1);
+                        this.config.rtl_sdr.calibration.splice(index, 1);
+                    }
                 }
             }
         }
     </script>
 </body>
-</html>
+</html> 

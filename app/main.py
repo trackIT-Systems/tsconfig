@@ -1,3 +1,5 @@
+"""tsOS Configuration Manager."""
+
 import socket
 from pathlib import Path
 from typing import Any, Dict, List
@@ -8,7 +10,16 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app import __version__
-from app.config import load_config, save_config, validate_config
+from app.configs.radiotracking import (
+    AnalysisEntry,
+    DashboardEntry,
+    MatchingEntry,
+    OptionalArgumentsEntry,
+    PublishEntry,
+    RadioTrackingConfig,
+    RTLSDREntry,
+)
+from app.configs.schedule import ScheduleConfig, ScheduleEntry
 
 app = FastAPI(title="tsOS Configuration")
 
@@ -18,20 +29,29 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Templates
 templates = Jinja2Templates(directory="app/templates")
 
+# Initialize configs
+schedule_config = ScheduleConfig()
+radiotracking_config = RadioTrackingConfig()
+
 
 # Pydantic models for request/response validation
-class ScheduleEntry(BaseModel):
-    name: str
-    start: str
-    stop: str
-
-
-class ConfigUpdate(BaseModel):
+class ScheduleConfigUpdate(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
     lon: float = Field(..., ge=-180, le=180)
     force_on: bool
     button_delay: str
     schedule: List[ScheduleEntry]
+
+
+class RadioTrackingConfigUpdate(BaseModel):
+    """Radio tracking configuration update model."""
+
+    optional_arguments: OptionalArgumentsEntry
+    rtl_sdr: RTLSDREntry
+    analysis: AnalysisEntry
+    matching: MatchingEntry
+    publish: PublishEntry
+    dashboard: DashboardEntry
 
 
 @app.get("/")
@@ -43,40 +63,97 @@ async def home(request: Request):
     )
 
 
-@app.get("/api/config")
-async def get_config() -> Dict[str, Any]:
-    """Get the current configuration."""
+# Schedule configuration endpoints
+@app.get("/api/schedule")
+async def get_schedule() -> Dict[str, Any]:
+    """Get the current schedule configuration."""
     try:
-        return load_config()
+        return schedule_config.load()
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Configuration file not found")
+        raise HTTPException(status_code=404, detail="Schedule configuration not found")
 
 
-@app.put("/api/config")
-async def update_config(config: ConfigUpdate) -> Dict[str, Any]:
-    """Update the configuration."""
+@app.put("/api/schedule")
+async def update_schedule(config: ScheduleConfigUpdate) -> Dict[str, Any]:
+    """Update the schedule configuration."""
     # Convert to dict for validation
     config_dict = config.model_dump()
 
     # Validate the configuration
-    errors = validate_config(config_dict)
+    errors = schedule_config.validate(config_dict)
     if errors:
-        raise HTTPException(status_code=400, detail={"message": "Invalid configuration", "errors": errors})
+        raise HTTPException(status_code=400, detail={"message": "Invalid schedule configuration", "errors": errors})
 
     # Save the configuration
     try:
-        save_config(config_dict)
-        return {"message": "Configuration updated successfully", "config": config_dict}
+        schedule_config.save(config_dict)
+        return {"message": "Schedule configuration updated successfully", "config": config_dict}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/config/validate")
-async def validate_config_endpoint(config: ConfigUpdate) -> Dict[str, Any]:
-    """Validate a configuration without saving it."""
+@app.post("/api/schedule/validate")
+async def validate_schedule(config: ScheduleConfigUpdate) -> Dict[str, Any]:
+    """Validate a schedule configuration without saving it."""
     config_dict = config.model_dump()
-    errors = validate_config(config_dict)
+    errors = schedule_config.validate(config_dict)
 
     if errors:
         return {"valid": False, "errors": errors}
-    return {"valid": True, "message": "Configuration is valid"}
+    return {"valid": True, "message": "Schedule configuration is valid"}
+
+
+# Radio tracking configuration endpoints
+@app.get("/api/radiotracking")
+async def get_radiotracking() -> Dict[str, Any]:
+    """Get the current radio tracking configuration."""
+    try:
+        return radiotracking_config.load()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Radio tracking configuration not found")
+
+
+@app.put("/api/radiotracking")
+async def update_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, Any]:
+    """Update the radio tracking configuration."""
+    # Convert to dict for validation
+    config_dict = {
+        "optional arguments": config.optional_arguments.model_dump(),
+        "rtl-sdr": config.rtl_sdr.model_dump(),
+        "analysis": config.analysis.model_dump(),
+        "matching": config.matching.model_dump(),
+        "publish": config.publish.model_dump(),
+        "dashboard": config.dashboard.model_dump(),
+    }
+
+    # Validate the configuration
+    errors = radiotracking_config.validate(config_dict)
+    if errors:
+        raise HTTPException(
+            status_code=400, detail={"message": "Invalid radio tracking configuration", "errors": errors}
+        )
+
+    # Save the configuration
+    try:
+        radiotracking_config.save(config_dict)
+        return {"message": "Radio tracking configuration updated successfully", "config": config_dict}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/radiotracking/validate")
+async def validate_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, Any]:
+    """Validate a radio tracking configuration without saving it."""
+    config_dict = {
+        "optional arguments": config.optional_arguments.model_dump(),
+        "rtl-sdr": config.rtl_sdr.model_dump(),
+        "analysis": config.analysis.model_dump(),
+        "matching": config.matching.model_dump(),
+        "publish": config.publish.model_dump(),
+        "dashboard": config.dashboard.model_dump(),
+    }
+    errors = radiotracking_config.validate(config_dict)
+
+    if errors:
+        return {"valid": False, "errors": errors}
+    return {"valid": True, "message": "Radio tracking configuration is valid"}

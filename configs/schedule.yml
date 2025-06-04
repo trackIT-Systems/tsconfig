@@ -1,7 +1,7 @@
-lat: 50.85318565
-lon: 8.78743147
-force_on: true
 button_delay: 00:30
+force_on: true
+lat: 50.85318609
+lon: 8.78749519
 schedule:
 - name: debugging
   start: sunrise+00:00
