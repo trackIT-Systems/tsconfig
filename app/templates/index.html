@@ -105,7 +105,7 @@
                         <h5 class="card-title mb-0">Schedule Configuration</h5>
                     </div>
                     <div class="card-body">
-                            <div x-data="scheduleConfig()" x-init="loadConfig(); initMap()">
+                            <div x-data="scheduleConfig()" x-init="loadConfig()">
                                 <!-- Schedule Configuration Form -->
                             <form @submit.prevent="saveConfig">
                                     <div class="row">
@@ -920,6 +920,19 @@
                     // Update URL hash when active config changes
                     this.$watch('activeConfig', (value) => {
                         window.location.hash = value;
+                        
+                        // Ensure map is properly initialized when switching to schedule tab
+                        if (value === 'schedule') {
+                            setTimeout(() => {
+                                const scheduleComponent = this.$el.querySelector('[x-data*="scheduleConfig"]');
+                                if (scheduleComponent && scheduleComponent._x_dataStack) {
+                                    const scheduleData = scheduleComponent._x_dataStack[0];
+                                    if (scheduleData && scheduleData.ensureMapVisible) {
+                                        scheduleData.ensureMapVisible();
+                                    }
+                                }
+                            }, 150);
+                        }
                     });
 
                     // Listen for hash changes
@@ -955,64 +968,98 @@
                 },
                 map: null,
                 marker: null,
+                mapInitialized: false,
 
                 initMap() {
-                    // Initialize map
-                    this.map = L.map('map', {
-                        center: [this.config.lat, this.config.lon],
-                        zoom: 13,
-                        zoomControl: true
-                    });
-                    
-                    // Add Mapbox satellite streets layer
-                    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
-                        attribution: '© Mapbox © OpenStreetMap',
-                        maxZoom: 19
-                    }).addTo(this.map);
+                    // Only initialize if not already done and container is visible
+                    if (this.mapInitialized || !document.getElementById('map')) {
+                        return;
+                    }
 
-                    // Add locate control
-                    L.control.locate({
-                        position: 'topleft',
-                        strings: {
-                            title: "Show my location"
-                        },
-                        flyTo: true,
-                        keepCurrentZoomLevel: true,
-                        locateOptions: {
-                            enableHighAccuracy: true
+                    // Wait a bit to ensure the container is properly rendered
+                    setTimeout(() => {
+                        if (!document.getElementById('map') || this.mapInitialized) {
+                            return;
                         }
-                    }).addTo(this.map);
 
-                    // Add marker
-                    this.marker = L.marker([this.config.lat, this.config.lon], {
-                        draggable: true
-                    }).addTo(this.map);
+                        // Initialize map with loaded coordinates
+                        this.map = L.map('map', {
+                            center: [this.config.lat, this.config.lon],
+                            zoom: 13,
+                            zoomControl: true
+                        });
+                        
+                        // Add Mapbox satellite streets layer
+                        L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
+                            attribution: '© Mapbox © OpenStreetMap',
+                            maxZoom: 19
+                        }).addTo(this.map);
 
-                    // Update coordinates when marker is dragged
-                    this.marker.on('dragend', (e) => {
-                        const position = e.target.getLatLng();
-                        this.config.lat = position.lat.toFixed(8);
-                        this.config.lon = position.lng.toFixed(8);
-                    });
+                        // Add locate control
+                        L.control.locate({
+                            position: 'topleft',
+                            strings: {
+                                title: "Show my location"
+                            },
+                            flyTo: true,
+                            keepCurrentZoomLevel: true,
+                            locateOptions: {
+                                enableHighAccuracy: true
+                            }
+                        }).addTo(this.map);
 
-                    // Update marker when map is clicked
-                    this.map.on('click', (e) => {
-                        const position = e.latlng;
-                        this.marker.setLatLng(position);
-                        this.config.lat = position.lat.toFixed(8);
-                        this.config.lon = position.lng.toFixed(8);
-                    });
+                        // Add marker
+                        this.marker = L.marker([this.config.lat, this.config.lon], {
+                            draggable: true
+                        }).addTo(this.map);
 
-                    // Handle location found event
-                    this.map.on('locationfound', (e) => {
-                        this.config.lat = e.latlng.lat.toFixed(8);
-                        this.config.lon = e.latlng.lng.toFixed(8);
-                        this.updateMarkerFromInputs();
-                    });
+                        // Update coordinates when marker is dragged
+                        this.marker.on('dragend', (e) => {
+                            const position = e.target.getLatLng();
+                            this.config.lat = position.lat.toFixed(8);
+                            this.config.lon = position.lng.toFixed(8);
+                        });
+
+                        // Update marker when map is clicked
+                        this.map.on('click', (e) => {
+                            const position = e.latlng;
+                            this.marker.setLatLng(position);
+                            this.config.lat = position.lat.toFixed(8);
+                            this.config.lon = position.lng.toFixed(8);
+                        });
+
+                        // Handle location found event
+                        this.map.on('locationfound', (e) => {
+                            this.config.lat = e.latlng.lat.toFixed(8);
+                            this.config.lon = e.latlng.lng.toFixed(8);
+                            this.updateMarkerFromInputs();
+                        });
+
+                        this.mapInitialized = true;
+                        
+                        // Force a resize to ensure tiles load properly
+                        setTimeout(() => {
+                            if (this.map) {
+                                this.map.invalidateSize();
+                            }
+                        }, 100);
+                    }, 100);
+                },
+
+                ensureMapVisible() {
+                    // Call this when the schedule tab becomes active
+                    if (this.map && this.mapInitialized) {
+                        setTimeout(() => {
+                            this.map.invalidateSize();
+                            this.map.setView([this.config.lat, this.config.lon], 13);
+                        }, 50);
+                    } else if (!this.mapInitialized) {
+                        this.initMap();
+                    }
                 },
 
                 updateMarkerFromInputs() {
-                    if (this.marker) {
+                    if (this.marker && this.mapInitialized) {
                         // Ensure coordinates are within bounds and have proper precision
                         const lat = Math.min(Math.max(parseFloat(this.config.lat), -90), 90);
                         const lon = Math.min(Math.max(parseFloat(this.config.lon), -180), 180);
@@ -1028,7 +1075,6 @@
                 },
 
                 async refreshConfig() {
-                    console.log('Reset button clicked');
                     try {
                         // Reset to initial state
                         this.config = {
@@ -1044,12 +1090,9 @@
                         this.error = false;
                         this.warning = false;
                         
-                        console.log('About to load config');
                         // Reload the configuration
                         await this.loadConfig();
-                        console.log('Config loaded');
                     } catch (error) {
-                        console.error('Error in refreshConfig:', error);
                         this.showMessage(error.message, true);
                     }
                 },
@@ -1066,7 +1109,12 @@
                                 button_delay: "01:00",
                                 schedule: []
                             };
-                            this.updateMarkerFromInputs();
+                            // Initialize map after config is loaded
+                            if (!this.mapInitialized) {
+                                this.initMap();
+                            } else {
+                                this.updateMarkerFromInputs();
+                            }
                             this.showMessage("No schedule configuration found. Using default values.", false);
                             return;
                         }
@@ -1089,8 +1137,10 @@
                             entry.stopOffset = stopParts.offset;
                         });
                         
-                        // Update map if it exists
-                        if (this.map && this.marker) {
+                        // Initialize map after config is loaded, or update if already initialized
+                        if (!this.mapInitialized) {
+                            this.initMap();
+                        } else {
                             this.updateMarkerFromInputs();
                         }
                     } catch (error) {
@@ -1209,7 +1259,6 @@
                         });
                         if (!response.ok) {
                             const error = await response.json();
-                            console.error('Detailed error:', error);
                             let errorMessage = error.detail?.message || 'Failed to save schedule configuration';
                             if (error.detail?.errors) {
                                 errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
@@ -1514,7 +1563,6 @@
                         });
                         if (!response.ok) {
                             const error = await response.json();
-                            console.error('Detailed error:', error);
                             let errorMessage = error.detail?.message || 'Failed to save radio tracking configuration';
                             if (error.detail?.errors) {
                                 errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');

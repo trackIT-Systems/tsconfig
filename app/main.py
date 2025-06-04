@@ -58,9 +58,7 @@ class RadioTrackingConfigUpdate(BaseModel):
 async def home(request: Request):
     """Render the main configuration page."""
     hostname = socket.gethostname()
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "title": f"tsOS Configuration @ {hostname}", "version": __version__}
-    )
+    return templates.TemplateResponse("index.html", {"request": request, "title": hostname, "version": __version__})
 
 
 # Schedule configuration endpoints
