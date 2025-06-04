@@ -1,0 +1,88 @@
+/* Custom styles for the schedule manager */
+.schedule-entry {
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.schedule-entry:last-child {
+    margin-bottom: 0;
+}
+
+.time-input-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    align-items: start;
+}
+
+.time-input-group .form-select,
+.time-input-group .form-control {
+    width: 100%;
+}
+
+.time-input-group .form-text {
+    grid-column: 1 / -1;
+}
+
+/* Map styles */
+.map-container {
+    min-height: 300px;
+    height: 100%;
+    width: 100%;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
+}
+
+/* Ensure the map container's parent has a defined height */
+.col-md-8 {
+    min-height: 400px;
+}
+
+.card-body.p-0 {
+    border-radius: 0 0 0.25rem 0.25rem;
+    overflow: hidden;
+}
+
+/* Map container */
+.map-container {
+    height: 100%;
+    min-height: 400px;
+}
+
+/* Footer */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1 0 auto;
+}
+
+.footer {
+    flex-shrink: 0;
+    width: 100%;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.footer a {
+    color: #6c757d;
+    text-decoration: none;
+    margin-left: 1rem;
+}
+
+.footer a:hover {
+    color: #495057;
+}
+
+.footer .lead {
+    font-size: 1.25rem;
+} 
