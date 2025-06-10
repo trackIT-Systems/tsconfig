@@ -1,0 +1,60 @@
+"""Schedule configuration endpoints."""
+
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from app.configs.schedule import ScheduleConfig, ScheduleEntry
+
+router = APIRouter(prefix="/api/schedule", tags=["schedule"])
+
+# Initialize config
+schedule_config = ScheduleConfig()
+
+
+class ScheduleConfigUpdate(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+    force_on: bool
+    button_delay: str
+    schedule: List[ScheduleEntry]
+
+
+@router.get("")
+async def get_schedule() -> Dict[str, Any]:
+    """Get the current schedule configuration."""
+    try:
+        return schedule_config.load()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Schedule configuration not found")
+
+
+@router.put("")
+async def update_schedule(config: ScheduleConfigUpdate) -> Dict[str, Any]:
+    """Update the schedule configuration."""
+    # Convert to dict for validation
+    config_dict = config.model_dump()
+
+    # Validate the configuration
+    errors = schedule_config.validate(config_dict)
+    if errors:
+        raise HTTPException(status_code=400, detail={"message": "Invalid schedule configuration", "errors": errors})
+
+    # Save the configuration
+    try:
+        schedule_config.save(config_dict)
+        return {"message": "Schedule configuration updated successfully", "config": config_dict}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/validate")
+async def validate_schedule(config: ScheduleConfigUpdate) -> Dict[str, Any]:
+    """Validate a schedule configuration without saving it."""
+    config_dict = config.model_dump()
+    errors = schedule_config.validate(config_dict)
+
+    if errors:
+        return {"valid": False, "errors": errors}
+    return {"valid": True, "message": "Schedule configuration is valid"}

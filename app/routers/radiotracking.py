@@ -1,0 +1,100 @@
+"""Radio tracking configuration endpoints."""
+
+from typing import Any, Dict
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ValidationError
+
+from app.configs.radiotracking import (
+    AnalysisEntry,
+    DashboardEntry,
+    MatchingEntry,
+    OptionalArgumentsEntry,
+    PublishEntry,
+    RadioTrackingConfig,
+    RTLSDREntry,
+)
+
+router = APIRouter(prefix="/api/radiotracking", tags=["radiotracking"])
+
+# Initialize config
+radiotracking_config = RadioTrackingConfig()
+
+
+class RadioTrackingConfigUpdate(BaseModel):
+    """Radio tracking configuration update model."""
+
+    optional_arguments: OptionalArgumentsEntry
+    rtl_sdr: RTLSDREntry
+    analysis: AnalysisEntry
+    matching: MatchingEntry
+    publish: PublishEntry
+    dashboard: DashboardEntry
+
+
+@router.get("")
+async def get_radiotracking() -> Dict[str, Any]:
+    """Get the current radio tracking configuration."""
+    try:
+        return radiotracking_config.load()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Radio tracking configuration not found")
+
+
+@router.put("")
+async def update_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, Any]:
+    """Update the radio tracking configuration."""
+    try:
+        # Convert to dict for validation
+        config_dict = {
+            "optional arguments": config.optional_arguments.model_dump(),
+            "rtl-sdr": config.rtl_sdr.model_dump(),
+            "analysis": config.analysis.model_dump(),
+            "matching": config.matching.model_dump(),
+            "publish": config.publish.model_dump(),
+            "dashboard": config.dashboard.model_dump(),
+        }
+
+        # Validate the configuration
+        errors = radiotracking_config.validate(config_dict)
+        if errors:
+            raise HTTPException(
+                status_code=400, detail={"message": "Invalid radio tracking configuration", "errors": errors}
+            )
+
+        # Save the configuration
+        try:
+            radiotracking_config.save(config_dict)
+            return {"message": "Radio tracking configuration updated successfully", "config": config_dict}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        # Catch any validation errors from Pydantic and return detailed info
+        error_detail: Dict[str, Any] = {
+            "message": "Failed to parse radio tracking configuration",
+            "error": str(e),
+            "type": type(e).__name__,
+        }
+        if isinstance(e, ValidationError):
+            error_detail["validation_errors"] = [
+                {"loc": error["loc"], "msg": error["msg"], "type": error["type"]} for error in e.errors()
+            ]
+        raise HTTPException(status_code=422, detail=error_detail)
+
+
+@router.post("/validate")
+async def validate_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, Any]:
+    """Validate a radio tracking configuration without saving it."""
+    config_dict = {
+        "optional arguments": config.optional_arguments.model_dump(),
+        "rtl-sdr": config.rtl_sdr.model_dump(),
+        "analysis": config.analysis.model_dump(),
+        "matching": config.matching.model_dump(),
+        "publish": config.publish.model_dump(),
+        "dashboard": config.dashboard.model_dump(),
+    }
+    errors = radiotracking_config.validate(config_dict)
+
+    if errors:
+        return {"valid": False, "errors": errors}
+    return {"valid": True, "message": "Radio tracking configuration is valid"}
