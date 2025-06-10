@@ -322,7 +322,10 @@
                                 <form x-show="configLoaded" @submit.prevent="saveConfig">
                                     <!-- RTL-SDR Section -->
                                     <div class="mb-4">
-                                        <h6 class="border-bottom pb-2">RTL-SDR Settings</h6>
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-microchip me-2"></i>
+                                            RTL-SDR Settings
+                                        </h6>
                                         
                                         <!-- Device Configuration -->
                                         <div class="mb-3">
@@ -431,53 +434,57 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div class="row">
-                                                    <div class="col-md-3">
-                                                        <div class="mb-3">
-                                                            <label class="form-label">LNA Gain Stage</label>
-                                                            <input type="number" 
-                                                                   class="form-control" 
-                                                                   x-model.number="config['rtl-sdr'].lna_gain"
-                                                                   min="0"
-                                                                   max="15"
-                                                                   required>
-                                                            <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
+                                                
+                                                <!-- Expert Mode Gain Settings -->
+                                                <div x-show="expertMode" x-transition>
+                                                    <div class="row">
+                                                        <div class="col-md-3">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">LNA Gain Stage</label>
+                                                                <input type="number" 
+                                                                       class="form-control" 
+                                                                       x-model.number="config['rtl-sdr'].lna_gain"
+                                                                       min="0"
+                                                                       max="15"
+                                                                       required>
+                                                                <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <div class="mb-3">
-                                                            <label class="form-label">Mixer Gain Stage</label>
-                                                            <input type="number" 
-                                                                   class="form-control" 
-                                                                   x-model.number="config['rtl-sdr'].mixer_gain"
-                                                                   min="0"
-                                                                   max="15"
-                                                                   required>
-                                                            <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
+                                                        <div class="col-md-3">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Mixer Gain Stage</label>
+                                                                <input type="number" 
+                                                                       class="form-control" 
+                                                                       x-model.number="config['rtl-sdr'].mixer_gain"
+                                                                       min="0"
+                                                                       max="15"
+                                                                       required>
+                                                                <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <div class="mb-3">
-                                                            <label class="form-label">VGA Gain Stage</label>
-                                                            <input type="number" 
-                                                                   class="form-control" 
-                                                                   x-model.number="config['rtl-sdr'].vga_gain"
-                                                                   min="0"
-                                                                   max="15"
-                                                                   required>
-                                                            <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
+                                                        <div class="col-md-3">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">VGA Gain Stage</label>
+                                                                <input type="number" 
+                                                                       class="form-control" 
+                                                                       x-model.number="config['rtl-sdr'].vga_gain"
+                                                                       min="0"
+                                                                       max="15"
+                                                                       required>
+                                                                <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <div class="mb-3">
-                                                            <label class="form-label">Gain (deprecated)</label>
-                                                            <input type="number" 
-                                                                   class="form-control" 
-                                                                   x-model.number="config['rtl-sdr'].gain"
-                                                                   min="0"
-                                                                   step="0.1"
-                                                                   required>
-                                                            <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
+                                                        <div class="col-md-3">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Gain (deprecated)</label>
+                                                                <input type="number" 
+                                                                       class="form-control" 
+                                                                       x-model.number="config['rtl-sdr'].gain"
+                                                                       min="0"
+                                                                       step="0.1"
+                                                                       required>
+                                                                <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -516,7 +523,10 @@
 
                                     <!-- Analysis Section -->
                                     <div class="mb-4">
-                                        <h6 class="border-bottom pb-2">Signal Analysis</h6>
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-wave-square me-2"></i>
+                                            Signal Analysis
+                                        </h6>
                                         <!-- Basic Analysis Settings -->
                                         <div class="row">
                                             <div class="col-md-6">
@@ -601,9 +611,13 @@
                                         </div>
                                     </div>
 
-                                    <!-- Matching Section -->
-                                    <div class="mb-4">
-                                        <h6 class="border-bottom pb-2">Signal Matching</h6>
+                                    <!-- Matching Section (Expert Mode) -->
+                                    <div class="mb-4" x-show="expertMode" x-transition>
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-link text-muted me-2"></i>
+                                            Signal Matching
+                                            <small class="text-muted ms-2">(Expert Mode)</small>
+                                        </h6>
                                         <div class="form-text mb-3">
                                             Signal matching identifies the same radio signal detected across multiple SDR devices. This enables signal confirmation, reduces false positives, and supports triangulation for location tracking.
                                         </div>
@@ -755,7 +769,7 @@
                                     <!-- Dashboard Section (Expert Mode) -->
                                     <div class="mb-4" x-show="expertMode" x-transition>
                                         <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-chart-line text-muted me-2"></i>
+                                            <i class="fas fa-tachometer-alt text-muted me-2"></i>
                                             Dashboard
                                             <small class="text-muted ms-2">(Expert Mode)</small>
                                         </h6>
