@@ -108,78 +108,89 @@
                             <div x-data="scheduleConfig()" x-init="loadConfig()">
                                 <!-- Schedule Configuration Form -->
                             <form @submit.prevent="saveConfig">
-                                    <div class="row">
-                                        <!-- Left Column -->
-                                        <div class="col-md-4">
-                                <!-- Location -->
-                                <div class="mb-3">
-                                    <h6>Location</h6>
-                                                <div class="form-text mb-2">
-                                                    This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and golden/blue hours for scheduling.
+                                    <!-- General Section -->
+                                    <div class="mb-4">
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-cogs me-2"></i>
+                                            General
+                                        </h6>
+                                        
+                                        <div class="row">
+                                            <!-- Left Column -->
+                                            <div class="col-md-4">
+                                                <!-- Location -->
+                                                <div class="mb-3">
+                                                    <h6>Location</h6>
+                                                    <div class="form-text mb-2">
+                                                        This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and golden/blue hours for scheduling.
+                                                    </div>
+                                                    <div class="row">
+                                                        <div class="col-6">
+                                                            <label class="form-label">Latitude</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model="config.lat" 
+                                                                   @input="updateMarkerFromInputs()"
+                                                                   step="0.00000001" 
+                                                                   max="90"
+                                                                   min="-90"
+                                                                   required>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label">Longitude</label>
+                                                            <input type="number" 
+                                                                   class="form-control" 
+                                                                   x-model="config.lon" 
+                                                                   @input="updateMarkerFromInputs()"
+                                                                   step="0.00000001" 
+                                                                   max="180"
+                                                                   min="-180"
+                                                                   required>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                    <div class="row">
-                                                    <div class="col-6">
-                                            <label class="form-label">Latitude</label>
-                                            <input type="number" 
-                                                   class="form-control" 
-                                                   x-model="config.lat" 
-                                                               @input="updateMarkerFromInputs()"
-                                                               step="0.00000001" 
-                                                               max="90"
-                                                               min="-90"
-                                                   required>
-                                        </div>
-                                                    <div class="col-6">
-                                            <label class="form-label">Longitude</label>
-                                            <input type="number" 
-                                                   class="form-control" 
-                                                   x-model="config.lon" 
-                                                               @input="updateMarkerFromInputs()"
-                                                               step="0.00000001" 
-                                                               max="180"
-                                                               min="-180"
-                                                   required>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <!-- Force On -->
-                                <div class="mb-3">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" 
-                                               type="checkbox" 
-                                               x-model="config.force_on" 
-                                               id="forceOn">
-                                        <label class="form-check-label" for="forceOn">Force On</label>
-                                    </div>
-                                                <div class="form-text">
-                                                    When enabled, this disables all scheduling and makes the tracker stay on permanently.
-                                    </div>
-                                </div>
+                                                <!-- Force On -->
+                                                <div class="mb-3">
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.force_on" 
+                                                               id="forceOn">
+                                                        <label class="form-check-label" for="forceOn">Force On</label>
+                                                    </div>
+                                                    <div class="form-text">
+                                                        When enabled, this disables all scheduling and makes the tracker stay on permanently.
+                                                    </div>
+                                                </div>
 
-                                <!-- Button Delay -->
-                                <div class="mb-3">
-                                    <label class="form-label">Button Delay (HH:MM)</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           x-model="config.button_delay" 
-                                           pattern="[0-9]{2}:[0-9]{2}" 
-                                           required>
-                                                <div class="form-text">
-                                                    This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
+                                                <!-- Button Delay -->
+                                                <div class="mb-3">
+                                                    <label class="form-label">Button Delay (HH:MM)</label>
+                                                    <input type="text" 
+                                                           class="form-control" 
+                                                           x-model="config.button_delay" 
+                                                           pattern="[0-9]{2}:[0-9]{2}" 
+                                                           required>
+                                                    <div class="form-text">
+                                                        This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <!-- Right Column (Map) -->
-                                        <div class="col-md-8">
-                                            <div id="map" class="map-container"></div>
+                                            <!-- Right Column (Map) -->
+                                            <div class="col-md-8">
+                                                <div id="map" class="map-container"></div>
+                                            </div>
                                         </div>
-                                </div>
+                                    </div>
 
-                                <!-- Schedule Entries -->
-                                    <div class="mt-4">
-                                    <h6>Schedule Entries</h6>
+                                    <!-- Schedule Entries Section -->
+                                    <div class="mb-4">
+                                        <h6 class="border-bottom pb-2">
+                                            <i class="fas fa-calendar-alt me-2"></i>
+                                            Schedule Entries
+                                        </h6>
                                         <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
                                     <template x-for="(entry, index) in config.schedule" :key="index">
                                         <div class="schedule-entry">
@@ -267,24 +278,27 @@
                                             </div>
                                         </div>
                                     </template>
-                                        <div class="mt-4 mb-3 d-flex flex-column flex-sm-row justify-content-between gap-2">
-                                    <button type="button" 
+                                        
+                                        <div class="mt-3">
+                                            <button type="button" 
                                                     class="btn btn-secondary" 
-                                            @click="addSchedule">
-                                        Add Schedule Entry
+                                                    @click="addSchedule">
+                                                Add Schedule Entry
                                             </button>
-                                            <div class="d-flex gap-2">
-                                                <button type="button" 
-                                                        class="btn btn-outline-secondary" 
-                                                        @click="refreshConfig()">
-                                                    Reset
-                                                </button>
-                                                <button type="submit" 
-                                                        class="btn btn-success">
-                                                    Save Configuration
-                                    </button>
-                                            </div>
                                         </div>
+                                    </div>
+
+                                    <!-- Form Actions -->
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <button type="button" 
+                                                class="btn btn-outline-secondary" 
+                                                @click="refreshConfig()">
+                                            Reset
+                                        </button>
+                                        <button type="submit" 
+                                                class="btn btn-success">
+                                            Save Configuration
+                                        </button>
                                     </div>
                                 </form>
                             </div>
