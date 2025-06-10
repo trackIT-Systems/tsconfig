@@ -1,8 +1,11 @@
 """Schedule configuration endpoints."""
 
+import io
 from typing import Any, Dict, List
 
+import yaml
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.configs.schedule import ScheduleConfig, ScheduleEntry
@@ -58,3 +61,27 @@ async def validate_schedule(config: ScheduleConfigUpdate) -> Dict[str, Any]:
     if errors:
         return {"valid": False, "errors": errors}
     return {"valid": True, "message": "Schedule configuration is valid"}
+
+
+@router.post("/download")
+async def download_schedule(config: ScheduleConfigUpdate) -> StreamingResponse:
+    """Download the schedule configuration as a YAML file without saving it."""
+    # Convert to dict for validation
+    config_dict = config.model_dump()
+
+    # Validate the configuration
+    errors = schedule_config.validate(config_dict)
+    if errors:
+        raise HTTPException(status_code=400, detail={"message": "Invalid schedule configuration", "errors": errors})
+
+    # Generate YAML content
+    yaml_content = yaml.safe_dump(config_dict, default_flow_style=False)
+
+    # Create a file-like object from the string
+    file_like = io.StringIO(yaml_content)
+
+    return StreamingResponse(
+        io.BytesIO(yaml_content.encode()),
+        media_type="application/x-yaml",
+        headers={"Content-Disposition": "attachment; filename=schedule.yml"},
+    )

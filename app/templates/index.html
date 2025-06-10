@@ -295,9 +295,16 @@
                                                 @click="refreshConfig()">
                                             Reset
                                         </button>
+                                        <button type="button" 
+                                                class="btn btn-outline-primary" 
+                                                @click="downloadConfig()">
+                                            <i class="fas fa-download me-1"></i>
+                                            Download
+                                        </button>
                                         <button type="submit" 
                                                 class="btn btn-success">
-                                            Save Configuration
+                                            <i class="fas fa-save me-1"></i>
+                                            Save
                                         </button>
                                     </div>
                                 </form>
@@ -886,10 +893,18 @@
                                                 :disabled="!configLoaded">
                                             Reset
                                         </button>
+                                        <button type="button" 
+                                                class="btn btn-outline-primary" 
+                                                @click="downloadConfig()"
+                                                :disabled="!configLoaded">
+                                            <i class="fas fa-download me-1"></i>
+                                            Download
+                                        </button>
                                         <button type="submit" 
                                                 class="btn btn-success"
                                                 :disabled="!configLoaded">
-                                            Save Configuration
+                                            <i class="fas fa-save me-1"></i>
+                                            Save
                                         </button>
                                 </div>
                             </form>
@@ -1306,6 +1321,42 @@
                     }
                 },
 
+                async downloadConfig() {
+                    try {
+                        const response = await fetch('/api/schedule/download', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.config)
+                        });
+                        if (!response.ok) {
+                            const error = await response.json();
+                            let errorMessage = error.detail?.message || 'Failed to download schedule configuration';
+                            if (error.detail?.errors) {
+                                errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                            }
+                            throw new Error(errorMessage);
+                        }
+
+                        // Create a blob from the response and trigger download
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = 'schedule.yml';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+
+                        this.showMessage('Schedule configuration downloaded successfully!', false);
+                    } catch (error) {
+                        this.showMessage(error.message, true);
+                    }
+                },
+
                 showMessage(message, isError) {
                     // Dispatch a custom event that the parent can listen for
                     window.dispatchEvent(new CustomEvent('show-message', {
@@ -1605,6 +1656,102 @@
                         }
                         const data = await response.json();
                         this.dispatchMessage(data.message, false);  // false means not an error, so it will be success
+                    } catch (error) {
+                        this.dispatchMessage(error.message, true);
+                    }
+                },
+
+                async downloadConfig() {
+                    try {
+                        // Convert the frontend config format to the API format (same as saveConfig)
+                        const apiConfig = {
+                            optional_arguments: {
+                                verbose: this.config["optional arguments"].verbose,
+                                calibrate: this.config["optional arguments"].calibrate,
+                                config: "/boot/firmware/radiotracking.ini", // Required field
+                                station: this.config["optional arguments"].station || null,
+                                schedule: this.config["optional arguments"].schedule || []
+                            },
+                            rtl_sdr: {
+                                device: this.config["rtl-sdr"].device,
+                                calibration: this.config["rtl-sdr"].calibration,
+                                center_freq: this.config["rtl-sdr"].center_freq,
+                                sample_rate: this.config["rtl-sdr"].sample_rate,
+                                sdr_callback_length: this.config["rtl-sdr"].sdr_callback_length,
+                                gain: this.config["rtl-sdr"].gain,
+                                lna_gain: this.config["rtl-sdr"].lna_gain,
+                                mixer_gain: this.config["rtl-sdr"].mixer_gain,
+                                vga_gain: this.config["rtl-sdr"].vga_gain,
+                                sdr_max_restart: this.config["rtl-sdr"].sdr_max_restart,
+                                sdr_timeout_s: this.config["rtl-sdr"].sdr_timeout_s
+                            },
+                            analysis: {
+                                fft_nperseg: this.config["analysis"].fft_nperseg,
+                                fft_window: this.config["analysis"].fft_window,
+                                signal_threshold_dbw: this.config["analysis"].signal_threshold_dbw,
+                                snr_threshold_db: this.config["analysis"].snr_threshold_db,
+                                signal_min_duration_ms: this.config["analysis"].signal_min_duration_ms,
+                                signal_max_duration_ms: this.config["analysis"].signal_max_duration_ms
+                            },
+                            matching: {
+                                matching_timeout_s: this.config["matching"].matching_timeout_s,
+                                matching_time_diff_s: this.config["matching"].matching_time_diff_s,
+                                matching_bandwidth_hz: this.config["matching"].matching_bandwidth_hz,
+                                matching_duration_diff_ms: this.config["matching"].matching_duration_diff_ms
+                            },
+                            publish: {
+                                sig_stdout: this.config["publish"].sig_stdout,
+                                match_stdout: this.config["publish"].match_stdout,
+                                path: this.config["publish"].path,
+                                csv: this.config["publish"].csv,
+                                export_config: this.config["publish"].export_config || true,
+                                mqtt: this.config["publish"].mqtt,
+                                mqtt_host: this.config["publish"].mqtt_host,
+                                mqtt_port: this.config["publish"].mqtt_port
+                            },
+                            dashboard: {
+                                dashboard: this.config["dashboard"].dashboard,
+                                dashboard_host: this.config["dashboard"].dashboard_host,
+                                dashboard_port: this.config["dashboard"].dashboard_port,
+                                dashboard_signals: this.config["dashboard"].dashboard_signals
+                            }
+                        };
+
+                        const response = await fetch('/api/radiotracking/download', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(apiConfig)
+                        });
+                        if (!response.ok) {
+                            const error = await response.json();
+                            let errorMessage = error.detail?.message || 'Failed to download radio tracking configuration';
+                            if (error.detail?.errors) {
+                                errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                            }
+                            if (error.detail?.validation_errors) {
+                                const validationErrors = error.detail.validation_errors.map(err => 
+                                    `${err.loc.join('.')}: ${err.msg}`
+                                ).join(', ');
+                                errorMessage += '\nValidation errors: ' + validationErrors;
+                            }
+                            throw new Error(errorMessage);
+                        }
+
+                        // Create a blob from the response and trigger download
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = 'radiotracking.ini';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+
+                        this.dispatchMessage('Radio tracking configuration downloaded successfully!', false);
                     } catch (error) {
                         this.dispatchMessage(error.message, true);
                     }
