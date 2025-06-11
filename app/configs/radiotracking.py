@@ -22,7 +22,7 @@ class RTLSDREntry(BaseModel):
     mixer_gain: int = Field(..., ge=0, le=15)
     vga_gain: int = Field(..., ge=0, le=15)
     sdr_max_restart: int = Field(..., ge=0)
-    sdr_timeout_s: float = Field(..., gt=0)
+    sdr_timeout_s: int = Field(..., gt=0)
 
     @validator("sample_rate")
     def validate_sample_rate(cls, v):
@@ -120,7 +120,7 @@ class RadioTrackingConfig(BaseConfig):
             except ValueError:
                 return [item.strip().strip("'").strip('"') for item in items]
 
-        # Handle boolean values
+        # Handle boolean values - support both True/False and true/false
         if value.lower() in ("true", "false"):
             return value.lower() == "true"
 
@@ -130,14 +130,30 @@ class RadioTrackingConfig(BaseConfig):
                 return float(value)
             return int(value)
         except ValueError:
+            # Handle string values - strip quotes if present
+            if (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')):
+                return value[1:-1]  # Remove first and last character (quotes)
             return value
 
     def _convert_to_ini_value(self, value: Any) -> str:
         """Convert Python value to INI string format."""
         if isinstance(value, list):
-            return f"[{', '.join(str(x) for x in value)}]"
+            # Properly format list items with quotes for strings
+            formatted_items = []
+            for item in value:
+                if isinstance(item, str):
+                    formatted_items.append(f"'{item}'")
+                else:
+                    formatted_items.append(str(item))
+            return f"[{', '.join(formatted_items)}]"
         if isinstance(value, bool):
-            return str(value).lower()
+            # Use capitalized True/False to match the specification
+            return "True" if value else "False"
+        if isinstance(value, str):
+            # Quote string values unless they are paths or special values
+            if value in ['None', 'none'] or value.startswith('/'):
+                return value
+            return f"'{value}'"
         return str(value)
 
     def load(self) -> Dict[str, Any]:
@@ -221,4 +237,4 @@ class RadioTrackingConfig(BaseConfig):
         except Exception as e:
             errors.append(f"Invalid dashboard configuration: {str(e)}")
 
-        return errors
+        return errors 

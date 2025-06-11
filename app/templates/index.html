@@ -658,6 +658,13 @@
                 <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Schedule Configuration</h5>
+                        <button type="button" 
+                                class="btn btn-outline-info btn-sm" 
+                                @click="streamLogs('wittypid')"
+                                title="View wittypid service logs">
+                            <i class="fas fa-file-alt me-1"></i>
+                            View Logs
+                        </button>
                     </div>
                     <div class="card-body">
                             <div x-data="scheduleConfig()" x-init="loadConfig()">
@@ -873,15 +880,25 @@
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">Radio Tracking Configuration</h5>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" 
-                                       type="checkbox" 
-                                       x-model="expertMode" 
-                                       id="expertMode">
-                                <label class="form-check-label" for="expertMode">
-                                    <i class="fas fa-flask" title="Expert Mode"></i>
-                                    Expert Mode
-                                </label>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm" 
+                                        @click="streamLogs('radiotracking')"
+                                        title="View radiotracking service logs">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    <span class="d-none d-md-inline">View Logs</span>
+                                    <span class="d-md-none">Logs</span>
+                                </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           x-model="expertMode" 
+                                           id="expertMode">
+                                    <label class="form-check-label" for="expertMode">
+                                        <i class="fas fa-flask" title="Expert Mode"></i>
+                                        Expert Mode
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="card-body">
@@ -1556,6 +1573,26 @@
                     this.message = message;
                     this.error = isError;
                     this.warning = !isError && message.includes("No configuration found");
+                },
+
+                streamLogs(serviceName) {
+                    // Show the log modal
+                    const modal = new bootstrap.Modal(document.getElementById('logModal'));
+                    // Get the log viewer instance and start streaming
+                    const logViewerEl = document.getElementById('logModal');
+                    if (logViewerEl && logViewerEl._x_dataStack) {
+                        const logViewerInstance = logViewerEl._x_dataStack[0];
+                        logViewerInstance.startStreaming(serviceName);
+                    }
+                    modal.show();
+                    
+                    // Scroll to bottom after modal is shown and content is rendered
+                    setTimeout(() => {
+                        const container = document.getElementById('logContainer');
+                        if (container) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    }, 250);
                 }
             }
         }
