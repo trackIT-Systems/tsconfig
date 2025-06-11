@@ -12,8 +12,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.css" />
     <!-- Custom CSS -->
     <link href="{{ url_for('static', path='css/style.css') }}" rel="stylesheet">
-    <!-- Alpine.js -->
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Leaflet Locate Control JS -->
@@ -42,6 +40,17 @@
         }
         .config-section { display: none; }
         .config-section.active { display: block; }
+        .status-card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .status-card:hover {
+            transform: translateY(-2px);
+        }
+        .status-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #0d6efd;
+        }
     </style>
 </head>
 <body class="d-flex flex-column h-100">
@@ -53,6 +62,14 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#status" 
+                           @click.prevent="activeConfig = 'status'"
+                           :class="{ 'active': activeConfig === 'status', 'fw-bold': activeConfig === 'status' }">
+                            <i class="fas fa-tachometer-alt me-1"></i>Status
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" 
                            href="#schedule" 
@@ -97,6 +114,353 @@
                         </button>
                     </div>
                 </template>
+
+                <!-- Status Section -->
+                <div x-show="activeConfig === 'status'" x-cloak>
+                    <div x-data="statusPage()" x-init="initStatus()">
+                        <!-- Status Header -->
+                        <div class="row mb-4">
+                            <div class="col">
+                                <h2 class="mb-2">
+                                    <i class="fas fa-server me-3"></i>System Status
+                                </h2>
+                                <p class="text-muted">Real-time system information and health monitoring</p>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-outline-primary" 
+                                        @click="refreshStatus()"
+                                        :disabled="loading || refreshing">
+                                    <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading || refreshing }"></i>
+                                    <span x-text="(loading || refreshing) ? 'Refreshing...' : 'Refresh'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Status Error Alert -->
+                        <template x-if="statusError">
+                            <div x-cloak class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <div x-text="statusError"></div>
+                            </div>
+                        </template>
+
+                        <!-- Status Cards -->
+                        <div x-show="systemInfo" x-cloak>
+                            <div class="row g-4">
+                                <!-- Operating System -->
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 status-card">
+                                        <div class="card-body text-center">
+                                            <div class="mb-3">
+                                                <i class="fas fa-desktop fa-2x text-primary"></i>
+                                            </div>
+                                            <h6 class="card-title text-muted">Operating System</h6>
+                                            <div class="status-value" x-text="systemInfo?.operating_system || 'Loading...'"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Uptime -->
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 status-card">
+                                        <div class="card-body text-center">
+                                            <div class="mb-3">
+                                                <i class="fas fa-clock fa-2x text-success"></i>
+                                            </div>
+                                            <h6 class="card-title text-muted">Uptime</h6>
+                                            <div class="status-value text-success" x-text="formatUptime(systemInfo?.uptime)"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Current DateTime -->
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 status-card">
+                                        <div class="card-body text-center">
+                                            <div class="mb-3">
+                                                <i class="fas fa-calendar-alt fa-2x text-info"></i>
+                                            </div>
+                                            <h6 class="card-title text-muted">Current Date & Time</h6>
+                                            <div class="status-value" x-text="formatDateTime(systemInfo?.current_datetime)"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Timezone -->
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 status-card">
+                                        <div class="card-body text-center">
+                                            <div class="mb-3">
+                                                <i class="fas fa-globe fa-2x text-warning"></i>
+                                            </div>
+                                            <h6 class="card-title text-muted">Timezone</h6>
+                                            <div class="status-value" x-text="systemInfo?.timezone || 'Loading...'"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- OS Release Information -->
+                            <div class="row mt-4" x-show="systemInfo?.os_release">
+                                <div class="col">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-info-circle me-2"></i>OS Release Information
+                                            </h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <table class="table table-borderless">
+                                                        <template x-if="systemInfo?.os_release?.PRETTY_NAME">
+                                                            <tr>
+                                                                <td><strong>OS Name:</strong></td>
+                                                                <td x-text="systemInfo.os_release.PRETTY_NAME"></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.os_release?.VERSION">
+                                                            <tr>
+                                                                <td><strong>Version:</strong></td>
+                                                                <td x-text="systemInfo.os_release.VERSION"></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.os_release?.VERSION_ID">
+                                                            <tr>
+                                                                <td><strong>Version ID:</strong></td>
+                                                                <td x-text="systemInfo.os_release.VERSION_ID"></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.os_release?.ID">
+                                                            <tr>
+                                                                <td><strong>Distribution:</strong></td>
+                                                                <td x-text="systemInfo.os_release.ID"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </table>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <table class="table table-borderless">
+                                                        <template x-if="systemInfo?.os_release?.VERSION_CODENAME">
+                                                            <tr>
+                                                                <td><strong>Codename:</strong></td>
+                                                                <td x-text="systemInfo.os_release.VERSION_CODENAME"></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.os_release?.HOME_URL">
+                                                            <tr>
+                                                                <td><strong>Home URL:</strong></td>
+                                                                <td><a :href="systemInfo.os_release.HOME_URL" target="_blank" x-text="systemInfo.os_release.HOME_URL"></a></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.os_release?.SUPPORT_URL">
+                                                            <tr>
+                                                                <td><strong>Support URL:</strong></td>
+                                                                <td><a :href="systemInfo.os_release.SUPPORT_URL" target="_blank" x-text="systemInfo.os_release.SUPPORT_URL"></a></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.os_release?.BUG_REPORT_URL">
+                                                            <tr>
+                                                                <td><strong>Bug Reports:</strong></td>
+                                                                <td><a :href="systemInfo.os_release.BUG_REPORT_URL" target="_blank" x-text="systemInfo.os_release.BUG_REPORT_URL"></a></td>
+                                                            </tr>
+                                                        </template>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- OS Release Not Available Message -->
+                            <div class="row mt-4" x-show="!systemInfo?.os_release">
+                                <div class="col">
+                                    <div class="card">
+                                        <div class="card-body text-center text-muted">
+                                            <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                            <p class="mb-0">OS release information is not available on this system</p>
+                                            <small>This feature requires a Linux system with freedesktop.org OS release specification support</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Comprehensive System Information -->
+                            <div class="row mt-4" x-show="systemInfo">
+                                <div class="col">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-chart-bar me-2"></i>System Resources
+                                            </h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- CPU Information -->
+                                            <div class="row mb-4">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-microchip me-2"></i>CPU Load</h6>
+                                                    <template x-if="systemInfo?.cpu?.load_avg">
+                                                        <div>
+                                                            <!-- Layered Load Average Progress Bar (matching memory bar style) -->
+                                                            <div class="progress mb-2" style="position: relative;">
+                                                                <!-- 15min load (bottom/background layer) -->
+                                                                <div class="progress-bar bg-warning bg-opacity-30" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[2] / systemInfo.cpu.count_logical * 100))}%`"
+                                                                     style="position: absolute; height: 100%; top: 0; left: 0; z-index: 1;">
+                                                                </div>
+                                                                <!-- 5min load (middle layer) -->
+                                                                <div class="progress-bar bg-info bg-opacity-60" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[1] / systemInfo.cpu.count_logical * 100))}%`"
+                                                                     style="position: absolute; height: 100%; top: 0; left: 0; z-index: 2;">
+                                                                </div>
+                                                                <!-- 1min load (top/foreground layer) -->
+                                                                <div class="progress-bar bg-primary" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[0] / systemInfo.cpu.count_logical * 100))}%`"
+                                                                     style="position: absolute; height: 100%; top: 0; left: 0; z-index: 3;">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                <div class="d-flex justify-content-between mb-1">
+                                                                    <span>Load Average:</span>
+                                                                    <span>
+                                                                        <span class="badge bg-primary me-1" x-text="`1m: ${systemInfo.cpu.load_avg[0].toFixed(2)}`"></span>
+                                                                        <span class="badge bg-info me-1" x-text="`5m: ${systemInfo.cpu.load_avg[1].toFixed(2)}`"></span>
+                                                                        <span class="badge bg-warning" x-text="`15m: ${systemInfo.cpu.load_avg[2].toFixed(2)}`"></span>
+                                                                    </span>
+                                                                </div>
+                                                                <span x-text="`Cores: ${systemInfo.cpu.count_physical} physical, ${systemInfo.cpu.count_logical} logical`"></span>
+                                                            </small>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!systemInfo?.cpu?.load_avg">
+                                                        <div>
+                                                            <!-- Fallback to CPU percentage if load average not available -->
+                                                            <div class="progress mb-2">
+                                                                <div class="progress-bar" 
+                                                                     :style="`width: ${systemInfo?.cpu?.percent || 0}%`" 
+                                                                     :class="{
+                                                                         'bg-success': (systemInfo?.cpu?.percent || 0) < 50,
+                                                                         'bg-warning': (systemInfo?.cpu?.percent || 0) >= 50 && (systemInfo?.cpu?.percent || 0) < 80,
+                                                                         'bg-danger': (systemInfo?.cpu?.percent || 0) >= 80
+                                                                     }">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                <span x-text="`Usage: ${(systemInfo?.cpu?.percent || 0).toFixed(1)}%`"></span><br>
+                                                                <span x-text="`Cores: ${systemInfo?.cpu?.count_physical} physical, ${systemInfo?.cpu?.count_logical} logical`"></span><br>
+                                                                <span class="text-warning">Load averages not available on this system</span>
+                                                            </small>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-memory me-2"></i>Memory</h6>
+                                                    <div class="progress mb-2">
+                                                        <div class="progress-bar" 
+                                                             :style="`width: ${systemInfo?.memory?.virtual?.percent || 0}%`" 
+                                                             :class="{
+                                                                 'bg-success': (systemInfo?.memory?.virtual?.percent || 0) < 50,
+                                                                 'bg-warning': (systemInfo?.memory?.virtual?.percent || 0) >= 50 && (systemInfo?.memory?.virtual?.percent || 0) < 80,
+                                                                 'bg-danger': (systemInfo?.memory?.virtual?.percent || 0) >= 80
+                                                             }">
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted">
+                                                        <span x-text="`Usage: ${(systemInfo?.memory?.virtual?.percent || 0).toFixed(1)}%`"></span><br>
+                                                        <span x-text="`${formatBytes(systemInfo?.memory?.virtual?.used)} / ${formatBytes(systemInfo?.memory?.virtual?.total)}`"></span>
+                                                    </small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Disk Usage -->
+                                            <div class="row mb-4" x-show="systemInfo?.disk?.length > 0">
+                                                <div class="col-12">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-hdd me-2"></i>Disk Usage</h6>
+                                                    <template x-for="(disk, diskIndex) in (systemInfo?.disk || []).slice(0, 4)" :key="`${disk.device}-${disk.mountpoint}-${diskIndex}`">
+                                                        <div class="mb-3">
+                                                            <div class="d-flex justify-content-between">
+                                                                <span x-text="`${disk.device} (${disk.mountpoint})`" class="small"></span>
+                                                                <span x-text="`${disk.percent.toFixed(1)}%`" class="small"></span>
+                                                            </div>
+                                                            <div class="progress" style="height: 8px;">
+                                                                <div class="progress-bar" 
+                                                                     :style="`width: ${disk.percent}%`" 
+                                                                     :class="{
+                                                                         'bg-success': disk.percent < 50,
+                                                                         'bg-warning': disk.percent >= 50 && disk.percent < 80,
+                                                                         'bg-danger': disk.percent >= 80
+                                                                     }">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted" x-text="`${formatBytes(disk.used)} / ${formatBytes(disk.total)} (${formatBytes(disk.free)} free)`"></small>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+
+                                            <!-- Network & Temperature -->
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-network-wired me-2"></i>Network</h6>
+                                                    <table class="table table-borderless table-sm">
+                                                        <tr>
+                                                            <td><strong>Active Connections:</strong></td>
+                                                            <td x-text="systemInfo?.network?.connections !== null ? systemInfo?.network?.connections : 'Permission denied'"></td>
+                                                        </tr>
+                                                        <template x-if="systemInfo?.network?.io_counters?.bytes_sent">
+                                                            <tr>
+                                                                <td><strong>Bytes Sent:</strong></td>
+                                                                <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_sent)"></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.network?.io_counters?.bytes_recv">
+                                                            <tr>
+                                                                <td><strong>Bytes Received:</strong></td>
+                                                                <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_recv)"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </table>
+                                                </div>
+                                                <div class="col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length > 0">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                                    <template x-for="(sensors, sensorName) in systemInfo?.temperatures || {}" :key="sensorName">
+                                                        <div class="mb-2">
+                                                            <strong x-text="sensorName" class="text-capitalize"></strong>
+                                                            <template x-for="sensor in sensors" :key="sensor.label">
+                                                                <div class="small">
+                                                                    <span x-text="sensor.label"></span>: 
+                                                                    <span x-text="`${sensor.current}°C`" 
+                                                                          :class="{
+                                                                              'text-success': sensor.current < 60,
+                                                                              'text-warning': sensor.current >= 60 && sensor.current < 80,
+                                                                              'text-danger': sensor.current >= 80
+                                                                          }"></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div class="col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length === 0">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                                    <small class="text-muted">Temperature sensors not available</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loading State (Initial Load Only) -->
+                        <div x-show="loading && !systemInfo" x-cloak class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Loading system status...</p>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Schedule Configuration -->
                 <div x-show="activeConfig === 'schedule'" x-cloak>
@@ -940,12 +1304,14 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <!-- Alpine.js Components -->
     <script>
         function configManager() {
             return {
-                activeConfig: 'schedule',  // Default to schedule configuration
+                activeConfig: 'status',  // Default to status page
                 message: '',
                 error: false,
                 warning: false,
@@ -956,8 +1322,12 @@
                     const hash = window.location.hash.slice(1);
                     if (hash === 'radiotracking') {
                         this.activeConfig = 'radiotracking';
-                    } else {
+                    } else if (hash === 'schedule') {
                         this.activeConfig = 'schedule';
+                    } else if (hash === 'status') {
+                        this.activeConfig = 'status';
+                    } else {
+                        this.activeConfig = 'status';  // Default to status
                     }
 
                     // Update URL hash when active config changes
@@ -981,7 +1351,7 @@
                     // Listen for hash changes
                     window.addEventListener('hashchange', () => {
                         const hash = window.location.hash.slice(1);
-                        if (hash === 'radiotracking' || hash === 'schedule') {
+                        if (hash === 'radiotracking' || hash === 'schedule' || hash === 'status') {
                             this.activeConfig = hash;
                         }
                     });
@@ -1755,6 +2125,93 @@
                     } catch (error) {
                         this.dispatchMessage(error.message, true);
                     }
+                }
+            }
+        }
+
+        function statusPage() {
+            return {
+                systemInfo: null,
+                loading: true,
+                refreshing: false,
+                statusError: null,
+                lastUpdated: null,
+                refreshInterval: null,
+
+                async initStatus() {
+                    await this.refreshStatus();
+                    // Auto-refresh every 30 seconds when status tab is active
+                    this.refreshInterval = setInterval(() => {
+                        // Only refresh if status tab is active
+                        const currentHash = window.location.hash.slice(1);
+                        if (currentHash === 'status' || (currentHash === '' && this.activeConfig === 'status')) {
+                            this.refreshStatus();
+                        }
+                    }, 30000);
+                },
+
+                async refreshStatus() {
+                    // Use different loading states for initial load vs refresh
+                    if (this.systemInfo) {
+                        this.refreshing = true;
+                    } else {
+                        this.loading = true;
+                    }
+                    this.statusError = null;
+                    
+                    try {
+                        const response = await fetch('/api/system-status');
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const data = await response.json();
+                        this.systemInfo = data;
+                        this.lastUpdated = new Date().toLocaleTimeString();
+                    } catch (err) {
+                        this.statusError = `Failed to load system status: ${err.message}`;
+                        console.error('Status refresh error:', err);
+                    } finally {
+                        this.loading = false;
+                        this.refreshing = false;
+                    }
+                },
+
+                formatUptime(seconds) {
+                    if (!seconds) return 'N/A';
+                    
+                    const days = Math.floor(seconds / (24 * 3600));
+                    const hours = Math.floor((seconds % (24 * 3600)) / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    
+                    if (days > 0) {
+                        return `${days}d ${hours}h ${minutes}m`;
+                    } else if (hours > 0) {
+                        return `${hours}h ${minutes}m`;
+                    } else {
+                        return `${minutes}m`;
+                    }
+                },
+
+                formatDateTime(isoString) {
+                    if (!isoString) return 'N/A';
+                    
+                    try {
+                        const date = new Date(isoString);
+                        return date.toLocaleString();
+                    } catch (err) {
+                        return isoString;
+                    }
+                },
+
+                formatBytes(bytes) {
+                    if (!bytes || bytes === 0) return '0 B';
+                    
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
                 }
             }
         }
