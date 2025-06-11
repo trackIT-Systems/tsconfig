@@ -88,7 +88,7 @@
                            href="#schedule" 
                            @click.prevent="activeConfig = 'schedule'"
                            :class="{ 'active': activeConfig === 'schedule', 'fw-bold': activeConfig === 'schedule' }">
-                            Schedule
+                            <i class="fas fa-calendar-alt me-1"></i>Schedule
                         </a>
                     </li>
                     <li class="nav-item">
@@ -96,7 +96,7 @@
                            href="#radiotracking" 
                            @click.prevent="activeConfig = 'radiotracking'"
                            :class="{ 'active': activeConfig === 'radiotracking', 'fw-bold': activeConfig === 'radiotracking' }">
-                            Radio Tracking
+                            <i class="fas fa-broadcast-tower me-1"></i>Radio Tracking
                         </a>
                     </li>
                 </ul>
