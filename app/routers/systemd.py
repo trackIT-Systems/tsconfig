@@ -13,19 +13,13 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
-# Default services configuration
+# Empty default services configuration - no services loaded by default
 DEFAULT_SERVICES_CONFIG = {
-    "services": [
-        {"name": "chrony", "expert": False},
-        {"name": "wittypid", "expert": False}, 
-        {"name": "wg-quick@wireguard", "expert": False},
-        {"name": "mosquitto", "expert": True},
-        {"name": "mqttutil", "expert": False}
-    ]
+    "services": []
 }
 
 # Configuration file path
-CONFIG_PATH = Path("configs/systemd_services.yml")
+CONFIG_PATH = Path("configs/tsconfig.yml")
 
 
 class ServiceConfig(BaseModel):
