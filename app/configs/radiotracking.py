@@ -87,6 +87,14 @@ class RadioTrackingConfig(BaseConfig):
     """Radio tracking configuration management."""
 
     def __init__(self, config_dir: Path | None = None):
+        # If no custom config_dir provided, use the config loader to get the configured directory
+        if config_dir is None:
+            try:
+                from app.config_loader import config_loader
+                config_dir = config_loader.get_config_dir()
+            except ImportError:
+                # Fallback to default if config_loader is not available
+                config_dir = Path("/boot/firmware")
         super().__init__(config_dir)
 
     @property

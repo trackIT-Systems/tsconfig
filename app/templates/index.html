@@ -2327,6 +2327,7 @@
                 statusError: null,
                 lastUpdated: null,
                 refreshInterval: null,
+                refreshIntervalSeconds: 30, // Default value, will be loaded from config
                 // Systemd services properties
                 services: [],
                 servicesLoading: false,
@@ -2339,9 +2340,11 @@
                 rebootLoading: false,
 
                 async initStatus() {
+                    // Load system configuration first to get refresh interval
+                    await this.loadSystemConfig();
                     await this.refreshStatus();
                     await this.loadServices();
-                    // Auto-refresh every 30 seconds when status tab is active
+                    // Auto-refresh using configured interval when status tab is active
                     this.refreshInterval = setInterval(() => {
                         // Only refresh if status tab is active
                         const currentHash = window.location.hash.slice(1);
@@ -2349,7 +2352,7 @@
                             this.refreshStatus();
                             this.loadServices();
                         }
-                    }, 30000);
+                    }, this.refreshIntervalSeconds * 1000);
                 },
 
                 async refreshStatus() {
@@ -2381,6 +2384,19 @@
                     } finally {
                         this.loading = false;
                         this.refreshing = false;
+                    }
+                },
+
+                async loadSystemConfig() {
+                    try {
+                        const response = await fetch('/api/systemd/config/system');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.refreshIntervalSeconds = data.status_refresh_interval || 30;
+                        }
+                    } catch (err) {
+                        console.warn('Failed to load system config, using default refresh interval:', err);
+                        // Keep default value of 30 seconds
                     }
                 },
 

@@ -1,6 +1,14 @@
 # Systemd services configuration
 # Set expert: true for services that should only be visible in expert mode
 
+# Configuration file locations
+file_locations:
+  config_dir: "/boot/firmware"  # Default location for radiotracking.ini and schedule.yml
+
+# System settings
+system:
+  status_refresh_interval: 5  # Default system status refresh interval in seconds
+
 services:
   - name: chrony
     expert: true

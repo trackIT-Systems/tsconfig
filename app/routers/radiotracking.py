@@ -24,6 +24,18 @@ router = APIRouter(prefix="/api/radiotracking", tags=["radiotracking"])
 radiotracking_config = RadioTrackingConfig()
 
 
+def get_radiotracking_config() -> RadioTrackingConfig:
+    """Get the current radiotracking configuration instance."""
+    global radiotracking_config
+    return radiotracking_config
+
+
+def reload_radiotracking_config():
+    """Reload the radiotracking configuration with updated paths."""
+    global radiotracking_config
+    radiotracking_config = RadioTrackingConfig()
+
+
 class RadioTrackingConfigUpdate(BaseModel):
     """Radio tracking configuration update model."""
 
@@ -35,11 +47,25 @@ class RadioTrackingConfigUpdate(BaseModel):
     dashboard: DashboardEntry
 
 
+@router.post("/reload")
+async def reload_config():
+    """Reload the radiotracking configuration with updated file locations."""
+    try:
+        reload_radiotracking_config()
+        return {"message": "Radiotracking configuration reloaded successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reload radiotracking configuration: {str(e)}"
+        )
+
+
 @router.get("")
 async def get_radiotracking() -> Dict[str, Any]:
     """Get the current radio tracking configuration."""
     try:
-        return radiotracking_config.load()
+        config = get_radiotracking_config()
+        return config.load()
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Radio tracking configuration not found")
 
@@ -48,6 +74,8 @@ async def get_radiotracking() -> Dict[str, Any]:
 async def update_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, Any]:
     """Update the radio tracking configuration."""
     try:
+        radiotracking_cfg = get_radiotracking_config()
+        
         # Convert to dict for validation
         config_dict = {
             "optional arguments": config.optional_arguments.model_dump(),
@@ -59,7 +87,7 @@ async def update_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, A
         }
 
         # Validate the configuration
-        errors = radiotracking_config.validate(config_dict)
+        errors = radiotracking_cfg.validate(config_dict)
         if errors:
             raise HTTPException(
                 status_code=400, detail={"message": "Invalid radio tracking configuration", "errors": errors}
@@ -67,7 +95,7 @@ async def update_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, A
 
         # Save the configuration
         try:
-            radiotracking_config.save(config_dict)
+            radiotracking_cfg.save(config_dict)
             return {"message": "Radio tracking configuration updated successfully", "config": config_dict}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
@@ -88,6 +116,7 @@ async def update_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, A
 @router.post("/validate")
 async def validate_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str, Any]:
     """Validate a radio tracking configuration without saving it."""
+    radiotracking_cfg = get_radiotracking_config()
     config_dict = {
         "optional arguments": config.optional_arguments.model_dump(),
         "rtl-sdr": config.rtl_sdr.model_dump(),
@@ -96,7 +125,7 @@ async def validate_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str,
         "publish": config.publish.model_dump(),
         "dashboard": config.dashboard.model_dump(),
     }
-    errors = radiotracking_config.validate(config_dict)
+    errors = radiotracking_cfg.validate(config_dict)
 
     if errors:
         return {"valid": False, "errors": errors}
@@ -107,6 +136,8 @@ async def validate_radiotracking(config: RadioTrackingConfigUpdate) -> Dict[str,
 async def download_radiotracking(config: RadioTrackingConfigUpdate) -> StreamingResponse:
     """Download the radio tracking configuration as an INI file without saving it."""
     try:
+        radiotracking_cfg = get_radiotracking_config()
+        
         # Convert to dict for validation
         config_dict = {
             "optional arguments": config.optional_arguments.model_dump(),
@@ -118,7 +149,7 @@ async def download_radiotracking(config: RadioTrackingConfigUpdate) -> Streaming
         }
 
         # Validate the configuration
-        errors = radiotracking_config.validate(config_dict)
+        errors = radiotracking_cfg.validate(config_dict)
         if errors:
             raise HTTPException(
                 status_code=400, detail={"message": "Invalid radio tracking configuration", "errors": errors}
@@ -127,7 +158,7 @@ async def download_radiotracking(config: RadioTrackingConfigUpdate) -> Streaming
         # Generate INI content using the same method as the save function
         parser = ConfigParser()
         for section, values in config_dict.items():
-            parser[section] = {key: radiotracking_config._convert_to_ini_value(value) for key, value in values.items()}
+            parser[section] = {key: radiotracking_cfg._convert_to_ini_value(value) for key, value in values.items()}
 
         # Write to a string buffer
         ini_buffer = io.StringIO()

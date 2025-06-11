@@ -12,7 +12,10 @@ class BaseConfig(ABC):
 
     def __init__(self, config_dir: Optional[Path] = None):
         self.config_dir = config_dir or Path("configs")
-        self.config_dir.mkdir(parents=True, exist_ok=True)
+        # Only create directory if it's the default configs directory
+        # Don't automatically create system directories like /boot/firmware
+        if str(self.config_dir) == "configs":
+            self.config_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     @abstractmethod

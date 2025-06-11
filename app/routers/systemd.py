@@ -9,7 +9,9 @@ from typing import Dict, List, Optional
 import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.config_loader import config_loader
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
@@ -51,14 +53,13 @@ class ServiceAction(BaseModel):
 
 
 def get_services_config() -> ServicesConfigFile:
-    """Get services configuration from YAML file."""
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, 'r') as f:
-                config_data = yaml.safe_load(f)
-                return ServicesConfigFile(**config_data)
-        except Exception:
-            pass
+    """Get services configuration from the main config loader."""
+    try:
+        services_data = config_loader.get_services_config()
+        if services_data:
+            return ServicesConfigFile(services=services_data)
+    except Exception:
+        pass
     return ServicesConfigFile(**DEFAULT_SERVICES_CONFIG)
 
 
@@ -315,31 +316,178 @@ async def update_service_config(config: ServicesConfigFile):
 
 @router.post("/reboot")
 async def reboot_system():
-    """Reboot the system."""
+    """Initiate system reboot."""
     try:
-        # Execute reboot command
+        # Use systemctl to reboot the system
         result = subprocess.run(
-            ["sudo", "reboot"],
+            ["sudo", "systemctl", "reboot"],
             capture_output=True,
             text=True,
             timeout=10
         )
         
-        # If we reach here, the reboot command was issued successfully
-        # The system will reboot shortly, so this response may not be received
-        return {
-            "success": True,
-            "message": "System reboot initiated. The system will restart shortly.",
-        }
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to initiate reboot: {result.stderr}"
+            )
+        
+        return {"message": "System reboot initiated"}
     
     except subprocess.TimeoutExpired:
-        # This is somewhat expected as the system may reboot before the command completes
+        # Timeout is expected as the system will be rebooting
+        return {"message": "System reboot initiated"}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initiate reboot: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error during reboot: {str(e)}"
+        )
+
+
+@router.get("/config/locations")
+async def get_config_locations():
+    """Get the current configuration file locations."""
+    try:
+        config_dir = config_loader.get_config_dir()
         return {
-            "success": True,
-            "message": "System reboot command sent. The system should restart shortly.",
+            "config_dir": str(config_dir),
+            "radiotracking_ini": str(config_dir / "radiotracking.ini"),
+            "schedule_yml": str(config_dir / "schedule.yml")
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reboot system: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get configuration locations: {str(e)}"
+        )
+
+
+@router.get("/config/system")
+async def get_system_config():
+    """Get the current system configuration."""
+    try:
+        refresh_interval = config_loader.get_status_refresh_interval()
+        return {
+            "status_refresh_interval": refresh_interval
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get system configuration: {str(e)}"
+        )
+
+
+class ConfigLocationsUpdate(BaseModel):
+    """Configuration locations update model."""
+    config_dir: str
+
+
+class SystemConfigUpdate(BaseModel):
+    """System configuration update model."""
+    status_refresh_interval: int = Field(..., ge=1, le=3600, description="Refresh interval in seconds (1-3600)")
+
+
+@router.put("/config/locations")
+async def update_config_locations(locations: ConfigLocationsUpdate):
+    """Update the configuration file locations."""
+    try:
+        # Load current config
+        current_config = config_loader.load_config()
+        
+        # Update file_locations section
+        if 'file_locations' not in current_config:
+            current_config['file_locations'] = {}
+        
+        current_config['file_locations']['config_dir'] = locations.config_dir
+        
+        # Save updated config
+        with open(config_loader.config_path, 'w') as f:
+            yaml.safe_dump(current_config, f, default_flow_style=False)
+        
+        # Force reload of config
+        config_loader.reload_config()
+        
+        # Trigger reload of all dependent configuration modules
+        await reload_all_configs()
+        
+        return {
+            "message": "Configuration locations updated successfully",
+            "config_dir": locations.config_dir,
+            "radiotracking_ini": f"{locations.config_dir}/radiotracking.ini",
+            "schedule_yml": f"{locations.config_dir}/schedule.yml"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update configuration locations: {str(e)}"
+        )
+
+
+@router.put("/config/system")
+async def update_system_config(system_config: SystemConfigUpdate):
+    """Update the system configuration."""
+    try:
+        # Load current config
+        current_config = config_loader.load_config()
+        
+        # Update system section
+        if 'system' not in current_config:
+            current_config['system'] = {}
+        
+        current_config['system']['status_refresh_interval'] = system_config.status_refresh_interval
+        
+        # Save updated config
+        with open(config_loader.config_path, 'w') as f:
+            yaml.safe_dump(current_config, f, default_flow_style=False)
+        
+        # Force reload of config
+        config_loader.reload_config()
+        
+        return {
+            "message": "System configuration updated successfully",
+            "status_refresh_interval": system_config.status_refresh_interval
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update system configuration: {str(e)}"
+        )
+
+
+async def reload_all_configs():
+    """Reload all configuration modules to use updated paths."""
+    try:
+        # Import here to avoid circular imports
+        from app.routers.radiotracking import reload_radiotracking_config
+        from app.routers.schedule import reload_schedule_config
+        
+        # Reload all configs
+        reload_radiotracking_config()
+        reload_schedule_config()
+        
+    except ImportError as e:
+        # Some modules might not be available, that's okay
+        pass
+    except Exception as e:
+        # Log the error but don't fail the entire operation
+        print(f"Warning: Failed to reload some configurations: {str(e)}")
+
+
+@router.post("/config/reload-all")
+async def reload_all_configurations():
+    """Reload all configuration modules with current file locations."""
+    try:
+        await reload_all_configs()
+        return {"message": "All configurations reloaded successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reload configurations: {str(e)}"
+        )
 
 
 @router.get("/logs/{service_name}")
