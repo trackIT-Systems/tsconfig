@@ -655,22 +655,48 @@
 
                 <!-- Schedule Configuration -->
                 <div x-show="activeConfig === 'schedule'" x-cloak>
-                <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">Schedule Configuration</h5>
-                        <button type="button" 
-                                class="btn btn-outline-info btn-sm" 
-                                @click="streamLogs('wittypid')"
-                                title="View wittypid service logs">
-                            <i class="fas fa-file-alt me-1"></i>
-                            View Logs
-                        </button>
-                    </div>
-                    <div class="card-body">
-                            <div x-data="scheduleConfig()" x-init="loadConfig()">
-                                <!-- Schedule Configuration Form -->
-                            <form @submit.prevent="saveConfig">
-                                    <!-- General Section -->
+                    <div class="row">
+                        <div class="col">
+                            <div class="card" x-data="scheduleConfig()" x-init="init()" x-destroy="cleanup()">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <h5 class="card-title mb-0 me-3">Schedule Configuration</h5>
+                                    <!-- Service Status Indicator -->
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge d-flex align-items-center gap-1" 
+                                              :class="{
+                                                  'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                  'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                  'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                  'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                              }">
+                                            <i :class="{
+                                                   'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
+                                                   'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
+                                                   'fas fa-question-circle': serviceStatus.status === 'not-found',
+                                                   'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                               }" 
+                                               style="font-size: 0.7em;"></i>
+                                            <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
+                                        </span>
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>
+                                            <span x-text="serviceStatus.uptime"></span>
+                                        </small>
+                                    </div>
+                                </div>
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm" 
+                                        @click="streamLogs('wittypid')"
+                                        title="View wittypid service logs">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    View Logs
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                        <!-- Schedule Configuration Form -->
+                                    <form @submit.prevent="saveConfig">
+                                            <!-- General Section -->
                                     <div class="mb-4">
                                         <h6 class="border-bottom pb-2">
                                             <i class="fas fa-cogs me-2"></i>
@@ -883,14 +909,42 @@
                                 </form>
                             </div>
                         </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Radio Tracking Configuration -->
                 <div x-show="activeConfig === 'radiotracking'" x-cloak>
-                    <div class="card">
+                    <div class="row">
+                        <div class="col">
+                            <div class="card" x-data="radiotrackingConfig()" x-init="init()" x-destroy="cleanup()">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="card-title mb-0">Radio Tracking Configuration</h5>
+                            <div class="d-flex align-items-center">
+                                <h5 class="card-title mb-0 me-3">Radio Tracking Configuration</h5>
+                                <!-- Service Status Indicator -->
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge d-flex align-items-center gap-1" 
+                                          :class="{
+                                              'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                              'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                              'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                              'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                          }">
+                                        <i :class="{
+                                               'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
+                                               'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
+                                               'fas fa-question-circle': serviceStatus.status === 'not-found',
+                                               'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                           }" 
+                                           style="font-size: 0.7em;"></i>
+                                        <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
+                                    </span>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        <span x-text="serviceStatus.uptime"></span>
+                                    </small>
+                                </div>
+                            </div>
                             <div class="d-flex align-items-center gap-2">
                                 <button type="button" 
                                         class="btn btn-outline-info btn-sm" 
@@ -913,7 +967,6 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <div x-data="radiotrackingConfig()" x-init="init()">
                                 <!-- Loading State -->
                                 <div x-show="!configLoaded" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
@@ -1505,6 +1558,8 @@
                             </form>
                         </div>
                     </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1632,6 +1687,47 @@
                 map: null,
                 marker: null,
                 mapInitialized: false,
+                // Service status tracking
+                serviceStatus: {
+                    active: false,
+                    enabled: false,
+                    status: 'unknown',
+                    uptime: 'N/A'
+                },
+                serviceStatusLoading: false,
+                refreshInterval: null, // For periodic service status refresh
+
+                async init() {
+                    // Load configuration and set up periodic refresh
+                    await this.loadConfig();
+                    await this.setupPeriodicRefresh();
+                },
+
+                async setupPeriodicRefresh() {
+                    // Get the refresh interval from system config
+                    const refreshIntervalSeconds = await getSystemRefreshInterval();
+                    
+                    // Set up periodic refresh for service status
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                    }
+                    
+                    this.refreshInterval = setInterval(() => {
+                        // Only refresh if schedule tab is active
+                        const currentHash = window.location.hash.slice(1);
+                        if (currentHash === 'schedule') {
+                            this.loadServiceStatus();
+                        }
+                    }, refreshIntervalSeconds * 1000);
+                },
+
+                cleanup() {
+                    // Clean up interval when component is destroyed
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                        this.refreshInterval = null;
+                    }
+                },
 
                 initMap() {
                     // Only initialize if not already done and container is visible
@@ -1806,8 +1902,34 @@
                         } else {
                             this.updateMarkerFromInputs();
                         }
+                        
+                        // Load service status
+                        await this.loadServiceStatus();
                     } catch (error) {
                         this.showMessage(error.message, true);
+                    }
+                },
+
+                async loadServiceStatus() {
+                    this.serviceStatusLoading = true;
+                    try {
+                        const response = await fetch('/api/systemd/services');
+                        if (response.ok) {
+                            const services = await response.json();
+                            const wittypidService = services.find(service => service.name === 'wittypid');
+                            if (wittypidService) {
+                                this.serviceStatus = {
+                                    active: wittypidService.active,
+                                    enabled: wittypidService.enabled,
+                                    status: wittypidService.status,
+                                    uptime: wittypidService.uptime || 'N/A'
+                                };
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to load service status:', error);
+                    } finally {
+                        this.serviceStatusLoading = false;
                     }
                 },
 
@@ -2002,6 +2124,11 @@
                         
                         this.showMessage(`Configuration saved and ${data.message}`, false);
                         
+                        // Refresh service status after restart
+                        setTimeout(async () => {
+                            await this.loadServiceStatus();
+                        }, 2000);
+                        
                     } catch (error) {
                         this.showMessage(error.message, true);
                     }
@@ -2073,6 +2200,15 @@
                 configLoaded: false,
                 deviceCount: 1,
                 isLoading: true,
+                // Service status tracking
+                serviceStatus: {
+                    active: false,
+                    enabled: false,
+                    status: 'unknown',
+                    uptime: 'N/A'
+                },
+                serviceStatusLoading: false,
+                refreshInterval: null, // For periodic service status refresh
 
                 dispatchMessage(message, isError) {
                     // Dispatch a custom event that the parent can listen for
@@ -2117,9 +2253,59 @@
                     }
                 },
 
-                init() {
-                    // Load configuration when component is initialized
-                    this.loadConfig();
+                async init() {
+                    // Load configuration and set up periodic refresh
+                    await this.loadConfig();
+                    await this.setupPeriodicRefresh();
+                },
+
+                async setupPeriodicRefresh() {
+                    // Get the refresh interval from system config
+                    const refreshIntervalSeconds = await getSystemRefreshInterval();
+                    
+                    // Set up periodic refresh for service status
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                    }
+                    
+                    this.refreshInterval = setInterval(() => {
+                        // Only refresh if radiotracking tab is active
+                        const currentHash = window.location.hash.slice(1);
+                        if (currentHash === 'radiotracking') {
+                            this.loadServiceStatus();
+                        }
+                    }, refreshIntervalSeconds * 1000);
+                },
+
+                cleanup() {
+                    // Clean up interval when component is destroyed
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                        this.refreshInterval = null;
+                    }
+                },
+
+                async loadServiceStatus() {
+                    this.serviceStatusLoading = true;
+                    try {
+                        const response = await fetch('/api/systemd/services');
+                        if (response.ok) {
+                            const services = await response.json();
+                            const radiotrackingService = services.find(service => service.name === 'radiotracking');
+                            if (radiotrackingService) {
+                                this.serviceStatus = {
+                                    active: radiotrackingService.active,
+                                    enabled: radiotrackingService.enabled,
+                                    status: radiotrackingService.status,
+                                    uptime: radiotrackingService.uptime || 'N/A'
+                                };
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to load service status:', error);
+                    } finally {
+                        this.serviceStatusLoading = false;
+                    }
                 },
 
                 async loadConfig() {
@@ -2140,6 +2326,9 @@
                         Object.assign(this.config, data);
                         this.configLoaded = true;
                         this.deviceCount = this.config["rtl-sdr"].device.length;
+                        
+                        // Load service status
+                        await this.loadServiceStatus();
                     } catch (error) {
                         this.dispatchMessage(error.message, true);
                     } finally {
@@ -2432,11 +2621,30 @@
                         
                         this.dispatchMessage(`Configuration saved and ${data.message}`, false);
                         
+                        // Refresh service status after restart
+                        setTimeout(async () => {
+                            await this.loadServiceStatus();
+                        }, 2000);
+                        
                     } catch (error) {
                         this.dispatchMessage(error.message, true);
                     }
                 }
             }
+        }
+
+        // Global function to get refresh interval for use across all configurations
+        async function getSystemRefreshInterval() {
+            try {
+                const response = await fetch('/api/systemd/config/system');
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.status_refresh_interval || 30;
+                }
+            } catch (err) {
+                console.warn('Failed to load system config, using default refresh interval:', err);
+            }
+            return 30; // Default fallback
         }
 
         function statusPage() {
