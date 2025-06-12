@@ -108,19 +108,6 @@
                         </a>
                     </li>
                 </ul>
-                <!-- Expert Mode Toggle - Right side of navbar -->
-                <div class="ms-auto">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" 
-                               type="checkbox" 
-                               id="globalExpertModeToggle" 
-                               x-model="expertMode">
-                        <label class="form-check-label text-light" for="globalExpertModeToggle">
-                            <i class="fas fa-flask me-1" title="Expert Mode"></i>
-                            <span class="d-none d-md-inline">Expert Mode</span>
-                        </label>
-                    </div>
-                </div>
             </div>
         </div>
     </nav>
@@ -207,10 +194,19 @@
                         <div class="row mb-4">
                             <div class="col">
                                 <div class="card">
-                                    <div class="card-header">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
                                         <h5 class="card-title mb-0">
                                             <i class="fas fa-cogs me-2"></i>System Services
                                         </h5>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="expertModeToggle" 
+                                                   x-model="expertMode">
+                                            <label class="form-check-label" for="expertModeToggle">
+                                                Expert Mode
+                                            </label>
+                                        </div>
                                     </div>
 
                                         <!-- Loading state -->
@@ -993,6 +989,16 @@
                                     <span class="d-none d-md-inline">View Logs</span>
                                     <span class="d-md-none">Logs</span>
                                 </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           x-model="expertMode" 
+                                           id="expertMode">
+                                    <label class="form-check-label" for="expertMode">
+                                        <i class="fas fa-flask" title="Expert Mode"></i>
+                                        Expert Mode
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="card-body">
@@ -1633,6 +1639,16 @@
                                             <span class="d-none d-md-inline">View Logs</span>
                                             <span class="d-md-none">Logs</span>
                                         </button>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="expertMode" 
+                                                   id="expertModeSoundscape">
+                                            <label class="form-check-label" for="expertModeSoundscape">
+                                                <i class="fas fa-flask" title="Expert Mode"></i>
+                                                Expert Mode
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="card-body">
@@ -1689,7 +1705,7 @@
                                             </div>
                                             
                                             <!-- Technical Settings Row (Expert Mode) -->
-                                            <div class="row" x-show="$root.expertMode" x-transition>
+                                            <div class="row" x-show="expertMode" x-transition>
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Device Name <small class="text-muted">(Expert)</small></label>
@@ -1714,7 +1730,7 @@
                                             </div>
                                             
                                             <!-- Additional Technical Settings Row (Expert Mode) -->
-                                            <div class="row" x-show="$root.expertMode" x-transition>
+                                            <div class="row" x-show="expertMode" x-transition>
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Input Length <small class="text-muted">(Expert)</small></label>
@@ -1742,17 +1758,16 @@
 
 
 
-                                        <!-- Detectors Section -->
+                                        <!-- BirdEdge Detector Section -->
                                         <div class="mb-4">
                                             <h6 class="border-bottom pb-2">
-                                                <i class="fas fa-search me-2"></i>
-                                                Detectors
+                                                <i class="fas fa-dove me-2"></i>
+                                                BirdEdge Detector
                                             </h6>
                                             
-                                            <!-- Detector Settings -->
                                             <div class="mb-3">
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <label class="form-label mb-0">Bird Edge Detector</label>
+                                                    <label class="form-label mb-0">Enable BirdEdge Detection</label>
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" 
                                                                type="checkbox" 
@@ -1764,27 +1779,28 @@
                                                     </div>
                                                 </div>
                                                 <div class="row" x-show="config.detectors.birdedge.enabled"  x-transition>
-                                                    <div class="col-md-4">
+                                                    <div class="col-md-6">
                                                         <label class="form-label">Detection Threshold: <span x-text="config.detectors.birdedge.detection_threshold.toFixed(2)"></span></label>
                                                         <input type="range" 
                                                                class="form-range" 
                                                                x-model.number="config.detectors.birdedge.detection_threshold"
-                                                               min="0.0"
+                                                               min="0.3"
                                                                max="1.0"
                                                                step="0.01">
-                                                        <div class="form-text">Minimum confidence for bird call detection (0.0-1.0)</div>
+                                                        <div class="form-text">Species/label identification threshold (0.3-1.0)</div>
+                                                        
+                                                        <div x-show="expertMode" x-transition class="mt-3">
+                                                            <label class="form-label">Classification Threshold: <span x-text="config.detectors.birdedge.class_threshold.toFixed(2)"></span></label>
+                                                            <input type="range" 
+                                                                   class="form-range" 
+                                                                   x-model.number="config.detectors.birdedge.class_threshold"
+                                                                   min="0.0"
+                                                                   max="1.0"
+                                                                   step="0.01">
+                                                            <div class="form-text">Binary bird presence threshold (0.0 disables, 0.0-1.0)</div>
+                                                        </div>
                                                     </div>
-                                                    <div class="col-md-4">
-                                                        <label class="form-label">Class Threshold: <span x-text="config.detectors.birdedge.class_threshold.toFixed(2)"></span></label>
-                                                        <input type="range" 
-                                                               class="form-range" 
-                                                               x-model.number="config.detectors.birdedge.class_threshold"
-                                                               min="0.25"
-                                                               max="1.0"
-                                                               step="0.01">
-                                                        <div class="form-text">Minimum confidence for species classification (0.25-1.0)</div>
-                                                    </div>
-                                                    <div class="col-md-4">
+                                                    <div class="col-md-6">
                                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                                             <label class="form-label mb-0">Model Path</label>
                                                             <button type="button" 
@@ -1812,11 +1828,135 @@
                                                         <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
                                                     </div>
                                                 </div>
+                                                
+                                                <!-- BirdEdge Detection Schedule -->
+                                                <div x-show="config.detectors.birdedge.enabled" x-transition class="mt-3">
+                                                    <div class="mb-3">
+                                                        <label class="form-label mb-2">Detection Schedule</label>
+                                                        <div class="form-text mb-3">Define time spans when BirdEdge detector should be active. Leave empty for continuous operation.</div>
+                                                        
+                                                        <template x-for="(task, index) in config.detectors.birdedge.tasks" :key="index">
+                                                            <div class="schedule-entry-modern mb-2">
+                                                                <div class="bg-light rounded-2 p-3">
+                                                                    <div class="d-flex align-items-center justify-content-between mb-3">
+                                                                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                                            <i class="fas fa-clock text-primary me-2"></i>
+                                                                            <input type="text" 
+                                                                                   class="form-control form-control-sm fw-medium" 
+                                                                                   x-model="task.name" 
+                                                                                   placeholder="Enter task name..." 
+                                                                                   required>
+                                                                        </div>
+                                                                        <button type="button" 
+                                                                                class="btn btn-outline-danger btn-sm" 
+                                                                                @click="removeDetectorTask('birdedge', index)"
+                                                                                title="Remove task">
+                                                                            <i class="fas fa-trash"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                    <div class="row g-3">
+                                                                        <div class="col-md-6">
+                                                                            <div class="d-flex align-items-center gap-2">
+                                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                                                    <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                                                </label>
+                                                                                <div class="row g-1 flex-grow-1">
+                                                                                    <div class="col">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                x-model="task.startReference"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'start')">
+                                                                                            <option value="time">Clock Time</option>
+                                                                                            <option value="sunrise">Sunrise</option>
+                                                                                            <option value="sunset">Sunset</option>
+                                                                                            <option value="dawn">Dawn</option>
+                                                                                            <option value="dusk">Dusk</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                style="width: 70px;"
+                                                                                                x-model="task.startSign"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'start')"
+                                                                                                :disabled="task.startReference === 'time'">
+                                                                                            <option value="+">+</option>
+                                                                                            <option value="-">-</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <input type="time" 
+                                                                                               class="form-control form-control-sm" 
+                                                                                               style="width: 110px;"
+                                                                                               x-model="task.startOffset"
+                                                                                               @change="updateDetectorTaskTimeString('birdedge', task, 'start')">
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-6">
+                                                                            <div class="d-flex align-items-center gap-2">
+                                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                                                    <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                                                </label>
+                                                                                <div class="row g-1 flex-grow-1">
+                                                                                    <div class="col">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                x-model="task.stopReference"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'stop')">
+                                                                                            <option value="time">Clock Time</option>
+                                                                                            <option value="sunrise">Sunrise</option>
+                                                                                            <option value="sunset">Sunset</option>
+                                                                                            <option value="dawn">Dawn</option>
+                                                                                            <option value="dusk">Dusk</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                style="width: 70px;"
+                                                                                                x-model="task.stopSign"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'stop')"
+                                                                                                :disabled="task.stopReference === 'time'">
+                                                                                            <option value="+">+</option>
+                                                                                            <option value="-">-</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <input type="time" 
+                                                                                               class="form-control form-control-sm" 
+                                                                                               style="width: 110px;"
+                                                                                               x-model="task.stopOffset"
+                                                                                               @change="updateDetectorTaskTimeString('birdedge', task, 'stop')">
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                        
+                                                        <div class="mt-3">
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                                    @click="addDetectorTask('birdedge')">
+                                                                <i class="fas fa-plus me-2"></i>
+                                                                Add Schedule Entry
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
+                                        </div>
+
+                                        <!-- YoloBat Detector Section -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-moon me-2"></i>
+                                                YoloBat Detector
+                                            </h6>
                                             
                                             <div class="mb-3">
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <label class="form-label mb-0">YOLO Bat Detector</label>
+                                                    <label class="form-label mb-0">Enable YoloBat Detection</label>
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" 
                                                                type="checkbox" 
@@ -1828,27 +1968,17 @@
                                                     </div>
                                                 </div>
                                                 <div class="row" x-show="config.detectors.yolobat.enabled"  x-transition>
-                                                    <div class="col-md-4">
+                                                    <div class="col-md-6">
                                                         <label class="form-label">Detection Threshold: <span x-text="config.detectors.yolobat.detection_threshold.toFixed(2)"></span></label>
                                                         <input type="range" 
                                                                class="form-range" 
                                                                x-model.number="config.detectors.yolobat.detection_threshold"
-                                                               min="0.0"
+                                                               min="0.3"
                                                                max="1.0"
                                                                step="0.01">
-                                                        <div class="form-text">Minimum confidence for bat call detection (0.0-1.0)</div>
+                                                        <div class="form-text">Species/label identification threshold (0.3-1.0)</div>
                                                     </div>
-                                                    <div class="col-md-4">
-                                                        <label class="form-label">Class Threshold: <span x-text="config.detectors.yolobat.class_threshold.toFixed(2)"></span></label>
-                                                        <input type="range" 
-                                                               class="form-range" 
-                                                               x-model.number="config.detectors.yolobat.class_threshold"
-                                                               min="0.25"
-                                                               max="1.0"
-                                                               step="0.01">
-                                                        <div class="form-text">Minimum confidence for bat species classification (0.25-1.0)</div>
-                                                    </div>
-                                                    <div class="col-md-4">
+                                                    <div class="col-md-6">
                                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                                             <label class="form-label mb-0">Model Path</label>
                                                             <button type="button" 
@@ -1876,10 +2006,122 @@
                                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <!-- Expert Mode: Advanced Detector Settings -->
-                                            <div x-show="$root.expertMode" x-transition>
+                                                
+                                                <!-- YoloBat Detection Schedule -->
+                                                <div x-show="config.detectors.yolobat.enabled" x-transition class="mt-3">
+                                                    <div class="mb-3">
+                                                        <label class="form-label mb-2">Detection Schedule</label>
+                                                        <div class="form-text mb-3">Define time spans when YoloBat detector should be active. Leave empty for continuous operation.</div>
+                                                        
+                                                        <template x-for="(task, index) in config.detectors.yolobat.tasks" :key="index">
+                                                            <div class="schedule-entry-modern mb-2">
+                                                                <div class="bg-light rounded-2 p-3">
+                                                                    <div class="d-flex align-items-center justify-content-between mb-3">
+                                                                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                                            <i class="fas fa-clock text-primary me-2"></i>
+                                                                            <input type="text" 
+                                                                                   class="form-control form-control-sm fw-medium" 
+                                                                                   x-model="task.name" 
+                                                                                   placeholder="Enter task name..." 
+                                                                                   required>
+                                                                        </div>
+                                                                        <button type="button" 
+                                                                                class="btn btn-outline-danger btn-sm" 
+                                                                                @click="removeDetectorTask('yolobat', index)"
+                                                                                title="Remove task">
+                                                                            <i class="fas fa-trash"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                    <div class="row g-3">
+                                                                        <div class="col-md-6">
+                                                                            <div class="d-flex align-items-center gap-2">
+                                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                                                    <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                                                </label>
+                                                                                <div class="row g-1 flex-grow-1">
+                                                                                    <div class="col">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                x-model="task.startReference"
+                                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'start')">
+                                                                                            <option value="time">Clock Time</option>
+                                                                                            <option value="sunrise">Sunrise</option>
+                                                                                            <option value="sunset">Sunset</option>
+                                                                                            <option value="dawn">Dawn</option>
+                                                                                            <option value="dusk">Dusk</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                style="width: 70px;"
+                                                                                                x-model="task.startSign"
+                                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'start')"
+                                                                                                :disabled="task.startReference === 'time'">
+                                                                                            <option value="+">+</option>
+                                                                                            <option value="-">-</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <input type="time" 
+                                                                                               class="form-control form-control-sm" 
+                                                                                               style="width: 110px;"
+                                                                                               x-model="task.startOffset"
+                                                                                               @change="updateDetectorTaskTimeString('yolobat', task, 'start')">
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-6">
+                                                                            <div class="d-flex align-items-center gap-2">
+                                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                                                    <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                                                </label>
+                                                                                <div class="row g-1 flex-grow-1">
+                                                                                    <div class="col">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                x-model="task.stopReference"
+                                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'stop')">
+                                                                                            <option value="time">Clock Time</option>
+                                                                                            <option value="sunrise">Sunrise</option>
+                                                                                            <option value="sunset">Sunset</option>
+                                                                                            <option value="dawn">Dawn</option>
+                                                                                            <option value="dusk">Dusk</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                style="width: 70px;"
+                                                                                                x-model="task.stopSign"
+                                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'stop')"
+                                                                                                :disabled="task.stopReference === 'time'">
+                                                                                            <option value="+">+</option>
+                                                                                            <option value="-">-</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <input type="time" 
+                                                                                               class="form-control form-control-sm" 
+                                                                                               style="width: 110px;"
+                                                                                               x-model="task.stopOffset"
+                                                                                               @change="updateDetectorTaskTimeString('yolobat', task, 'stop')">
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                        
+                                                        <div class="mt-3">
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                                    @click="addDetectorTask('yolobat')">
+                                                                <i class="fas fa-plus me-2"></i>
+                                                                Add Schedule Entry
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -1979,7 +2221,7 @@
                                         </div>
 
                                         <!-- Species Groups Section (Expert Mode) -->
-                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
+                                        <div class="mb-4" x-show="expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-layer-group text-muted me-2"></i>
                                                 Species Groups
@@ -2000,7 +2242,7 @@
 
                                         <!-- Optional Arguments Section (Expert Mode) -->
                                                                                 <!-- Output Device Settings (Expert Mode) -->
-                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
+                                        <div class="mb-4" x-show="expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-volume-up me-2"></i>
                                                 Output Device
@@ -2033,7 +2275,7 @@
                                             </div>
                                             
                                             <!-- Expert Mode Output Settings -->
-                                            <div class="row" x-show="$root.expertMode" x-transition>
+                                            <div class="row" x-show="expertMode" x-transition>
                                                 <div class="col-md-4">
                                                     <div class="mb-3">
                                                         <label class="form-label">Device Match <small class="text-muted">(Expert)</small></label>
@@ -2069,7 +2311,7 @@
                                         </div>
 
                                         <!-- Lure Playback Section (Expert Mode) -->
-                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
+                                        <div class="mb-4" x-show="expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-play text-muted me-2"></i>
                                                 Lure Playback
@@ -2091,7 +2333,7 @@
                                                 </template>
                                             </div>
                                         </div>
-                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
+                                        <div class="mb-4" x-show="expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-cogs text-muted me-2"></i>
                                                 Optional Arguments
@@ -2141,7 +2383,7 @@
                                                 <button type="button" 
                                                         class="btn btn-warning" 
                                                         @click="saveAndRestartService()"
-                                                        :disabled="!configLoaded">
+                                                        :disabled="!configLoaded || serviceStatus.status === 'not-found'">
                                                     <i class="fas fa-save me-1"></i>
                                                     <i class="fas fa-redo me-1"></i>
                                                     Save & Restart
@@ -2252,6 +2494,13 @@
                     // Listen for message events from child components
                     window.addEventListener('show-message', (event) => {
                         this.showMessage(event.detail.message, event.detail.isError);
+                    });
+                    
+                    // Listen for Alpine.js custom events from child components (like soundscapepipe)
+                    this.$el.addEventListener('message', (event) => {
+                        this.message = event.detail.message;
+                        this.error = event.detail.error;
+                        this.warning = false;
                     });
                 },
 
@@ -3253,13 +3502,14 @@
                     channels: 1,
                     detectors: {
                         birdedge: {
-                            detection_threshold: 0.0,
-                            class_threshold: 0.3
+                            detection_threshold: 0.3,
+                            class_threshold: 0.0,
+                            tasks: []
                         },
                         yolobat: {
                             detection_threshold: 0.3,
-                            class_threshold: 0.3,
-                            model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml"
+                            model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml",
+                            tasks: []
                         },
                         schedule: {
                             tasks: []
@@ -3277,6 +3527,7 @@
                     groups: {}
                 },
                 configLoaded: false,
+                expertMode: false,
                 serviceStatus: {
                     active: false,
                     enabled: false,
@@ -3346,15 +3597,31 @@
                             // BirdEdge detector - enabled by default if present in config
                             if (detectors.birdedge) {
                                 detectors.birdedge.enabled = detectors.birdedge.enabled !== undefined ? detectors.birdedge.enabled : true;
+                                detectors.birdedge.tasks = detectors.birdedge.tasks || [];
+                                // Parse existing task time strings into UI components
+                                detectors.birdedge.tasks.forEach(task => {
+                                    this.parseDetectorTaskTimeString(task, task.start, 'start');
+                                    this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                                });
                             } else {
-                                detectors.birdedge = { enabled: true, detection_threshold: 0.0, class_threshold: 0.3, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx" };
+                                detectors.birdedge = { enabled: true, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", tasks: [] };
                             }
                             
                             // YOLOBat detector - enabled by default if present in config  
                             if (detectors.yolobat) {
                                 detectors.yolobat.enabled = detectors.yolobat.enabled !== undefined ? detectors.yolobat.enabled : true;
+                                detectors.yolobat.tasks = detectors.yolobat.tasks || [];
+                                // Parse existing task time strings into UI components
+                                detectors.yolobat.tasks.forEach(task => {
+                                    this.parseDetectorTaskTimeString(task, task.start, 'start');
+                                    this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                                });
+                                // Remove class_threshold if it exists (YoloBat only supports detection)
+                                if (detectors.yolobat.class_threshold !== undefined) {
+                                    delete detectors.yolobat.class_threshold;
+                                }
                             } else {
-                                detectors.yolobat = { enabled: false, detection_threshold: 0.3, class_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml" };
+                                detectors.yolobat = { enabled: false, detection_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", tasks: [] };
                             }
                             
                             // Schedule always exists
@@ -3419,11 +3686,27 @@
                         if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
                             configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
                             delete configToSave.detectors.birdedge.enabled; // Remove the enabled flag from saved config
+                            // Clean up tasks - convert UI components back to time strings
+                            if (configToSave.detectors.birdedge.tasks) {
+                                configToSave.detectors.birdedge.tasks = configToSave.detectors.birdedge.tasks.map(task => {
+                                    const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                                    return cleanTask;
+                                });
+                            }
                         }
                         
                         if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
                             configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
                             delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
+                            // Remove class_threshold if it exists (YoloBat only supports detection)
+                            delete configToSave.detectors.yolobat.class_threshold;
+                            // Clean up tasks - convert UI components back to time strings
+                            if (configToSave.detectors.yolobat.tasks) {
+                                configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
+                                    const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                                    return cleanTask;
+                                });
+                            }
                         }
                         
                         // Always include schedule if it exists
@@ -3465,11 +3748,27 @@
                         if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
                             configToDownload.detectors.birdedge = { ...this.config.detectors.birdedge };
                             delete configToDownload.detectors.birdedge.enabled; // Remove the enabled flag from downloaded config
+                            // Clean up tasks - convert UI components back to time strings
+                            if (configToDownload.detectors.birdedge.tasks) {
+                                configToDownload.detectors.birdedge.tasks = configToDownload.detectors.birdedge.tasks.map(task => {
+                                    const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                                    return cleanTask;
+                                });
+                            }
                         }
                         
                         if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
                             configToDownload.detectors.yolobat = { ...this.config.detectors.yolobat };
                             delete configToDownload.detectors.yolobat.enabled; // Remove the enabled flag from downloaded config
+                            // Remove class_threshold if it exists (YoloBat only supports detection)
+                            delete configToDownload.detectors.yolobat.class_threshold;
+                            // Clean up tasks - convert UI components back to time strings
+                            if (configToDownload.detectors.yolobat.tasks) {
+                                configToDownload.detectors.yolobat.tasks = configToDownload.detectors.yolobat.tasks.map(task => {
+                                    const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                                    return cleanTask;
+                                });
+                            }
                         }
                         
                         // Always include schedule if it exists
@@ -3726,6 +4025,66 @@
                     } finally {
                         this.loadingModels = false;
                     }
+                },
+
+                // Detector task management methods
+                updateDetectorTaskTimeString(detectorName, task, type) {
+                    const reference = task[`${type}Reference`];
+                    const sign = task[`${type}Sign`];
+                    const offset = task[`${type}Offset`];
+                    
+                    if (reference === 'time') {
+                        task[type] = offset;
+                    } else {
+                        task[type] = `${reference}${sign}${offset}`;
+                    }
+                },
+
+                addDetectorTask(detectorName) {
+                    if (!this.config.detectors[detectorName].tasks) {
+                        this.config.detectors[detectorName].tasks = [];
+                    }
+                    
+                    this.config.detectors[detectorName].tasks.push({
+                        name: '',
+                        start: '00:00',
+                        stop: '00:00',
+                        startReference: 'time',
+                        startOffset: '00:00',
+                        startSign: '+',
+                        stopReference: 'time',
+                        stopOffset: '00:00',
+                        stopSign: '+'
+                    });
+                },
+
+                removeDetectorTask(detectorName, index) {
+                    this.config.detectors[detectorName].tasks.splice(index, 1);
+                },
+
+                parseDetectorTaskTimeString(task, timeStr, type) {
+                    if (timeStr.includes('sunrise')) {
+                        task[`${type}Reference`] = 'sunrise';
+                        task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                        task[`${type}Offset`] = timeStr.replace('sunrise', '').replace('+', '').replace('-', '').trim();
+                    } else if (timeStr.includes('sunset')) {
+                        task[`${type}Reference`] = 'sunset';
+                        task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                        task[`${type}Offset`] = timeStr.replace('sunset', '').replace('+', '').replace('-', '').trim();
+                    } else if (timeStr.includes('dawn')) {
+                        task[`${type}Reference`] = 'dawn';
+                        task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                        task[`${type}Offset`] = timeStr.replace('dawn', '').replace('+', '').replace('-', '').trim();
+                    } else if (timeStr.includes('dusk')) {
+                        task[`${type}Reference`] = 'dusk';
+                        task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                        task[`${type}Offset`] = timeStr.replace('dusk', '').replace('+', '').replace('-', '').trim();
+                    } else {
+                        // Assume it's a clock time
+                        task[`${type}Reference`] = 'time';
+                        task[`${type}Sign`] = '+';
+                        task[`${type}Offset`] = timeStr;
+                    }
                 }
             }
         }
@@ -3760,6 +4119,7 @@
                 actionLoading: false,
                 actionMessage: '',
                 actionError: false,
+                expertMode: false,
                 // Reboot functionality
                 rebootLoading: false,
 
@@ -3887,10 +4247,7 @@
                 },
 
                 get filteredServices() {
-                    // Access root expertMode via Alpine's $root
-                    const expertMode = this.$root.expertMode || false;
-                    
-                    if (expertMode) {
+                    if (this.expertMode) {
                         return this.services;
                     } else {
                         return this.services.filter(service => !service.expert);
