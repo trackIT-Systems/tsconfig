@@ -1689,7 +1689,7 @@
                                             </div>
                                             
                                             <!-- Technical Settings Row (Expert Mode) -->
-                                            <div class="row" x-show="$parent.expertMode" x-transition>
+                                            <div class="row" x-show="$root.expertMode" x-transition>
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Device Name <small class="text-muted">(Expert)</small></label>
@@ -1714,7 +1714,7 @@
                                             </div>
                                             
                                             <!-- Additional Technical Settings Row (Expert Mode) -->
-                                            <div class="row" x-show="$parent.expertMode" x-transition>
+                                            <div class="row" x-show="$root.expertMode" x-transition>
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Input Length <small class="text-muted">(Expert)</small></label>
@@ -1879,7 +1879,7 @@
                                             </div>
                                             
                                             <!-- Expert Mode: Advanced Detector Settings -->
-                                            <div x-show="$parent.expertMode" x-transition>
+                                            <div x-show="$root.expertMode" x-transition>
                                             </div>
                                         </div>
 
@@ -1979,7 +1979,7 @@
                                         </div>
 
                                         <!-- Species Groups Section (Expert Mode) -->
-                                        <div class="mb-4" x-show="$parent.expertMode" x-transition>
+                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-layer-group text-muted me-2"></i>
                                                 Species Groups
@@ -2000,7 +2000,7 @@
 
                                         <!-- Optional Arguments Section (Expert Mode) -->
                                                                                 <!-- Output Device Settings (Expert Mode) -->
-                                        <div class="mb-4" x-show="$parent.expertMode" x-transition>
+                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-volume-up me-2"></i>
                                                 Output Device
@@ -2033,7 +2033,7 @@
                                             </div>
                                             
                                             <!-- Expert Mode Output Settings -->
-                                            <div class="row" x-show="$parent.expertMode" x-transition>
+                                            <div class="row" x-show="$root.expertMode" x-transition>
                                                 <div class="col-md-4">
                                                     <div class="mb-3">
                                                         <label class="form-label">Device Match <small class="text-muted">(Expert)</small></label>
@@ -2069,7 +2069,7 @@
                                         </div>
 
                                         <!-- Lure Playback Section (Expert Mode) -->
-                                        <div class="mb-4" x-show="$parent.expertMode" x-transition>
+                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-play text-muted me-2"></i>
                                                 Lure Playback
@@ -2091,7 +2091,7 @@
                                                 </template>
                                             </div>
                                         </div>
-                                        <div class="mb-4" x-show="$parent.expertMode" x-transition>
+                                        <div class="mb-4" x-show="$root.expertMode" x-transition>
                                             <h6 class="border-bottom pb-2">
                                                 <i class="fas fa-cogs text-muted me-2"></i>
                                                 Optional Arguments
@@ -3887,7 +3887,10 @@
                 },
 
                 get filteredServices() {
-                    if (this.$parent.expertMode) {
+                    // Access root expertMode via Alpine's $root
+                    const expertMode = this.$root.expertMode || false;
+                    
+                    if (expertMode) {
                         return this.services;
                     } else {
                         return this.services.filter(service => !service.expert);
