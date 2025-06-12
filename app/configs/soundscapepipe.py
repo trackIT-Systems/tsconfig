@@ -14,6 +14,7 @@ class DetectorEntry(BaseModel):
     detection_threshold: Optional[float] = None
     class_threshold: Optional[float] = None
     model_path: Optional[str] = None
+    tasks: Optional[List["ScheduleTaskEntry"]] = None
 
 
 class ScheduleTaskEntry(BaseModel):
@@ -175,6 +176,23 @@ class SoundscapepipeConfig(BaseConfig):
                                 errors.append(f"Detector '{detector_name}' {threshold_key} must be between 0.0 and 1.0")
                         except (ValueError, TypeError):
                             errors.append(f"Detector '{detector_name}' {threshold_key} must be a valid number")
+
+                # Validate detector tasks (applicable to all detectors except schedule)
+                if detector_name != "schedule":
+                    tasks = detector_config.get("tasks", [])
+                    if tasks is not None:
+                        if not isinstance(tasks, list):
+                            errors.append(f"Detector '{detector_name}' tasks must be a list")
+                        else:
+                            for i, task in enumerate(tasks):
+                                if not isinstance(task, dict):
+                                    errors.append(f"Detector '{detector_name}' task {i} must be a dictionary")
+                                    continue
+                                
+                                required_fields = ["name", "start", "stop"]
+                                for field in required_fields:
+                                    if not task.get(field):
+                                        errors.append(f"Detector '{detector_name}' task {i} must have a '{field}' field")
 
                 # Validate schedule tasks
                 if detector_name == "schedule":

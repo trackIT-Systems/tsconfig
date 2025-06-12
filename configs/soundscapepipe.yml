@@ -16,13 +16,23 @@ channels: 1
 # detectors section
 detectors:
   birdedge:
-    detection_threshold: 0.0
-    class_threshold: 0.3
+    detection_threshold: 0.3
+    class_threshold: 0.0
     model_path: /home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx
+    tasks:
+    - name: morning
+      start: "sunrise-01:00"
+      stop: "sunrise+00:35"
+    - name: evening
+      start: "sunset-01:00"
+      stop: "sunset+01:00"
   yolobat:
     detection_threshold: 0.3
-    class_threshold: 0.3
     model_path: /home/pi/yolobat/models/yolobat11_2025.3.2/model.xml
+    tasks:
+    - name: night
+      start: "sunset-00:30"
+      stop: "sunrise+00:30"
   schedule:
     tasks:
     - name: morningsong
@@ -35,7 +45,7 @@ speaker_enable_pin: 27
 highpass_freq: 100
 
 # playback lure calls
-lure:q
+lure:
   tasks:
   - species: Test
     paths: 
