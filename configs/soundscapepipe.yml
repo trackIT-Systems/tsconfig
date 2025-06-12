@@ -1,0 +1,80 @@
+# Input device section 
+# http audio stream port
+stream_host: "::"
+stream_port: 5001
+
+# fixed station coordinates (for scheduling)
+lat: 50.85318
+lon: 8.78735
+
+# input device section
+input_device_match: USB AUDIO DEVICE
+sample_rate: 48000  # optional
+input_length_s: 0.1
+channels: 1
+
+# detectors section
+detectors:
+  birdedge:
+    detection_threshold: 0.0
+    class_threshold: 0.3
+    model_path: /home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx
+  yolobat:
+    detection_threshold: 0.3
+    class_threshold: 0.3
+    model_path: /home/pi/yolobat/models/yolobat11_2025.3.2/model.xml
+  schedule:
+    tasks:
+    - name: morningsong
+      start: "sunrise+00:30"
+      stop: "sunrise+00:35"
+
+# output device section
+output_device_match: USB AUDIO DEVICE
+speaker_enable_pin: 27
+highpass_freq: 100
+
+# playback lure calls
+lure:q
+  tasks:
+  - species: Test
+    paths: 
+    - /data/lure/
+    start: "sunset+00:00"
+    stop: "sunset+00:00"
+    skip_days: 0
+    record: 0
+
+# recording section
+ratio: 0.0                  # default ratio of calls to be recorded
+length_s: 20                # default audio record length after call detection
+maximize_confidence: false  # record all detections with higher confidence than before (per calendar day) 
+
+groups:
+  owls:               # define owls group
+    ratio: 1          # record all calls of the group
+    species:          # define species in the group by Id, Scientific Name or German Name
+      - Tyto alba             # Schleiereule
+      - Asio flammeus         # Sumpfohreule      
+      - Asio otus             # Waldohreule
+      - Bubo bubo             # Uhu 
+      - Strix uralensis       # Habichtskauz
+      - Aegolius funereus     # Raufußkauz 
+      - Glaucidium passerinum # Sperlingskauz
+      - Athene noctua         # Steinkauz
+      - Strix aluco           # Waldkauz
+
+  assessments:
+    maximize_confidence: true
+    species:
+      - Crex crex             # Wachtelkönig
+      - Tetrao urogallus      # Auerhuhn
+      - Caprimulgus europaeus # Nachtschwalbe
+      - Picoides tridactylus  # Dreizehenspecht
+      - Dendrocopos leucotos  # Weißrückenspecht
+      - Pernis apivorus       # Wespenbussard
+
+  risked:
+    ratio: 1
+    species:
+      - Tetrastes bonasia     # Haselhuhn

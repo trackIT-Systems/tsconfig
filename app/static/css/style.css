@@ -10,6 +10,53 @@
     margin-bottom: 0;
 }
 
+/* Modern schedule entry styles */
+.schedule-entry-modern {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.875rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+}
+
+.schedule-entry-modern:hover {
+    border-color: #007bff;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.12);
+}
+
+.schedule-entry-modern:last-child {
+    margin-bottom: 0;
+}
+
+
+/* Responsive label width for schedule entries */
+.schedule-label {
+    min-width: auto;
+}
+
+@media (min-width: 768px) {
+    .schedule-label {
+        min-width: 70px;
+    }
+}
+
+.add-schedule-btn {
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border: 2px dashed #007bff !important;
+    background: transparent !important;
+    color: #007bff !important;
+    transition: all 0.2s ease;
+}
+
+.add-schedule-btn:hover {
+    background: #007bff !important;
+    color: white !important;
+    border-style: solid !important;
+}
+
 .time-input-group {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;

@@ -13,13 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import __version__
-from app.routers import radiotracking, schedule, systemd
+from app.routers import radiotracking, schedule, soundscapepipe, systemd
 
 app = FastAPI(title="tsOS Configuration")
 
 # Include routers
 app.include_router(schedule.router)
 app.include_router(radiotracking.router)
+app.include_router(soundscapepipe.router)
 app.include_router(systemd.router)
 
 # Mount static files

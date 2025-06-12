@@ -99,6 +99,14 @@
                             <i class="fas fa-broadcast-tower me-1"></i>Radio Tracking
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#soundscapepipe" 
+                           @click.prevent="activeConfig = 'soundscapepipe'"
+                           :class="{ 'active': activeConfig === 'soundscapepipe', 'fw-bold': activeConfig === 'soundscapepipe' }">
+                            <i class="fas fa-volume-up me-1"></i>Soundscapepipe
+                        </a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -781,96 +789,123 @@
                                         </h6>
                                         <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
                                     <template x-for="(entry, index) in config.schedule" :key="index">
-                                        <div class="schedule-entry">
-                                            <div class="row mb-2">
-                                                <div class="col">
-                                                    <label class="form-label">Name</label>
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           x-model="entry.name" 
-                                                           required>
-                                                </div>
-                                                <div class="col-auto d-flex align-items-end">
+                                        <div class="schedule-entry-modern mb-2">
+                                            <div class="bg-light rounded-2 p-3">
+                                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                                    <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                        <i class="fas fa-clock text-primary me-2"></i>
+                                                        <input type="text" 
+                                                               class="form-control form-control-sm fw-medium" 
+                                                               x-model="entry.name" 
+                                                               placeholder="Enter schedule name..." 
+                                                               required>
+                                                    </div>
                                                     <button type="button" 
-                                                            class="btn btn-danger" 
-                                                            @click="removeSchedule(index)">
-                                                        Remove
+                                                            class="btn btn-outline-danger btn-sm" 
+                                                            @click="removeSchedule(index)"
+                                                            title="Remove schedule">
+                                                        <i class="fas fa-trash"></i>
                                                     </button>
                                                 </div>
+                                                <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                             <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="entry.startReference"
+                                                                        @change="updateTimeString(entry, 'start')">
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                    <option value="midnight">Solar Midnight</option>
+                                                                    <option value="blue_hour_morning">Blue Hour (AM)</option>
+                                                                    <option value="blue_hour_evening">Blue Hour (PM)</option>
+                                                                    <option value="golden_hour_morning">Golden Hour (AM)</option>
+                                                                    <option value="golden_hour_evening">Golden Hour (PM)</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="entry.startSign"
+                                                                        @change="updateTimeString(entry, 'start')"
+                                                                        :disabled="entry.startReference === 'time'"
+                                                                        :value="entry.startReference === 'time' ? '+' : entry.startSign">
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                       class="form-control form-control-sm" 
+                                                                       style="width: 110px;"
+                                                                       x-model="entry.startOffset"
+                                                                       @change="updateTimeString(entry, 'start')">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                             <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="entry.stopReference"
+                                                                        @change="updateTimeString(entry, 'stop')">
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                    <option value="midnight">Solar Midnight</option>
+                                                                    <option value="blue_hour_morning">Blue Hour (AM)</option>
+                                                                    <option value="blue_hour_evening">Blue Hour (PM)</option>
+                                                                    <option value="golden_hour_morning">Golden Hour (AM)</option>
+                                                                    <option value="golden_hour_evening">Golden Hour (PM)</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="entry.stopSign"
+                                                                        @change="updateTimeString(entry, 'stop')"
+                                                                        :disabled="entry.stopReference === 'time'"
+                                                                        :value="entry.stopReference === 'time' ? '+' : entry.stopSign">
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                       class="form-control form-control-sm" 
+                                                                       style="width: 110px;"
+                                                                       x-model="entry.stopOffset"
+                                                                       @change="updateTimeString(entry, 'stop')">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Start Time</label>
-                                                    <div class="time-input-group">
-                                                        <select class="form-select" 
-                                                                x-model="entry.startReference"
-                                                                @change="updateTimeString(entry, 'start')">
-                                                            <option value="time">Clock Time</option>
-                                                            <option value="sunrise">Sunrise</option>
-                                                            <option value="sunset">Sunset</option>
-                                                            <option value="dawn">Dawn</option>
-                                                            <option value="dusk">Dusk</option>
-                                                            <option value="noon">Solar Noon</option>
-                                                            <option value="midnight">Solar Midnight</option>
-                                                            <option value="blue_hour_morning">Blue Hour (Morning)</option>
-                                                            <option value="blue_hour_evening">Blue Hour (Evening)</option>
-                                                            <option value="golden_hour_morning">Golden Hour (Morning)</option>
-                                                            <option value="golden_hour_evening">Golden Hour (Evening)</option>
-                                                        </select>
-                                                        <select class="form-select" 
-                                                                x-model="entry.startSign"
-                                                                @change="updateTimeString(entry, 'start')"
-                                                                :disabled="entry.startReference === 'time'"
-                                                                    :value="entry.startReference === 'time' ? '+' : entry.startSign">
-                                                            <option value="+">+</option>
-                                                            <option value="-">-</option>
-                                                        </select>
-                                                        <input type="time" 
-                                                               class="form-control" 
-                                                               x-model="entry.startOffset"
-                                                               @change="updateTimeString(entry, 'start')">
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Stop Time</label>
-                                                    <div class="time-input-group">
-                                                        <select class="form-select" 
-                                                                x-model="entry.stopReference"
-                                                                @change="updateTimeString(entry, 'stop')">
-                                                            <option value="time">Clock Time</option>
-                                                            <option value="sunrise">Sunrise</option>
-                                                            <option value="sunset">Sunset</option>
-                                                            <option value="dawn">Dawn</option>
-                                                            <option value="dusk">Dusk</option>
-                                                            <option value="noon">Solar Noon</option>
-                                                            <option value="midnight">Solar Midnight</option>
-                                                            <option value="blue_hour_morning">Blue Hour (Morning)</option>
-                                                            <option value="blue_hour_evening">Blue Hour (Evening)</option>
-                                                            <option value="golden_hour_morning">Golden Hour (Morning)</option>
-                                                            <option value="golden_hour_evening">Golden Hour (Evening)</option>
-                                                        </select>
-                                                        <select class="form-select" 
-                                                                x-model="entry.stopSign"
-                                                                @change="updateTimeString(entry, 'stop')"
-                                                                :disabled="entry.stopReference === 'time'"
-                                                                    :value="entry.stopReference === 'time' ? '+' : entry.stopSign">
-                                                            <option value="+">+</option>
-                                                            <option value="-">-</option>
-                                                        </select>
-                                                        <input type="time" 
-                                                               class="form-control" 
-                                                               x-model="entry.stopOffset"
-                                                               @change="updateTimeString(entry, 'stop')">
-                                                    </div>
-                                                </div>
                                             </div>
                                         </div>
                                     </template>
                                         
                                         <div class="mt-3">
                                             <button type="button" 
-                                                    class="btn btn-secondary" 
+                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
                                                     @click="addSchedule">
+                                                <i class="fas fa-plus me-2"></i>
                                                 Add Schedule Entry
                                             </button>
                                         </div>
@@ -1561,6 +1596,580 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Soundscapepipe Configuration -->
+                <div x-show="activeConfig === 'soundscapepipe'" x-cloak>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card" x-data="soundscapepipeConfig()" x-init="init()" x-destroy="cleanup()">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <h5 class="card-title mb-0 me-3">Soundscapepipe Configuration</h5>
+                                        <!-- Service Status Indicator -->
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge d-flex align-items-center gap-1" 
+                                                  :class="{
+                                                      'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                      'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                      'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                      'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                  }">
+                                                <i :class="{
+                                                       'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
+                                                       'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
+                                                       'fas fa-question-circle': serviceStatus.status === 'not-found',
+                                                       'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                   }" 
+                                                   style="font-size: 0.7em;"></i>
+                                                <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
+                                            </span>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span x-text="serviceStatus.uptime"></span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button type="button" 
+                                                class="btn btn-outline-info btn-sm" 
+                                                @click="streamLogs('soundscapepipe')"
+                                                :disabled="serviceStatus.status === 'not-found'"
+                                                title="View soundscapepipe service logs">
+                                            <i class="fas fa-file-alt me-1"></i>
+                                            <span class="d-none d-md-inline">View Logs</span>
+                                            <span class="d-md-none">Logs</span>
+                                        </button>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="expertMode" 
+                                                   id="expertModeSoundscape">
+                                            <label class="form-check-label" for="expertModeSoundscape">
+                                                <i class="fas fa-flask" title="Expert Mode"></i>
+                                                Expert Mode
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Loading State -->
+                                    <div x-show="!configLoaded" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <div class="mt-2">Loading configuration...</div>
+                                    </div>
+
+                                    <!-- Configuration Form -->
+                                    <form x-show="configLoaded" @submit.prevent="saveConfig">
+                                        <!-- Input Device Settings -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-microphone me-2"></i>
+                                                Input Device Settings
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <label class="form-label mb-0">Input Device</label>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    @click="loadAudioDevices()"
+                                                                    :disabled="loadingDevices"
+                                                                    title="Refresh audio devices">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
+                                                            </button>
+                                                        </div>
+                                                        <template x-if="audioDevices.input_devices && audioDevices.input_devices.length > 0">
+                                                            <select class="form-select" 
+                                                                    @change="updateInputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                                                <option value="">Select input device...</option>
+                                                                <template x-for="device in audioDevices.input_devices" :key="device.index">
+                                                                    <option :value="device.name" 
+                                                                            :data-sample-rate="device.default_sample_rate"
+                                                                            :data-max-channels="device.max_input_channels"
+                                                                            :selected="config.input_device_match && config.input_device_match === device.name.split(':')[0].trim()"
+                                                                            x-text="device.name + (device.is_default ? ' (Default)' : '') + ' - ' + device.max_input_channels + ' channels @ ' + Math.round(device.default_sample_rate/1000) + 'kHz'">
+                                                                    </option>
+                                                                </template>
+                                                            </select>
+                                                        </template>
+                                                        <template x-if="!audioDevices.input_devices || audioDevices.input_devices.length === 0">
+                                                            <div class="text-muted">
+                                                                <i class="fas fa-exclamation-triangle"></i> No input devices detected
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Technical Settings Row (Expert Mode) -->
+                                            <div class="row" x-show="expertMode" x-transition>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Device Name <small class="text-muted">(Expert)</small></label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               x-model="config.input_device_match"
+                                                               placeholder="384kHz AudioMoth USB Microphone">
+                                                        <div class="form-text">Exact device name for matching</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Sample Rate <small class="text-muted">(Expert)</small></label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.sample_rate"
+                                                               min="1000"
+                                                               step="1000">
+                                                        <div class="form-text">Audio sample rate (Hz)</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Additional Technical Settings Row (Expert Mode) -->
+                                            <div class="row" x-show="expertMode" x-transition>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Input Length <small class="text-muted">(Expert)</small></label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.input_length_s"
+                                                               min="0.1"
+                                                               max="1.0"
+                                                               step="0.1">
+                                                        <div class="form-text">Input buffer length in seconds (0.1-1.0)</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Channels <small class="text-muted">(Expert)</small></label>
+                                                        <select class="form-select" x-model.number="config.channels">
+                                                            <option value="1">1 (Mono)</option>
+                                                            <option value="2">2 (Stereo)</option>
+                                                        </select>
+                                                        <div class="form-text">Number of audio channels</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+
+                                        <!-- Detectors Section -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-search me-2"></i>
+                                                Detectors
+                                            </h6>
+                                            
+                                            <!-- Detector Settings -->
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label class="form-label mb-0">Bird Edge Detector</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.detectors.birdedge.enabled" 
+                                                               id="birdedgeEnabled">
+                                                        <label class="form-check-label" for="birdedgeEnabled">
+                                                            Enabled
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="row" x-show="config.detectors.birdedge.enabled"  x-transition>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Detection Threshold: <span x-text="config.detectors.birdedge.detection_threshold.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.detectors.birdedge.detection_threshold"
+                                                               min="0.0"
+                                                               max="1.0"
+                                                               step="0.01">
+                                                        <div class="form-text">Minimum confidence for bird call detection (0.0-1.0)</div>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Class Threshold: <span x-text="config.detectors.birdedge.class_threshold.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.detectors.birdedge.class_threshold"
+                                                               min="0.25"
+                                                               max="1.0"
+                                                               step="0.01">
+                                                        <div class="form-text">Minimum confidence for species classification (0.25-1.0)</div>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <label class="form-label mb-0">Model Path</label>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    @click="loadModelFiles()"
+                                                                    :disabled="loadingModels"
+                                                                    title="Refresh model files">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
+                                                            </button>
+                                                        </div>
+                                                        <select class="form-select" 
+                                                                x-model="config.detectors.birdedge.model_path">
+                                                            <option value="">Select BirdEdge model...</option>
+                                                            <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
+                                                                <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
+                                                            </template>
+                                                            <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
+                                                        </select>
+                                                        <div x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0" class="mt-2">
+                                                            <input type="text" 
+                                                                   class="form-control" 
+                                                                   x-model="config.detectors.birdedge.model_path"
+                                                                   placeholder="Enter custom path: /path/to/model.onnx">
+                                                        </div>
+                                                        <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label class="form-label mb-0">YOLO Bat Detector</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.detectors.yolobat.enabled" 
+                                                               id="yolobatEnabled">
+                                                        <label class="form-check-label" for="yolobatEnabled">
+                                                            Enabled
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="row" x-show="config.detectors.yolobat.enabled"  x-transition>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Detection Threshold: <span x-text="config.detectors.yolobat.detection_threshold.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.detectors.yolobat.detection_threshold"
+                                                               min="0.0"
+                                                               max="1.0"
+                                                               step="0.01">
+                                                        <div class="form-text">Minimum confidence for bat call detection (0.0-1.0)</div>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Class Threshold: <span x-text="config.detectors.yolobat.class_threshold.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.detectors.yolobat.class_threshold"
+                                                               min="0.25"
+                                                               max="1.0"
+                                                               step="0.01">
+                                                        <div class="form-text">Minimum confidence for bat species classification (0.25-1.0)</div>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <label class="form-label mb-0">Model Path</label>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    @click="loadModelFiles()"
+                                                                    :disabled="loadingModels"
+                                                                    title="Refresh model files">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
+                                                            </button>
+                                                        </div>
+                                                        <select class="form-select" 
+                                                                x-model="config.detectors.yolobat.model_path">
+                                                            <option value="">Select YOLOBat model...</option>
+                                                            <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
+                                                                <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
+                                                            </template>
+                                                            <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
+                                                        </select>
+                                                        <div x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0" class="mt-2">
+                                                            <input type="text" 
+                                                                   class="form-control" 
+                                                                   x-model="config.detectors.yolobat.model_path"
+                                                                   placeholder="Enter custom path: /path/to/model.xml">
+                                                        </div>
+                                                        <div class="form-text">Path to the YOLO model file (.xml)</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Expert Mode: Advanced Detector Settings -->
+                                            <div x-show="expertMode" x-transition>
+                                            </div>
+                                        </div>
+
+                                        <!-- Scheduling Settings -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-calendar-alt me-2"></i>
+                                                Scheduling Settings
+                                            </h6>
+                                            <div class="form-text mb-3">Configure the station location for scheduling detection tasks based on sunrise, sunset, and other solar events.</div>
+                                            <div class="row">
+                                                <!-- Left Column (Controls) -->
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Latitude</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.lat"
+                                                               min="-90"
+                                                               max="90"
+                                                               step="0.00001"
+                                                               @input="updateMarkerFromInputs"
+                                                               required>
+                                                        <div class="form-text">Station latitude (-90 to 90)</div>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Longitude</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.lon"
+                                                               min="-180"
+                                                               max="180"
+                                                               step="0.00001"
+                                                               @input="updateMarkerFromInputs"
+                                                               required>
+                                                        <div class="form-text">Station longitude (-180 to 180)</div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Right Column (Map) -->
+                                                <div class="col-md-8">
+                                                    <div id="soundscapeMap" class="map-container"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Recording Section -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-record-vinyl me-2"></i>
+                                                Recording Settings
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">&nbsp;</label>
+                                                        <div class="form-check form-switch">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   x-model="config.maximize_confidence" 
+                                                                   id="maximize_confidence">
+                                                            <label class="form-check-label" for="maximize_confidence">
+                                                                Maximize Confidence
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-text">Record highest confidence detections per day</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Default Ratio: <span x-text="config.ratio.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.ratio"
+                                                               min="0.0"
+                                                               max="1.0"
+                                                               step="0.01"
+                                                               :disabled="config.maximize_confidence">
+                                                        <div class="form-text" :class="{ 'text-muted': config.maximize_confidence }">
+                                                            <span x-show="!config.maximize_confidence">Ratio of calls to record (0.0-1.0)</span>
+                                                            <span x-show="config.maximize_confidence">Disabled when maximize confidence is enabled</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Recording Length: <span x-text="config.length_s"></span> seconds</label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.length_s"
+                                                               min="1"
+                                                               max="60"
+                                                               step="1">
+                                                        <div class="form-text">Seconds to record after detection</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Species Groups Section (Expert Mode) -->
+                                        <div class="mb-4" x-show="expertMode" x-transition>
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-layer-group text-muted me-2"></i>
+                                                Species Groups
+                                                <small class="text-muted ms-2">(Expert Mode)</small>
+                                            </h6>
+                                            <div class="form-text mb-3">
+                                                Define species groups with custom recording ratios and confidence settings. Groups allow you to prioritize certain species for recording.
+                                            </div>
+                                            <div class="mb-3">
+                                                <template x-if="Object.keys(config.groups || {}).length === 0">
+                                                    <div class="text-muted text-center py-2">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        No species groups configured. Advanced feature for targeted recording strategies.
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <!-- Optional Arguments Section (Expert Mode) -->
+                                                                                <!-- Output Device Settings (Expert Mode) -->
+                                        <div class="mb-4" x-show="expertMode" x-transition>
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-volume-up me-2"></i>
+                                                Output Device
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Output Device</label>
+                                                        <template x-if="audioDevices.output_devices && audioDevices.output_devices.length > 0">
+                                                            <select class="form-select" 
+                                                                    @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                                                <option value="">Select output device...</option>
+                                                                <template x-for="device in audioDevices.output_devices" :key="device.index">
+                                                                    <option :value="device.name" 
+                                                                            :data-sample-rate="device.default_sample_rate"
+                                                                        :data-max-channels="device.max_input_channels"
+                                                                            :selected="config.output_device_match && config.output_device_match === device.name.split(':')[0].trim()"
+                                                                            x-text="device.name + (device.is_default ? ' (Default)' : '') + ' - ' + device.max_output_channels + ' channels @ ' + Math.round(device.default_sample_rate/1000) + 'kHz'">
+                                                                    </option>
+                                                                </template>
+                                                            </select>
+                                                        </template>
+                                                        <template x-if="!audioDevices.output_devices || audioDevices.output_devices.length === 0">
+                                                            <div class="text-muted">
+                                                                <i class="fas fa-exclamation-triangle"></i> No output devices detected
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Expert Mode Output Settings -->
+                                            <div class="row" x-show="expertMode" x-transition>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Device Match <small class="text-muted">(Expert)</small></label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               x-model="config.output_device_match"
+                                                               placeholder="USB AUDIO DEVICE">
+                                                        <div class="form-text">Device identifier pattern</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Speaker Enable Pin <small class="text-muted">(Expert)</small></label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.speaker_enable_pin"
+                                                               min="0">
+                                                        <div class="form-text">GPIO pin number</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Highpass Frequency <small class="text-muted">(Expert)</small></label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.highpass_freq"
+                                                               min="0"
+                                                               step="10">
+                                                        <div class="form-text">Hz (0 disables filter)</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Lure Playback Section (Expert Mode) -->
+                                        <div class="mb-4" x-show="expertMode" x-transition>
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-play text-muted me-2"></i>
+                                                Lure Playback
+                                                <small class="text-muted ms-2">(Expert Mode)</small>
+                                            </h6>
+                                            <div class="form-text mb-3">
+                                                Configure automated playback of lure calls to attract target species for detection and recording.
+                                            </div>
+                                            
+                                            <!-- Lure Tasks -->
+                                            <div class="mb-3">
+                                                <label class="form-label">Lure Tasks</label>
+                                                <div class="form-text mb-2">Add tasks to play species-specific lure calls at scheduled times</div>
+                                                <template x-if="config.lure && config.lure.tasks && config.lure.tasks.length === 0">
+                                                    <div class="text-muted text-center py-2">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        No lure tasks configured. Advanced feature for automated call playback.
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <div class="mb-4" x-show="expertMode" x-transition>
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-cogs text-muted me-2"></i>
+                                                Optional Arguments
+                                                <small class="text-muted ms-2">(Expert Mode)</small>
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Stream Port</label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.stream_port"
+                                                               min="1"
+                                                               max="65535"
+                                                               required>
+                                                        <div class="form-text">HTTP audio stream port for real-time audio streaming</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+                                        <!-- Form Actions -->
+                                        <div class="d-flex justify-content-between gap-2">
+                                            <div class="d-flex gap-2">
+                                                <button type="button" 
+                                                        class="btn btn-outline-secondary" 
+                                                        @click="resetConfig()"
+                                                        :disabled="!configLoaded">
+                                                    Reset
+                                                </button>
+                                                <button type="button" 
+                                                        class="btn btn-outline-primary" 
+                                                        @click="downloadConfig()"
+                                                        :disabled="!configLoaded">
+                                                    <i class="fas fa-download me-1"></i>
+                                                    Download
+                                                </button>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="submit" 
+                                                        class="btn btn-success"
+                                                        :disabled="!configLoaded">
+                                                    <i class="fas fa-save me-1"></i>
+                                                    Save
+                                                </button>
+                                                <button type="button" 
+                                                        class="btn btn-warning" 
+                                                        @click="saveAndRestartService()"
+                                                        :disabled="!configLoaded">
+                                                    <i class="fas fa-save me-1"></i>
+                                                    <i class="fas fa-redo me-1"></i>
+                                                    Save & Restart
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1609,6 +2218,8 @@
                         this.activeConfig = 'radiotracking';
                     } else if (hash === 'schedule') {
                         this.activeConfig = 'schedule';
+                    } else if (hash === 'soundscapepipe') {
+                        this.activeConfig = 'soundscapepipe';
                     } else if (hash === 'status') {
                         this.activeConfig = 'status';
                     } else {
@@ -1631,12 +2242,25 @@
                                 }
                             }, 150);
                         }
+                        
+                        // Ensure map is properly initialized when switching to soundscapepipe tab
+                        if (value === 'soundscapepipe') {
+                            setTimeout(() => {
+                                const soundscapeComponent = this.$el.querySelector('[x-data*="soundscapepipeConfig"]');
+                                if (soundscapeComponent && soundscapeComponent._x_dataStack) {
+                                    const soundscapeData = soundscapeComponent._x_dataStack[0];
+                                    if (soundscapeData && soundscapeData.ensureMapVisible) {
+                                        soundscapeData.ensureMapVisible();
+                                    }
+                                }
+                            }, 150);
+                        }
                     });
 
                     // Listen for hash changes
                     window.addEventListener('hashchange', () => {
                         const hash = window.location.hash.slice(1);
-                        if (hash === 'radiotracking' || hash === 'schedule' || hash === 'status') {
+                        if (hash === 'radiotracking' || hash === 'schedule' || hash === 'soundscapepipe' || hash === 'status') {
                             this.activeConfig = hash;
                         }
                     });
@@ -2628,6 +3252,496 @@
                         
                     } catch (error) {
                         this.dispatchMessage(error.message, true);
+                    }
+                }
+            }
+        }
+
+        function soundscapepipeConfig() {
+            return {
+                config: {
+                    stream_port: 5001,
+                    lat: 50.85318,
+                    lon: 8.78735,
+                    input_device_match: "USB AUDIO DEVICE",
+                    sample_rate: 48000,
+                    input_length_s: 0.1,
+                    channels: 1,
+                    detectors: {
+                        birdedge: {
+                            detection_threshold: 0.0,
+                            class_threshold: 0.3
+                        },
+                        yolobat: {
+                            detection_threshold: 0.3,
+                            class_threshold: 0.3,
+                            model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml"
+                        },
+                        schedule: {
+                            tasks: []
+                        }
+                    },
+                    output_device_match: "USB AUDIO DEVICE",
+                    speaker_enable_pin: 27,
+                    highpass_freq: 100,
+                    lure: {
+                        tasks: []
+                    },
+                    ratio: 0.0,
+                    length_s: 20,
+                    maximize_confidence: false,
+                    groups: {}
+                },
+                configLoaded: false,
+                expertMode: false,
+                serviceStatus: {
+                    active: false,
+                    enabled: false,
+                    status: 'unknown',
+                    uptime: 'N/A'
+                },
+                refreshInterval: null,
+                map: null,
+                marker: null,
+                mapInitialized: false,
+                audioDevices: {},
+                loadingDevices: false,
+                modelFiles: {},
+                loadingModels: false,
+
+                init() {
+                    this.loadConfig();
+                    this.loadServiceStatus();
+                    this.loadAudioDevices();
+                    this.loadModelFiles();
+                    
+                    // Auto-refresh service status every 30 seconds when tab is active
+                    this.refreshInterval = setInterval(() => {
+                        // Only refresh if soundscapepipe tab is active
+                        const currentHash = window.location.hash.slice(1);
+                        if (currentHash === 'soundscapepipe') {
+                            this.loadServiceStatus();
+                        }
+                    }, 30000);
+                },
+
+                cleanup() {
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                        this.refreshInterval = null;
+                    }
+                },
+
+                async loadServiceStatus() {
+                    try {
+                        const response = await fetch('/api/systemd/services');
+                        if (response.ok) {
+                            const services = await response.json();
+                            const soundscapepipeService = services.find(service => service.name === 'soundscapepipe');
+                            if (soundscapepipeService) {
+                                this.serviceStatus = {
+                                    active: soundscapepipeService.active,
+                                    enabled: soundscapepipeService.enabled,
+                                    status: soundscapepipeService.status,
+                                    uptime: soundscapepipeService.uptime || 'N/A'
+                                };
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to load service status:', error);
+                    }
+                },
+
+                async loadConfig() {
+                    try {
+                        const response = await fetch('/api/soundscapepipe');
+                        if (response.ok) {
+                            const data = await response.json();
+                            // Handle backward compatibility for detectors - add enabled flags if missing
+                            const detectors = data.detectors || {};
+                            
+                            // BirdEdge detector - enabled by default if present in config
+                            if (detectors.birdedge) {
+                                detectors.birdedge.enabled = detectors.birdedge.enabled !== undefined ? detectors.birdedge.enabled : true;
+                            } else {
+                                detectors.birdedge = { enabled: true, detection_threshold: 0.0, class_threshold: 0.3, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx" };
+                            }
+                            
+                            // YOLOBat detector - enabled by default if present in config  
+                            if (detectors.yolobat) {
+                                detectors.yolobat.enabled = detectors.yolobat.enabled !== undefined ? detectors.yolobat.enabled : true;
+                            } else {
+                                detectors.yolobat = { enabled: false, detection_threshold: 0.3, class_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml" };
+                            }
+                            
+                            // Schedule always exists
+                            if (!detectors.schedule) {
+                                detectors.schedule = { tasks: [] };
+                            }
+
+                            this.config = {
+                                // Ensure all sections exist with defaults
+                                stream_port: data.stream_port || 5001,
+                                lat: data.lat || 50.85318,
+                                lon: data.lon || 8.78735,
+                                input_device_match: data.input_device_match || "USB AUDIO DEVICE",
+                                input_length_s: data.input_length_s || 0.1,
+                                channels: data.channels || 1,
+                                sample_rate: data.sample_rate || 48000,
+                                detectors: detectors,
+                                output_device_match: data.output_device_match || "USB AUDIO DEVICE",
+                                speaker_enable_pin: data.speaker_enable_pin || 27,
+                                highpass_freq: data.highpass_freq || 100,
+                                lure: data.lure || { tasks: [] },
+                                ratio: data.ratio || 0.0,
+                                length_s: data.length_s || 20,
+                                maximize_confidence: data.maximize_confidence || false,
+                                groups: data.groups || {}
+                            };
+                            this.configLoaded = true;
+                        } else if (response.status === 404) {
+                            // No configuration found, use defaults
+                            this.configLoaded = true;
+                            this.showMessage("No soundscapepipe configuration found. Using default values.", false);
+                        } else {
+                            const error = await response.json();
+                            throw new Error(error.detail || 'Failed to load soundscapepipe configuration');
+                        }
+                        
+                        // Initialize map after config is loaded, or update if already initialized
+                        if (!this.mapInitialized) {
+                            setTimeout(() => this.initMap(), 200);
+                        } else {
+                            this.updateMarkerFromInputs();
+                        }
+                    } catch (error) {
+                        this.showMessage(error.message, true);
+                        this.configLoaded = true; // Allow user to see form even if loading failed
+                        
+                        // Initialize map with defaults even if config loading failed
+                        if (!this.mapInitialized) {
+                            setTimeout(() => this.initMap(), 200);
+                        }
+                    }
+                },
+
+                async saveConfig() {
+                    try {
+                        // Create a copy of the config and filter out disabled detectors
+                        const configToSave = { ...this.config };
+                        
+                        // Filter detectors to only include enabled ones
+                        configToSave.detectors = {};
+                        
+                        if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
+                            configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
+                            delete configToSave.detectors.birdedge.enabled; // Remove the enabled flag from saved config
+                        }
+                        
+                        if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
+                            configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
+                            delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
+                        }
+                        
+                        // Always include schedule if it exists
+                        if (this.config.detectors.schedule) {
+                            configToSave.detectors.schedule = this.config.detectors.schedule;
+                        }
+
+                        const response = await fetch('/api/soundscapepipe', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(configToSave)
+                        });
+                        
+                        if (response.ok) {
+                            this.showMessage('Soundscapepipe configuration saved successfully!', false);
+                        } else {
+                            const error = await response.json();
+                            let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
+                            if (error.detail?.errors) {
+                                errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
+                            }
+                            throw new Error(errorMessage);
+                        }
+                    } catch (error) {
+                        this.showMessage(error.message, true);
+                    }
+                },
+
+                async downloadConfig() {
+                    try {
+                        // Create a copy of the config and filter out disabled detectors
+                        const configToDownload = { ...this.config };
+                        
+                        // Filter detectors to only include enabled ones
+                        configToDownload.detectors = {};
+                        
+                        if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
+                            configToDownload.detectors.birdedge = { ...this.config.detectors.birdedge };
+                            delete configToDownload.detectors.birdedge.enabled; // Remove the enabled flag from downloaded config
+                        }
+                        
+                        if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
+                            configToDownload.detectors.yolobat = { ...this.config.detectors.yolobat };
+                            delete configToDownload.detectors.yolobat.enabled; // Remove the enabled flag from downloaded config
+                        }
+                        
+                        // Always include schedule if it exists
+                        if (this.config.detectors.schedule) {
+                            configToDownload.detectors.schedule = this.config.detectors.schedule;
+                        }
+
+                        const response = await fetch('/api/soundscapepipe/download', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(configToDownload)
+                        });
+                        
+                        if (!response.ok) {
+                            const error = await response.json();
+                            let errorMessage = error.detail?.message || 'Failed to download soundscapepipe configuration';
+                            if (error.detail?.errors) {
+                                errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
+                            }
+                            throw new Error(errorMessage);
+                        }
+
+                        // Create a blob from the response and trigger download
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = 'soundscapepipe.yml';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+
+                        this.showMessage('Soundscapepipe configuration downloaded successfully!', false);
+                    } catch (error) {
+                        this.showMessage(error.message, true);
+                    }
+                },
+
+                async saveAndRestartService() {
+                    try {
+                        // First save the configuration
+                        await this.saveConfig();
+                        
+                        // Then restart the soundscapepipe service
+                        const response = await fetch('/api/systemd/action', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                service: 'soundscapepipe',
+                                action: 'restart'
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.detail || 'Failed to restart soundscapepipe service');
+                        }
+                        
+                        this.showMessage(`Configuration saved and ${data.message}`, false);
+                        
+                        // Refresh service status after restart
+                        setTimeout(async () => {
+                            await this.loadServiceStatus();
+                        }, 2000);
+                        
+                    } catch (error) {
+                        this.showMessage(error.message, true);
+                    }
+                },
+
+                resetConfig() {
+                    this.loadConfig();
+                },
+
+                showMessage(message, isError = false) {
+                    // Dispatch to parent component
+                    this.$dispatch('message', { message, error: isError });
+                },
+
+                streamLogs(serviceName) {
+                    // Dispatch to parent component
+                    this.$dispatch('streamLogs', { serviceName });
+                },
+
+                initMap() {
+                    // Only initialize if not already done and container is visible
+                    if (this.mapInitialized || !document.getElementById('soundscapeMap')) {
+                        return;
+                    }
+
+                    // Wait a bit to ensure the container is properly rendered
+                    setTimeout(() => {
+                        if (!document.getElementById('soundscapeMap') || this.mapInitialized) {
+                            return;
+                        }
+
+                        // Initialize map with loaded coordinates
+                        this.map = L.map('soundscapeMap', {
+                            center: [this.config.lat, this.config.lon],
+                            zoom: 13,
+                            zoomControl: true
+                        });
+                        
+                        // Add Mapbox satellite streets layer
+                        L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
+                            attribution: '© Mapbox © OpenStreetMap',
+                            maxZoom: 19
+                        }).addTo(this.map);
+
+                        // Add locate control
+                        L.control.locate({
+                            position: 'topleft',
+                            strings: {
+                                title: "Show my location"
+                            },
+                            flyTo: true,
+                            keepCurrentZoomLevel: true,
+                            locateOptions: {
+                                enableHighAccuracy: true
+                            }
+                        }).addTo(this.map);
+
+                        // Add marker
+                        this.marker = L.marker([this.config.lat, this.config.lon], {
+                            draggable: true
+                        }).addTo(this.map);
+
+                        // Update coordinates when marker is dragged
+                        this.marker.on('dragend', (e) => {
+                            const position = e.target.getLatLng();
+                            this.config.lat = parseFloat(position.lat.toFixed(8));
+                            this.config.lon = parseFloat(position.lng.toFixed(8));
+                        });
+
+                        // Update marker when map is clicked
+                        this.map.on('click', (e) => {
+                            const position = e.latlng;
+                            this.marker.setLatLng(position);
+                            this.config.lat = parseFloat(position.lat.toFixed(8));
+                            this.config.lon = parseFloat(position.lng.toFixed(8));
+                        });
+
+                        // Handle location found event
+                        this.map.on('locationfound', (e) => {
+                            this.config.lat = parseFloat(e.latlng.lat.toFixed(8));
+                            this.config.lon = parseFloat(e.latlng.lng.toFixed(8));
+                            this.updateMarkerFromInputs();
+                        });
+
+                        this.mapInitialized = true;
+                        
+                        // Force a resize to ensure tiles load properly
+                        setTimeout(() => {
+                            if (this.map) {
+                                this.map.invalidateSize();
+                            }
+                        }, 100);
+                    }, 100);
+                },
+
+                ensureMapVisible() {
+                    // Call this when the soundscapepipe tab becomes active
+                    if (this.map && this.mapInitialized) {
+                        setTimeout(() => {
+                            this.map.invalidateSize();
+                            this.map.setView([this.config.lat, this.config.lon], 13);
+                        }, 50);
+                    } else if (!this.mapInitialized) {
+                        this.initMap();
+                    }
+                },
+
+                updateMarkerFromInputs() {
+                    if (this.marker && this.mapInitialized) {
+                        // Ensure coordinates are within bounds and have proper precision
+                        const lat = Math.min(Math.max(parseFloat(this.config.lat), -90), 90);
+                        const lon = Math.min(Math.max(parseFloat(this.config.lon), -180), 180);
+                        
+                        // Update the marker and map view
+                        this.marker.setLatLng([lat, lon]);
+                        this.map.setView([lat, lon]);
+                        
+                        // Update the input values with properly formatted numbers
+                        this.config.lat = parseFloat(lat.toFixed(8));
+                        this.config.lon = parseFloat(lon.toFixed(8));
+                    }
+                },
+
+                async loadAudioDevices() {
+                    this.loadingDevices = true;
+                    try {
+                        const response = await fetch('/api/soundscapepipe/audio-devices');
+                        if (response.ok) {
+                            this.audioDevices = await response.json();
+                        } else {
+                            const error = await response.json();
+                            this.showMessage(`Failed to load audio devices: ${error.detail}`, true);
+                        }
+                    } catch (error) {
+                        this.showMessage(`Failed to load audio devices: ${error.message}`, true);
+                    } finally {
+                        this.loadingDevices = false;
+                    }
+                },
+
+                updateInputDeviceFromSelection(deviceName, selectedOption) {
+                    if (deviceName) {
+                        // Extract just the device name part (before the colon if it exists)
+                        // e.g. "384kHz AudioMoth USB Microphone: Audio (hw:2,0)" -> "384kHz AudioMoth USB Microphone"
+                        
+                        const cleanDeviceName = deviceName.split(':')[0].trim();
+                        this.config.input_device_match = cleanDeviceName;
+                        
+                        // Set sample rate from selected device
+                        if (selectedOption && selectedOption.dataset.sampleRate) {
+                            this.config.sample_rate = Math.round(parseFloat(selectedOption.dataset.sampleRate));
+                        }
+
+                        // Set channels from selected device
+                        if (selectedOption && selectedOption.dataset.maxChannels) {
+                            this.config.channels = Math.min(parseInt(selectedOption.dataset.maxChannels), 2);
+                        }
+                    }
+                },
+
+                updateOutputDeviceFromSelection(deviceName, selectedOption) {
+                    if (deviceName) {
+                        // Extract just the device name part (before the colon if it exists)
+                        // e.g. "USB AUDIO DEVICE: Audio (hw:3,0)" -> "USB AUDIO DEVICE"
+                        const cleanDeviceName = deviceName.split(':')[0].trim();
+                        this.config.output_device_match = cleanDeviceName;
+                    }
+                },
+
+                async loadModelFiles() {
+                    this.loadingModels = true;
+                    try {
+                        const response = await fetch('/api/soundscapepipe/model-files');
+                        if (response.ok) {
+                            this.modelFiles = await response.json();
+                        } else {
+                            const error = await response.json();
+                            this.showMessage(`Failed to load model files: ${error.detail}`, true);
+                        }
+                    } catch (error) {
+                        this.showMessage(`Failed to load model files: ${error.message}`, true);
+                    } finally {
+                        this.loadingModels = false;
                     }
                 }
             }
