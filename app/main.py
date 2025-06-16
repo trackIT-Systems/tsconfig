@@ -115,6 +115,9 @@ async def get_system_status():
             # Temperature sensors not available on this platform
             pass
 
+        # Get hardware information (Raspberry Pi specific)
+        hardware_info = _get_hardware_info()
+
         # Get system information
         system_info = {
             "operating_system": f"{platform.system()} {platform.release()}",
@@ -124,6 +127,7 @@ async def get_system_status():
             "hostname": socket.gethostname(),
             "version": __version__,
             "os_release": os_release_info,
+            "hardware": hardware_info,
             "cpu": {
                 "times": cpu_times,
                 "percent": cpu_percent,
@@ -149,3 +153,32 @@ def _get_freedesktop_os_release():
     except (AttributeError, OSError):
         # platform.freedesktop_os_release() is not available or failed
         return None
+
+
+def _get_hardware_info():
+    """Get hardware information from /proc/cpuinfo (Raspberry Pi specific)."""
+    hardware_info = {
+        "model": None,
+        "serial": None,
+        "serial_short": None,
+        "revision": None,
+    }
+    
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('Model'):
+                    hardware_info["model"] = line.split(':', 1)[1].strip()
+                elif line.startswith('Serial'):
+                    serial = line.split(':', 1)[1].strip()
+                    hardware_info["serial"] = serial
+                    # Get last 8 digits of serial
+                    hardware_info["serial_short"] = serial[-8:] if len(serial) >= 8 else serial
+                elif line.startswith('Revision'):
+                    hardware_info["revision"] = line.split(':', 1)[1].strip()
+    except (FileNotFoundError, PermissionError, OSError):
+        # /proc/cpuinfo not available or not accessible
+        pass
+    
+    return hardware_info

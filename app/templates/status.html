@@ -187,7 +187,7 @@
             <div x-show="systemInfo" x-cloak>
                 <div class="row g-4 mt-4">
                     <!-- Operating System -->
-                    <div class="col-md-6 col-lg-3">
+                    <div class="col-md-6 col-xl-3">
                         <div class="card h-100 status-card">
                             <div class="card-body text-center">
                                 <div class="mb-3">
@@ -199,41 +199,53 @@
                         </div>
                     </div>
 
-                    <!-- Uptime -->
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card h-100 status-card">
+                    <!-- Uptime (with date & time on hover) -->
+                    <div class="col-md-6 col-xl-3" x-data="{ showDateTime: false }">
+                        <div class="card h-100 status-card"
+                             @mouseenter="showDateTime = true"
+                             @mouseleave="showDateTime = false"
+                             style="cursor: help;">
                             <div class="card-body text-center">
                                 <div class="mb-3">
                                     <i class="fas fa-clock fa-2x text-success"></i>
                                 </div>
-                                <h6 class="card-title text-muted">Uptime</h6>
-                                <div class="status-value text-success" x-text="formatUptime(systemInfo?.uptime)"></div>
+                                <h6 class="card-title text-muted" 
+                                    x-text="showDateTime ? 'Current Date & Time' : 'Uptime'"
+                                    style="transition: all 0.2s ease;"></h6>
+                                <div class="status-value text-success" 
+                                     x-text="showDateTime ? formatDateTime(systemInfo?.current_datetime) : formatUptime(systemInfo?.uptime)"
+                                     style="transition: all 0.2s ease;"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Current DateTime -->
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card h-100 status-card">
+                    <!-- Hardware Model (with revision on hover) -->
+                    <div class="col-md-6 col-xl-3" x-show="systemInfo?.hardware?.model" x-data="{ showRevision: false }">
+                        <div class="card h-100 status-card" 
+                             @mouseenter="showRevision = true"
+                             @mouseleave="showRevision = false"
+                             style="cursor: help;">
                             <div class="card-body text-center">
                                 <div class="mb-3">
-                                    <i class="fas fa-calendar-alt fa-2x text-info"></i>
+                                    <i class="fas fa-microchip fa-2x text-danger"></i>
                                 </div>
-                                <h6 class="card-title text-muted">Current Date & Time</h6>
-                                <div class="status-value" x-text="formatDateTime(systemInfo?.current_datetime)"></div>
+                                <h6 class="card-title text-muted">Hardware Model</h6>
+                                <div class="status-value text-danger" 
+                                     x-text="showRevision ? `Revision: ${systemInfo?.hardware?.revision || 'N/A'}` : (systemInfo?.hardware?.model || 'N/A')"
+                                     style="transition: all 0.2s ease;"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Timezone -->
-                    <div class="col-md-6 col-lg-3">
+                    <!-- Serial Number -->
+                    <div class="col-md-6 col-xl-3" x-show="systemInfo?.hardware?.model">
                         <div class="card h-100 status-card">
                             <div class="card-body text-center">
                                 <div class="mb-3">
-                                    <i class="fas fa-globe fa-2x text-warning"></i>
+                                    <i class="fas fa-barcode fa-2x text-secondary"></i>
                                 </div>
-                                <h6 class="card-title text-muted">Timezone</h6>
-                                <div class="status-value" x-text="systemInfo?.timezone || 'Loading...'"></div>
+                                <h6 class="card-title text-muted">Serial Number</h6>
+                                <div class="status-value text-secondary" x-text="systemInfo?.hardware?.serial_short || 'N/A'"></div>
                             </div>
                         </div>
                     </div>
