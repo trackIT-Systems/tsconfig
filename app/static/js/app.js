@@ -390,36 +390,8 @@ function scheduleConfig() {
                     sign: timeStr.includes('-') ? '-' : '+',
                     offset: timeStr.replace('noon', '').replace('+', '').replace('-', '').trim()
                 };
-            } else if (timeStr.includes('midnight')) {
-                return {
-                    reference: 'midnight',
-                    sign: timeStr.includes('-') ? '-' : '+',
-                    offset: timeStr.replace('midnight', '').replace('+', '').replace('-', '').trim()
-                };
-            } else if (timeStr.includes('blue_hour_morning')) {
-                return {
-                    reference: 'blue_hour_morning',
-                    sign: timeStr.includes('-') ? '-' : '+',
-                    offset: timeStr.replace('blue_hour_morning', '').replace('+', '').replace('-', '').trim()
-                };
-            } else if (timeStr.includes('blue_hour_evening')) {
-                return {
-                    reference: 'blue_hour_evening',
-                    sign: timeStr.includes('-') ? '-' : '+',
-                    offset: timeStr.replace('blue_hour_evening', '').replace('+', '').replace('-', '').trim()
-                };
-            } else if (timeStr.includes('golden_hour_morning')) {
-                return {
-                    reference: 'golden_hour_morning',
-                    sign: timeStr.includes('-') ? '-' : '+',
-                    offset: timeStr.replace('golden_hour_morning', '').replace('+', '').replace('-', '').trim()
-                };
-            } else if (timeStr.includes('golden_hour_evening')) {
-                return {
-                    reference: 'golden_hour_evening',
-                    sign: timeStr.includes('-') ? '-' : '+',
-                    offset: timeStr.replace('golden_hour_evening', '').replace('+', '').replace('-', '').trim()
-                };
+
+
             } else {
                 return {
                     reference: 'time',

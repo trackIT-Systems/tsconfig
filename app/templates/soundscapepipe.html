@@ -228,8 +228,7 @@
                                         <div class="form-text mb-3">Define time spans when BirdEdge detector should be active. Leave empty for continuous operation.</div>
                                         
                                         <template x-for="(task, index) in config.detectors.birdedge.tasks" :key="index">
-                                            <div class="schedule-entry-modern mb-2">
-                                                <div class="bg-light rounded-2 p-3">
+                                                <div class="bg-light rounded-2 p-3 mb-2">
                                                     <div class="d-flex align-items-center justify-content-between mb-3">
                                                         <div class="d-flex align-items-center flex-grow-1 me-3">
                                                             <i class="fas fa-clock text-primary me-2"></i>
@@ -262,6 +261,7 @@
                                                                             <option value="sunset">Sunset</option>
                                                                             <option value="dawn">Dawn</option>
                                                                             <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
                                                                         </select>
                                                                     </div>
                                                                     <div class="col-auto">
@@ -299,6 +299,7 @@
                                                                             <option value="sunset">Sunset</option>
                                                                             <option value="dawn">Dawn</option>
                                                                             <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
                                                                         </select>
                                                                     </div>
                                                                     <div class="col-auto">
@@ -410,8 +411,7 @@
                                         
 
                                         <template x-for="(task, index) in config.detectors.yolobat.tasks" :key="index">
-                                            <div class="schedule-entry-modern mb-2">
-                                                <div class="bg-light rounded-2 p-3">
+                                                <div class="bg-light rounded-2 p-3 mb-2">
                                                     <div class="d-flex align-items-center justify-content-between mb-3">
                                                         <div class="d-flex align-items-center flex-grow-1 me-3">
                                                             <i class="fas fa-clock text-primary me-2"></i>
@@ -444,6 +444,7 @@
                                                                             <option value="sunset">Sunset</option>
                                                                             <option value="dawn">Dawn</option>
                                                                             <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
                                                                         </select>
                                                                     </div>
                                                                     <div class="col-auto">
@@ -481,6 +482,7 @@
                                                                             <option value="sunset">Sunset</option>
                                                                             <option value="dawn">Dawn</option>
                                                                             <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
                                                                         </select>
                                                                     </div>
                                                                     <div class="col-auto">
@@ -505,7 +507,6 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
                                         </template>
                                         
                                         <div class="mt-3">
@@ -550,8 +551,7 @@
                                         
 
                                         <template x-for="(task, index) in config.detectors.schedule.tasks" :key="index">
-                                            <div class="schedule-entry-modern mb-2">
-                                                <div class="bg-light rounded-2 p-3">
+                                                <div class="bg-light rounded-2 p-3 mb-2">
                                                     <div class="d-flex align-items-center justify-content-between mb-3">
                                                         <div class="d-flex align-items-center flex-grow-1 me-3">
                                                             <i class="fas fa-clock text-primary me-2"></i>
@@ -584,6 +584,7 @@
                                                                             <option value="sunset">Sunset</option>
                                                                             <option value="dawn">Dawn</option>
                                                                             <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
                                                                         </select>
                                                                     </div>
                                                                     <div class="col-auto">
@@ -621,6 +622,7 @@
                                                                             <option value="sunset">Sunset</option>
                                                                             <option value="dawn">Dawn</option>
                                                                             <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
                                                                         </select>
                                                                     </div>
                                                                     <div class="col-auto">
@@ -645,7 +647,6 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
                                         </template>
                                         
                                         <div class="mt-3">
@@ -667,7 +668,7 @@
                                 <i class="fas fa-calendar-alt me-2"></i>
                                 Scheduling Settings
                             </h6>
-                            <div class="form-text mb-3">Configure the station location for scheduling detection tasks based on sunrise, sunset, and other solar events.</div>
+                            <div class="form-text mb-3">Configure the station location for scheduling detection tasks based on sunrise, sunset, dawn, dusk, and solar noon.</div>
                             <div class="row">
                                 <!-- Left Column (Controls) -->
                                 <div class="col-md-4">
