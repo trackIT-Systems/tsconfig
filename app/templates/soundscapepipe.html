@@ -212,9 +212,9 @@
                                         </select>
                                         <div x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0" class="mt-2">
                                             <input type="text" 
-                                                    class="form-control" 
-                                                    x-model="config.detectors.birdedge.model_path"
-                                                    placeholder="Enter custom path: /path/to/model.onnx">
+                                                   class="form-control" 
+                                                   x-model="config.detectors.birdedge.model_path"
+                                                   placeholder="Enter custom path: /path/to/model.onnx">
                                         </div>
                                         <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
                                     </div>
@@ -233,10 +233,10 @@
                                                         <div class="d-flex align-items-center flex-grow-1 me-3">
                                                             <i class="fas fa-clock text-primary me-2"></i>
                                                             <input type="text" 
-                                                                    class="form-control form-control-sm fw-medium" 
-                                                                    x-model="task.name" 
-                                                                    placeholder="Enter task name..." 
-                                                                    required>
+                                                                   class="form-control form-control-sm fw-medium" 
+                                                                   x-model="task.name" 
+                                                                   placeholder="Enter task name..." 
+                                                                   required>
                                                         </div>
                                                         <button type="button" 
                                                                 class="btn btn-outline-danger btn-sm" 
@@ -275,10 +275,10 @@
                                                                     </div>
                                                                     <div class="col-auto">
                                                                         <input type="time" 
-                                                                                class="form-control form-control-sm" 
-                                                                                style="width: 110px;"
-                                                                                x-model="task.startOffset"
-                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'start')">
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.startOffset"
+                                                                               @change="updateDetectorTaskTimeString('birdedge', task, 'start')">
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -312,10 +312,10 @@
                                                                     </div>
                                                                     <div class="col-auto">
                                                                         <input type="time" 
-                                                                                class="form-control form-control-sm" 
-                                                                                style="width: 110px;"
-                                                                                x-model="task.stopOffset"
-                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'stop')">
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.stopOffset"
+                                                                               @change="updateDetectorTaskTimeString('birdedge', task, 'stop')">
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -350,9 +350,9 @@
                                     <label class="form-label mb-0">Enable YoloBat Detection</label>
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" 
-                                                type="checkbox" 
-                                                x-model="config.detectors.yolobat.enabled" 
-                                                id="yolobatEnabled">
+                                               type="checkbox" 
+                                               x-model="config.detectors.yolobat.enabled" 
+                                               id="yolobatEnabled">
                                         <label class="form-check-label" for="yolobatEnabled">
                                             Enabled
                                         </label>
@@ -362,11 +362,11 @@
                                     <div class="col-md-6">
                                         <label class="form-label">Detection Threshold: <span x-text="config.detectors.yolobat.detection_threshold.toFixed(2)"></span></label>
                                         <input type="range" 
-                                                class="form-range" 
-                                                x-model.number="config.detectors.yolobat.detection_threshold"
-                                                min="0.3"
-                                                max="1.0"
-                                                step="0.01">
+                                               class="form-range" 
+                                               x-model.number="config.detectors.yolobat.detection_threshold"
+                                               min="0.3"
+                                               max="1.0"
+                                               step="0.01">
                                         <div class="form-text">Species/label identification threshold (0.3-1.0)</div>
                                     </div>
                                     <div class="col-md-6">
@@ -390,9 +390,9 @@
                                         </select>
                                         <div x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0" class="mt-2">
                                             <input type="text" 
-                                                    class="form-control" 
-                                                    x-model="config.detectors.yolobat.model_path"
-                                                    placeholder="Enter custom path: /path/to/model.xml">
+                                                   class="form-control" 
+                                                   x-model="config.detectors.yolobat.model_path"
+                                                   placeholder="Enter custom path: /path/to/model.xml">
                                         </div>
                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
                                     </div>
@@ -402,3 +402,389 @@
                                 <div x-show="config.detectors.yolobat.enabled" x-transition class="mt-3">
                                     <div class="mb-3">
                                         <label class="form-label mb-2">Detection Schedule</label>
+                                        <div class="form-text mb-3">Define time spans when YoloBat detector should be active. Leave empty for continuous operation.</div>
+                                        
+
+                                        <template x-for="(task, index) in config.detectors.yolobat.tasks" :key="index">
+                                            <div class="schedule-entry-modern mb-2">
+                                                <div class="bg-light rounded-2 p-3">
+                                                    <div class="d-flex align-items-center justify-content-between mb-3">
+                                                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                            <i class="fas fa-clock text-primary me-2"></i>
+                                                            <input type="text" 
+                                                                   class="form-control form-control-sm fw-medium" 
+                                                                   x-model="task.name" 
+                                                                   placeholder="Enter task name..." 
+                                                                   required>
+                                                        </div>
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm" 
+                                                                @click="removeDetectorTask('yolobat', index)"
+                                                                title="Remove task">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                                    <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                                </label>
+                                                                <div class="row g-1 flex-grow-1">
+                                                                    <div class="col">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                x-model="task.startReference"
+                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'start')">
+                                                                            <option value="time">Clock Time</option>
+                                                                            <option value="sunrise">Sunrise</option>
+                                                                            <option value="sunset">Sunset</option>
+                                                                            <option value="dawn">Dawn</option>
+                                                                            <option value="dusk">Dusk</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                style="width: 70px;"
+                                                                                x-model="task.startSign"
+                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'start')"
+                                                                                :disabled="task.startReference === 'time'">
+                                                                            <option value="+">+</option>
+                                                                            <option value="-">-</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="time" 
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.startOffset"
+                                                                               @change="updateDetectorTaskTimeString('yolobat', task, 'start')">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                                    <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                                </label>
+                                                                <div class="row g-1 flex-grow-1">
+                                                                    <div class="col">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                x-model="task.stopReference"
+                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'stop')">
+                                                                            <option value="time">Clock Time</option>
+                                                                            <option value="sunrise">Sunrise</option>
+                                                                            <option value="sunset">Sunset</option>
+                                                                            <option value="dawn">Dawn</option>
+                                                                            <option value="dusk">Dusk</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                style="width: 70px;"
+                                                                                x-model="task.stopSign"
+                                                                                @change="updateDetectorTaskTimeString('yolobat', task, 'stop')"
+                                                                                :disabled="task.stopReference === 'time'">
+                                                                            <option value="+">+</option>
+                                                                            <option value="-">-</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="time" 
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.stopOffset"
+                                                                               @change="updateDetectorTaskTimeString('yolobat', task, 'stop')">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <div class="mt-3">
+                                            <button type="button" 
+                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                    @click="addDetectorTask('yolobat')">
+                                                <i class="fas fa-plus me-2"></i>
+                                                Add Schedule Entry
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scheduling Settings -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Scheduling Settings
+                            </h6>
+                            <div class="form-text mb-3">Configure the station location for scheduling detection tasks based on sunrise, sunset, and other solar events.</div>
+                            <div class="row">
+                                <!-- Left Column (Controls) -->
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Latitude</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.lat"
+                                               min="-90"
+                                               max="90"
+                                               step="0.00001"
+                                               @input="updateMarkerFromInputs"
+                                               required>
+                                        <div class="form-text">Station latitude (-90 to 90)</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Longitude</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.lon"
+                                               min="-180"
+                                               max="180"
+                                               step="0.00001"
+                                               @input="updateMarkerFromInputs"
+                                               required>
+                                        <div class="form-text">Station longitude (-180 to 180)</div>
+                                    </div>
+                                </div>
+
+                                <!-- Right Column (Map) -->
+                                <div class="col-md-8">
+                                    <div id="soundscapeMap" class="map-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Recording Section -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-record-vinyl me-2"></i>
+                                Recording Settings
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">&nbsp;</label>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="config.maximize_confidence" 
+                                                   id="maximize_confidence">
+                                            <label class="form-check-label" for="maximize_confidence">
+                                                Maximize Confidence
+                                            </label>
+                                        </div>
+                                        <div class="form-text">Record highest confidence detections per day</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Default Ratio: <span x-text="config.ratio.toFixed(2)"></span></label>
+                                        <input type="range" 
+                                               class="form-range" 
+                                               x-model.number="config.ratio"
+                                               min="0.0"
+                                               max="1.0"
+                                               step="0.01"
+                                               :disabled="config.maximize_confidence">
+                                        <div class="form-text" :class="{ 'text-muted': config.maximize_confidence }">
+                                            <span x-show="!config.maximize_confidence">Ratio of calls to record (0.0-1.0)</span>
+                                            <span x-show="config.maximize_confidence">Disabled when maximize confidence is enabled</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Recording Length: <span x-text="config.length_s"></span> seconds</label>
+                                        <input type="range" 
+                                               class="form-range" 
+                                               x-model.number="config.length_s"
+                                               min="1"
+                                               max="60"
+                                               step="1">
+                                        <div class="form-text">Seconds to record after detection</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Species Groups Section (Expert Mode) -->
+                        <div class="mb-4" x-show="expertMode" x-transition>
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-layer-group text-muted me-2"></i>
+                                Species Groups
+                                <small class="text-muted ms-2">(Expert Mode)</small>
+                            </h6>
+                            <div class="form-text mb-3">
+                                Define species groups with custom recording ratios and confidence settings. Groups allow you to prioritize certain species for recording.
+                            </div>
+                            <div class="mb-3">
+                                <template x-if="Object.keys(config.groups || {}).length === 0">
+                                    <div class="text-muted text-center py-2">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        No species groups configured. Advanced feature for targeted recording strategies.
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Optional Arguments Section (Expert Mode) -->
+                                                                <!-- Output Device Settings (Expert Mode) -->
+                        <div class="mb-4" x-show="expertMode" x-transition>
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-volume-up me-2"></i>
+                                Output Device
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Output Device</label>
+                                        <template x-if="audioDevices.output_devices && audioDevices.output_devices.length > 0">
+                                            <select class="form-select" 
+                                                    @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                                <option value="">Select output device...</option>
+                                                <template x-for="device in audioDevices.output_devices" :key="device.index">
+                                                    <option :value="device.name" 
+                                                            :data-sample-rate="device.default_sample_rate"
+                                                        :data-max-channels="device.max_input_channels"
+                                                            :selected="config.output_device_match && config.output_device_match === device.name.split(':')[0].trim()"
+                                                            x-text="device.name + (device.is_default ? ' (Default)' : '') + ' - ' + device.max_output_channels + ' channels @ ' + Math.round(device.default_sample_rate/1000) + 'kHz'">
+                                                    </option>
+                                                </template>
+                                            </select>
+                                        </template>
+                                        <template x-if="!audioDevices.output_devices || audioDevices.output_devices.length === 0">
+                                            <div class="text-muted">
+                                                <i class="fas fa-exclamation-triangle"></i> No output devices detected
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Expert Mode Output Settings -->
+                            <div class="row" x-show="expertMode" x-transition>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Device Match <small class="text-muted">(Expert)</small></label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               x-model="config.output_device_match"
+                                               placeholder="USB AUDIO DEVICE">
+                                        <div class="form-text">Device identifier pattern</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Speaker Enable Pin <small class="text-muted">(Expert)</small></label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.speaker_enable_pin"
+                                               min="0">
+                                        <div class="form-text">GPIO pin number</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Highpass Frequency <small class="text-muted">(Expert)</small></label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.highpass_freq"
+                                               min="0"
+                                               step="10">
+                                        <div class="form-text">Hz (0 disables filter)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lure Playback Section (Expert Mode) -->
+                        <div class="mb-4" x-show="expertMode" x-transition>
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-play text-muted me-2"></i>
+                                Lure Playback
+                                <small class="text-muted ms-2">(Expert Mode)</small>
+                            </h6>
+                            <div class="form-text mb-3">
+                                Configure automated playback of lure calls to attract target species for detection and recording.
+                            </div>
+                            
+                            <!-- Lure Tasks -->
+                            <div class="mb-3">
+                                <label class="form-label">Lure Tasks</label>
+                                <div class="form-text mb-2">Add tasks to play species-specific lure calls at scheduled times</div>
+                                <template x-if="config.lure && config.lure.tasks && config.lure.tasks.length === 0">
+                                    <div class="text-muted text-center py-2">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        No lure tasks configured. Advanced feature for automated call playback.
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="mb-4" x-show="expertMode" x-transition>
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-cogs text-muted me-2"></i>
+                                Optional Arguments
+                                <small class="text-muted ms-2">(Expert Mode)</small>
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Stream Port</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.stream_port"
+                                               min="1"
+                                               max="65535"
+                                               required>
+                                        <div class="form-text">HTTP audio stream port for real-time audio streaming</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between gap-2">
+                            <div class="d-flex gap-2">
+                                <button type="button" 
+                                        class="btn btn-outline-secondary" 
+                                        @click="resetConfig()"
+                                        :disabled="!configLoaded">
+                                    Reset
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-outline-primary" 
+                                        @click="downloadConfig()"
+                                        :disabled="!configLoaded">
+                                    <i class="fas fa-download me-1"></i>
+                                    Download
+                                </button>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" 
+                                        class="btn btn-success"
+                                        :disabled="!configLoaded">
+                                    <i class="fas fa-save me-1"></i>
+                                    Save
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-warning" 
+                                        @click="saveAndRestartService()"
+                                        :disabled="!configLoaded || serviceStatus.status === 'not-found'">
+                                    <i class="fas fa-save me-1"></i>
+                                    <i class="fas fa-redo me-1"></i>
+                                    Save & Restart
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
