@@ -266,4 +266,40 @@ async def get_model_files() -> Dict[str, List[str]]:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to scan model files: {str(e)}"
+        )
+
+
+@router.get("/lure-files")
+async def get_lure_files() -> Dict[str, Any]:
+    """Get available lure audio files and directories."""
+    try:
+        result = {
+            "directories": [],
+            "files": []
+        }
+        
+        lure_path = Path("/data/lure")
+        if lure_path.exists() and lure_path.is_dir():
+            # Common audio file extensions
+            audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma'}
+            
+            # Recursively find all directories and audio files
+            for item in lure_path.rglob("*"):
+                if item.is_dir():
+                    # Add directory path
+                    result["directories"].append(str(item) + "/")
+                elif item.is_file() and item.suffix.lower() in audio_extensions:
+                    # Add audio file path
+                    result["files"].append(str(item))
+            
+            # Sort the lists for better UX
+            result["directories"].sort()
+            result["files"].sort()
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to scan lure files: {str(e)}"
         ) 

@@ -30,8 +30,7 @@ class LureTaskEntry(BaseModel):
     paths: List[str]
     start: str
     stop: str
-    skip_days: int = 0
-    record: int = 0
+    record: bool = False
 
 
 class GroupEntry(BaseModel):
@@ -251,6 +250,11 @@ class SoundscapepipeConfig(BaseConfig):
                     paths = task.get("paths", [])
                     if not isinstance(paths, list):
                         errors.append(f"Lure task {i} paths must be a list")
+                    
+                    # Validate record is a boolean
+                    record = task.get("record", False)
+                    if record is not None and not isinstance(record, bool):
+                        errors.append(f"Lure task {i} record must be a boolean (true/false)")
 
         # Validate recording settings
         ratio = config.get("ratio")

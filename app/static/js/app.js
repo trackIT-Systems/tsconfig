@@ -1084,12 +1084,15 @@ function soundscapepipeConfig() {
         loadingDevices: false,
         modelFiles: {},
         loadingModels: false,
+        lureFiles: {},
+        loadingLureFiles: false,
 
         init() {
             this.loadConfig();
             this.loadServiceStatus();
             this.loadAudioDevices();
             this.loadModelFiles();
+            this.loadLureFiles();
             
             // Auto-refresh service status every 30 seconds when tab is active
             this.refreshInterval = setInterval(() => {
@@ -1179,6 +1182,24 @@ function soundscapepipeConfig() {
                         detectors.schedule = { enabled: false, tasks: [] };
                     }
 
+                    // Handle lure tasks - parse existing time strings into UI components
+                    const lure = data.lure || { tasks: [] };
+                    if (lure.tasks) {
+                        lure.tasks.forEach(task => {
+                            this.parseLureTaskTimeString(task, task.start, 'start');
+                            this.parseLureTaskTimeString(task, task.stop, 'stop');
+                            // Ensure the time strings are properly synchronized after parsing
+                            this.updateLureTaskTimeString(task, 'start');
+                            this.updateLureTaskTimeString(task, 'stop');
+                            // Ensure paths is always an array
+                            if (!Array.isArray(task.paths)) {
+                                task.paths = task.paths ? [task.paths] : [''];
+                            }
+                            // Ensure record is boolean
+                            task.record = Boolean(task.record);
+                        });
+                    }
+
                     this.config = {
                         // Ensure all sections exist with defaults
                         stream_port: data.stream_port || 5001,
@@ -1192,7 +1213,7 @@ function soundscapepipeConfig() {
                         output_device_match: data.output_device_match || "USB AUDIO DEVICE",
                         speaker_enable_pin: data.speaker_enable_pin || 27,
                         highpass_freq: data.highpass_freq || 100,
-                        lure: data.lure || { tasks: [] },
+                        lure: lure,
                         ratio: data.ratio || 0.0,
                         length_s: data.length_s || 20,
                         maximize_confidence: data.maximize_confidence || false,
@@ -1273,6 +1294,34 @@ function soundscapepipeConfig() {
                     }
                 }
 
+                // Ensure all lure task time strings are synced with UI components before saving
+                if (this.config.lure && this.config.lure.tasks) {
+                    this.config.lure.tasks.forEach(task => {
+                        this.updateLureTaskTimeString(task, 'start');
+                        this.updateLureTaskTimeString(task, 'stop');
+                    });
+                }
+
+                // Clean up lure tasks - convert UI components back to time strings
+                if (configToSave.lure && configToSave.lure.tasks) {
+                    // Create a new array to avoid modifying the original that UI is bound to
+                    configToSave.lure = {
+                        ...configToSave.lure,
+                        tasks: configToSave.lure.tasks.map(task => {
+                            const cleanTask = { 
+                                species: task.species, 
+                                paths: task.paths,
+                                start: task.start, 
+                                stop: task.stop,
+                                record: Boolean(task.record)
+                            };
+                            return cleanTask;
+                        })
+                    };
+                }
+
+
+
                 const response = await fetch('/api/soundscapepipe', {
                     method: 'PUT',
                     headers: {
@@ -1342,6 +1391,20 @@ function soundscapepipeConfig() {
                             return cleanTask;
                         });
                     }
+                }
+
+                // Clean up lure tasks - convert UI components back to time strings
+                if (configToDownload.lure && configToDownload.lure.tasks) {
+                    configToDownload.lure.tasks = configToDownload.lure.tasks.map(task => {
+                        const cleanTask = { 
+                            species: task.species, 
+                            paths: task.paths,
+                            start: task.start, 
+                            stop: task.stop,
+                            record: Boolean(task.record)
+                        };
+                        return cleanTask;
+                    });
                 }
 
                 const response = await fetch('/api/soundscapepipe/download', {
@@ -1595,6 +1658,24 @@ function soundscapepipeConfig() {
             }
         },
 
+        async loadLureFiles() {
+            this.loadingLureFiles = true;
+            try {
+                const response = await fetch('/api/soundscapepipe/lure-files');
+                if (response.ok) {
+                    this.lureFiles = await response.json();
+                } else {
+                    console.error('Failed to load lure files');
+                    this.lureFiles = { directories: [], files: [] };
+                }
+            } catch (error) {
+                console.error('Error loading lure files:', error);
+                this.lureFiles = { directories: [], files: [] };
+            } finally {
+                this.loadingLureFiles = false;
+            }
+        },
+
         // Detector task management methods
         updateDetectorTaskTimeString(detectorName, task, type) {
             const reference = task[`${type}Reference`];
@@ -1653,6 +1734,82 @@ function soundscapepipeConfig() {
                 task[`${type}Sign`] = '+';
                 task[`${type}Offset`] = timeStr;
             }
+        },
+
+        // Lure task management methods
+        updateLureTaskTimeString(task, type) {
+            const reference = task[`${type}Reference`];
+            const sign = task[`${type}Sign`];
+            const offset = task[`${type}Offset`];
+            
+            if (reference === 'time') {
+                task[type] = offset;
+            } else {
+                task[type] = `${reference}${sign}${offset}`;
+            }
+        },
+
+        addLureTask() {
+            if (!this.config.lure) {
+                this.config.lure = { tasks: [] };
+            }
+            if (!this.config.lure.tasks) {
+                this.config.lure.tasks = [];
+            }
+            
+            this.config.lure.tasks.push({
+                species: '',
+                paths: [''],
+                start: '00:00',
+                stop: '00:00',
+                record: false,
+                startReference: 'time',
+                startOffset: '00:00',
+                startSign: '+',
+                stopReference: 'time',
+                stopOffset: '00:00',
+                stopSign: '+'
+            });
+        },
+
+        removeLureTask(index) {
+            this.config.lure.tasks.splice(index, 1);
+        },
+
+        parseLureTaskTimeString(task, timeStr, type) {
+            if (timeStr.includes('sunrise')) {
+                task[`${type}Reference`] = 'sunrise';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('sunrise', '').replace('+', '').replace('-', '').trim();
+            } else if (timeStr.includes('sunset')) {
+                task[`${type}Reference`] = 'sunset';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('sunset', '').replace('+', '').replace('-', '').trim();
+            } else if (timeStr.includes('dawn')) {
+                task[`${type}Reference`] = 'dawn';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('dawn', '').replace('+', '').replace('-', '').trim();
+            } else if (timeStr.includes('dusk')) {
+                task[`${type}Reference`] = 'dusk';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('dusk', '').replace('+', '').replace('-', '').trim();
+            } else {
+                // Assume it's a clock time
+                task[`${type}Reference`] = 'time';
+                task[`${type}Sign`] = '+';
+                task[`${type}Offset`] = timeStr;
+            }
+        },
+
+        addLureTaskPath(taskIndex) {
+            if (!this.config.lure.tasks[taskIndex].paths) {
+                this.config.lure.tasks[taskIndex].paths = [];
+            }
+            this.config.lure.tasks[taskIndex].paths.push('');
+        },
+
+        removeLureTaskPath(taskIndex, pathIndex) {
+            this.config.lure.tasks[taskIndex].paths.splice(pathIndex, 1);
         }
     }
 }

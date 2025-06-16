@@ -52,8 +52,7 @@ lure:
     - /data/lure/
     start: "sunset+00:00"
     stop: "sunset+00:00"
-    skip_days: 0
-    record: 0
+    record: false
 
 # recording section
 ratio: 0.0                  # default ratio of calls to be recorded
