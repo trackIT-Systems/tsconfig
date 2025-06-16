@@ -1194,17 +1194,17 @@ function soundscapepipeConfig() {
                         detectors.yolobat = { enabled: false, detection_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", tasks: [] };
                     }
                     
-                    // Schedule always exists
-                    if (!detectors.schedule) {
-                        detectors.schedule = { enabled: false, tasks: [] };
-                    } else {
-                        detectors.schedule.enabled = detectors.schedule.enabled !== undefined ? detectors.schedule.enabled : false;
+                    // Static detector (schedule) - enabled if present in config, disabled if not present
+                    if (detectors.schedule) {
+                        detectors.schedule.enabled = detectors.schedule.enabled !== undefined ? detectors.schedule.enabled : true;
                         detectors.schedule.tasks = detectors.schedule.tasks || [];
                         // Parse existing task time strings into UI components
                         detectors.schedule.tasks.forEach(task => {
                             this.parseDetectorTaskTimeString(task, task.start, 'start');
                             this.parseDetectorTaskTimeString(task, task.stop, 'stop');
                         });
+                    } else {
+                        detectors.schedule = { enabled: false, tasks: [] };
                     }
 
                     this.config = {
