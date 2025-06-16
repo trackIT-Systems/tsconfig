@@ -1,0 +1,64 @@
+<!-- Log Streaming Modal -->
+<div class="modal fade" id="logModal" tabindex="-1" aria-labelledby="logModalLabel" aria-hidden="true" x-data="logViewer()">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl" style="max-width: 95vw;" data-bs-keyboard="false">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="logModalLabel">
+                    <i class="fas fa-file-alt me-2"></i>
+                    Service Logs: <span x-text="currentService"></span>
+                </h5>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" style="height: 70vh;">
+                <div class="h-100 bg-dark text-light font-monospace small overflow-auto position-relative" 
+                     id="logContainer" 
+                     style="padding: 1rem; white-space: pre-wrap;">
+                    <!-- Empty state indicator -->
+                    <div x-show="!isStreaming && logs.length === 0" 
+                         class="position-absolute top-50 start-50 translate-middle text-center text-muted">
+                        <i class="fas fa-file-alt fa-3x mb-3 d-block"></i>
+                        <p class="mb-0">No logs to display</p>
+                    </div>
+                    <!-- Loading indicator -->
+                    <div x-show="isStreaming && logs.length === 0" 
+                         class="position-absolute top-50 start-50 translate-middle text-center text-muted">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mb-0">Connecting to log stream...</p>
+                    </div>
+                    <!-- Log lines -->
+                    <template x-for="(log, index) in logs" :key="index">
+                        <div class="log-line" x-text="log"></div>
+                    </template>
+                    <!-- Error indicator -->
+                    <div x-show="streamError" class="text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <span x-text="streamError"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <div class="d-flex justify-content-between w-100 align-items-center">
+                    <div class="small text-muted">
+                        <span x-text="logs.length"></span> lines
+                        <span x-show="isStreaming" class="text-success">
+                            <i class="fas fa-circle fa-xs me-1"></i>Streaming
+                        </span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-warning" @click="restartService()" :disabled="!currentService">
+                            <i class="fas fa-redo me-1"></i>Restart Service
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" @click="clearLogs()">
+                            <i class="fas fa-trash me-1"></i>Clear
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 

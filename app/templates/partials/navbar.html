@@ -1,0 +1,58 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/">{{ title }}</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" 
+                       href="#status" 
+                       @click.prevent="activeConfig = 'status'"
+                       :class="{ 'active': activeConfig === 'status', 'fw-bold': activeConfig === 'status' }">
+                        <i class="fas fa-tachometer-alt me-1"></i>Status
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" 
+                       href="#schedule" 
+                       @click.prevent="activeConfig = 'schedule'"
+                       :class="{ 'active': activeConfig === 'schedule', 'fw-bold': activeConfig === 'schedule' }">
+                        <i class="fas fa-calendar-alt me-1"></i>Schedule
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" 
+                       href="#radiotracking" 
+                       @click.prevent="activeConfig = 'radiotracking'"
+                       :class="{ 'active': activeConfig === 'radiotracking', 'fw-bold': activeConfig === 'radiotracking' }">
+                        <i class="fas fa-broadcast-tower me-1"></i>Radio Tracking
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" 
+                       href="#soundscapepipe" 
+                       @click.prevent="activeConfig = 'soundscapepipe'"
+                       :class="{ 'active': activeConfig === 'soundscapepipe', 'fw-bold': activeConfig === 'soundscapepipe' }">
+                        <i class="fas fa-volume-up me-1"></i>Soundscapepipe
+                    </a>
+                </li>
+            </ul>
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item d-flex align-items-center">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="globalExpertModeToggle" 
+                               x-model="expertMode">
+                        <label class="form-check-label text-light" for="globalExpertModeToggle">
+                            <i class="fas fa-flask me-1" title="Expert Mode"></i>
+                            <span class="d-none d-md-inline">Expert Mode</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav> 

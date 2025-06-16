@@ -132,4 +132,75 @@ main {
 
 .footer .lead {
     font-size: 1.25rem;
+}
+
+/* Common styles */
+[x-cloak] { 
+    display: none !important; 
+}
+
+/* Navigation styles */
+.nav-tabs .nav-link { 
+    color: #495057; 
+}
+
+.nav-tabs .nav-link.active { 
+    font-weight: 500;
+    color: #0d6efd;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+
+.navbar .nav-link.active {
+    color: #fff !important;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 0.25rem;
+}
+
+.navbar .nav-link {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.navbar .nav-link:hover {
+    color: #fff !important;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 0.25rem;
+}
+
+/* Configuration section styles */
+.config-section { 
+    display: none; 
+}
+
+.config-section.active { 
+    display: block; 
+}
+
+/* Status card styles */
+.status-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.status-card:hover {
+    transform: translateY(-2px);
+}
+
+.status-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+/* Log modal mobile optimization */
+@media (max-width: 991.98px) {
+    #logModal .modal-dialog {
+        margin: 0 !important;
+        max-width: 100vw !important;
+        height: 100vh;
+    }
+    #logModal .modal-content {
+        height: 100vh;
+        border: none;
+        border-radius: 0;
+    }
 } 

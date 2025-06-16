@@ -1,639 +1,639 @@
-                <!-- Radio Tracking Configuration -->
-                <div x-show="activeConfig === 'radiotracking'" x-cloak>
-                    <div class="row">
-                        <div class="col">
-                            <div class="card" x-data="radiotrackingConfig()" x-init="init()" x-destroy="cleanup()">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <h5 class="card-title mb-0 me-3">Radio Tracking Configuration</h5>
-                                <!-- Service Status Indicator -->
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="badge d-flex align-items-center gap-1" 
-                                          :class="{
-                                              'bg-success': serviceStatus.active && serviceStatus.status === 'active',
-                                              'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
-                                              'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
-                                              'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
-                                          }">
-                                        <i :class="{
-                                               'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
-                                               'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
-                                               'fas fa-question-circle': serviceStatus.status === 'not-found',
-                                               'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
-                                           }" 
-                                           style="font-size: 0.7em;"></i>
-                                        <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
-                                    </span>
-                                    <small class="text-muted">
-                                        <i class="fas fa-clock me-1"></i>
-                                        <span x-text="serviceStatus.uptime"></span>
-                                    </small>
-                                </div>
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <button type="button" 
-                                        class="btn btn-outline-info btn-sm" 
-                                        @click="streamLogs('radiotracking')"
-                                        title="View radiotracking service logs">
-                                    <i class="fas fa-file-alt me-1"></i>
-                                    <span class="d-none d-md-inline">View Logs</span>
-                                    <span class="d-md-none">Logs</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                                <!-- Loading State -->
-                                <div x-show="!configLoaded" class="text-center py-4">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
-                                    </div>
-                                    <div class="mt-2">Loading configuration...</div>
-                                </div>
-
-                                <!-- Configuration Form -->
-                                <form x-show="configLoaded" @submit.prevent="saveConfig">
-                                    <!-- RTL-SDR Section -->
-                                    <div class="mb-4">
-                                        <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-microchip me-2"></i>
-                                            RTL-SDR Settings
-                                        </h6>
-                                        
-                                        <!-- Device Configuration -->
-                                        <div class="mb-3">
-                                            <!-- Normal Mode: Device Count -->
-                                            <div x-show="!expertMode">
-                                                <div class="row align-items-center">
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Number of Devices</label>
-                                                        <select class="form-select" 
-                                                                x-model="deviceCount"
-                                                                @change="updateDeviceList"
-                                                                x-bind:disabled="!configLoaded">
-                                                            <template x-for="i in 8" :key="i">
-                                                                <option :value="i" x-text="i"></option>
-                                                            </template>
-                                                        </select>
-                                                        <div class="form-text">
-                                                            Select the number of RTL-SDR devices to use (1-8)
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Expert Mode: Detailed Device List -->
-                                            <div x-show="expertMode" x-transition>
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <h6 class="mb-0">Devices</h6>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-primary" 
-                                                            @click="addDevice"
-                                                            x-bind:disabled="!configLoaded">
-                                                        Add Device
-                                                    </button>
-                                                </div>
-                                                <div class="form-text mb-3">
-                                                    Configure multiple RTL-SDR devices. Each device needs a device index and calibration offset.
-                                                </div>
-                                                <template x-if="configLoaded">
-                                                    <template x-for="(device, index) in config['rtl-sdr'].device" :key="index">
-                                                        <div class="card mb-2">
-                                                            <div class="card-body">
-                                                                <div class="row align-items-center">
-                                                                    <div class="col-md-5">
-                                                                        <label class="form-label">Device Index</label>
-                                                                        <input type="text" 
-                                                                               class="form-control" 
-                                                                               x-model="config['rtl-sdr'].device[index]"
-                                                                               :placeholder="index.toString()"
-                                                                               required>
-                                                                    </div>
-                                                                    <div class="col-md-5">
-                                                                        <label class="form-label">Calibration Offset (dBm)</label>
-                                                                        <input type="number" 
-                                                                               class="form-control" 
-                                                                               x-model.number="config['rtl-sdr'].calibration[index]"
-                                                                               step="0.1"
-                                                                               required>
-                                                                        <div class="form-text">Signal strength calibration offset in dBm</div>
-                                                                    </div>
-                                                                    <div class="col-md-2 d-flex align-items-end">
-                                                                        <button type="button" 
-                                                                                class="btn btn-outline-danger w-100"
-                                                                                @click="removeDevice(index)"
-                                                                                :disabled="!configLoaded || config['rtl-sdr'].device.length <= 1">
-                                                                            Remove
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </template>
-                                                </template>
-                                            </div>
-                                        </div>
-
-                                        <!-- Common Settings -->
-                                        <template x-if="configLoaded">
-                                            <div>
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <div class="mb-3">
-                                                            <label class="form-label">Center Frequency (MHz)</label>
-                                                            <input type="number" 
-                                                                   class="form-control" 
-                                                                   x-model.number="centerFreqMHz"
-                                                                   min="24"
-                                                                   max="1766"
-                                                                   step="0.001"
-                                                                   @input="updateCenterFreq"
-                                                                   required>
-                                                            <div class="form-text">Center frequency in MHz (24-1766 MHz)</div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <div class="mb-3">
-                                                            <label class="form-label">Sample Rate (kHz)</label>
-                                                            <input type="number" 
-                                                                   class="form-control" 
-                                                                   x-model.number="sampleRateKHz"
-                                                                   min="230"
-                                                                   max="3200"
-                                                                   step="1"
-                                                                   @input="updateSampleRate"
-                                                                   required>
-                                                            <div class="form-text">Must be either 230-300 kHz or 900-3200 kHz</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Expert Mode Gain Settings -->
-                                                <div x-show="expertMode" x-transition>
-                                                    <div class="row">
-                                                        <div class="col-md-3">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">LNA Gain Stage</label>
-                                                                <input type="number" 
-                                                                       class="form-control" 
-                                                                       x-model.number="config['rtl-sdr'].lna_gain"
-                                                                       min="0"
-                                                                       max="15"
-                                                                       required>
-                                                                <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-3">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Mixer Gain Stage</label>
-                                                                <input type="number" 
-                                                                       class="form-control" 
-                                                                       x-model.number="config['rtl-sdr'].mixer_gain"
-                                                                       min="0"
-                                                                       max="15"
-                                                                       required>
-                                                                <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-3">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">VGA Gain Stage</label>
-                                                                <input type="number" 
-                                                                       class="form-control" 
-                                                                       x-model.number="config['rtl-sdr'].vga_gain"
-                                                                       min="0"
-                                                                       max="15"
-                                                                       required>
-                                                                <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-3">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Gain (deprecated)</label>
-                                                                <input type="number" 
-                                                                       class="form-control" 
-                                                                       x-model.number="config['rtl-sdr'].gain"
-                                                                       min="0"
-                                                                       step="0.1"
-                                                                       required>
-                                                                <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-
-                                        <!-- Expert Mode RTL-SDR Settings -->
-                                        <div x-show="expertMode" x-transition>
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Max Restart Attempts</label>
-                                                        <input type="number" 
-                                                               class="form-control" 
-                                                               x-model.number="config['rtl-sdr'].sdr_max_restart"
-                                                               min="0"
-                                                               required>
-                                                        <div class="form-text">Maximum number of restart attempts for the RTL-SDR device</div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Timeout (seconds)</label>
-                                                        <input type="number" 
-                                                               class="form-control" 
-                                                               x-model.number="config['rtl-sdr'].sdr_timeout_s"
-                                                               min="0.1"
-                                                               step="0.1"
-                                                               required>
-                                                        <div class="form-text">Timeout for RTL-SDR operations in seconds</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Analysis Section -->
-                                    <div class="mb-4">
-                                        <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-wave-square me-2"></i>
-                                            Signal Analysis
-                                        </h6>
-                                        <!-- Basic Analysis Settings -->
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Signal Threshold (dBW)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['analysis'].signal_threshold_dbw"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Minimum signal power level to trigger detection. Lower values (e.g., -100 dBW) detect weaker signals but may increase noise. Typical range: -100 to -80 dBW.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">SNR Threshold (dB)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['analysis'].snr_threshold_db"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Signal-to-Noise Ratio threshold for valid detection. Higher values reduce false positives but may miss weak signals. Typical range: 3-8 dB.</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Minimum Signal Duration (ms)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['analysis'].signal_min_duration_ms"
-                                                           min="0"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Minimum duration for a valid signal. Filters out brief noise spikes. For radio tags, typically 5-15 ms depending on tag pulse characteristics.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Maximum Signal Duration (ms)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['analysis'].signal_max_duration_ms"
-                                                           min="0"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Maximum duration for a valid signal. Prevents detection of continuous interference. For radio tags, typically 20-80 ms depending on tag specifications.</div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Expert Mode Analysis Settings -->
-                                        <div x-show="expertMode" x-transition>
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">FFT Segment Size</label>
-                                                        <input type="number" 
-                                                               class="form-control" 
-                                                               x-model.number="config['analysis'].fft_nperseg"
-                                                               min="1"
-                                                               required>
-                                                        <div class="form-text">Number of samples per FFT segment. Larger values improve frequency resolution but reduce time resolution. Power of 2 values (256, 512, 1024) are most efficient. Typical: 256-1024.</div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">FFT Window</label>
-                                                        <select class="form-select" 
-                                                                x-model="config['analysis'].fft_window"
-                                                                required>
-                                                            <option value="hamming">Hamming</option>
-                                                            <option value="hanning">Hanning</option>
-                                                            <option value="blackman">Blackman</option>
-                                                            <option value="bartlett">Bartlett</option>
-                                                        </select>
-                                                        <div class="form-text">Window function for FFT analysis. Hamming provides good balance of frequency resolution and spectral leakage reduction. Blackman has better leakage suppression but lower resolution.</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Matching Section (Expert Mode) -->
-                                    <div class="mb-4" x-show="expertMode" x-transition>
-                                        <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-link text-muted me-2"></i>
-                                            Signal Matching
-                                            <small class="text-muted ms-2">(Expert Mode)</small>
-                                        </h6>
-                                        <div class="form-text mb-3">
-                                            Signal matching identifies the same radio signal detected across multiple SDR devices. This enables signal confirmation, reduces false positives, and supports triangulation for location tracking.
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Matching Timeout (s)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['matching'].matching_timeout_s"
-                                                           min="0"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Maximum time to wait for matching signals from other SDRs. Longer timeouts catch more matches but increase processing delay. Typical: 1-5 seconds.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Time Difference (s)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['matching'].matching_time_diff_s"
-                                                           min="0"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Maximum time difference between signals to be considered a match. Accounts for clock drift and processing delays between SDRs. Typical: 0.1-1.0 seconds.</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Bandwidth (kHz)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="bandwidthKHz"
-                                                           min="0.1"
-                                                           step="0.1"
-                                                           @input="updateBandwidth"
-                                                           required>
-                                                    <div class="form-text">Frequency tolerance for matching signals. Allows for Doppler shift, oscillator drift, and frequency estimation errors. For VHF tags, typical: 2-8 kHz.</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Duration Difference (ms)</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['matching'].matching_duration_diff_ms"
-                                                           min="0"
-                                                           step="0.1"
-                                                           required>
-                                                    <div class="form-text">Maximum difference in signal duration to be considered a match. Accounts for varying signal strength and detection thresholds across SDRs. Typical: 2-10 ms.</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Data Publishing Section (Expert Mode) -->
-                                    <div class="mb-4" x-show="expertMode" x-transition>
-                                        <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-paper-plane text-muted me-2"></i>
-                                            Data Publishing
-                                            <small class="text-muted ms-2">(Expert Mode)</small>
-                                        </h6>
-                                        <div class="row">
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">&nbsp;</label>
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config['publish'].csv" 
-                                                               id="csv">
-                                                        <label class="form-check-label" for="csv">CSV Export</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-9">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Data Path</label>
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           x-model="config['publish'].path"
-                                                           required>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">&nbsp;</label>
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config['publish'].mqtt" 
-                                                               id="mqtt">
-                                                        <label class="form-check-label" for="mqtt">MQTT</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">MQTT Host</label>
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           x-model="config['publish'].mqtt_host"
-                                                           required>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">MQTT Port</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['publish'].mqtt_port"
-                                                           min="1"
-                                                           max="65535"
-                                                           required>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config['publish'].sig_stdout" 
-                                                               id="sig_stdout">
-                                                        <label class="form-check-label" for="sig_stdout">Signal to stdout</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config['publish'].match_stdout" 
-                                                               id="match_stdout">
-                                                        <label class="form-check-label" for="match_stdout">Matches to stdout</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Dashboard Section (Expert Mode) -->
-                                    <div class="mb-4" x-show="expertMode" x-transition>
-                                        <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-tachometer-alt text-muted me-2"></i>
-                                            Dashboard
-                                            <small class="text-muted ms-2">(Expert Mode)</small>
-                                        </h6>
-                                        <div class="row">
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">&nbsp;</label>
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config['dashboard'].dashboard" 
-                                                               id="dashboard">
-                                                        <label class="form-check-label" for="dashboard">Enable Dashboard</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Host</label>
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           x-model="config['dashboard'].dashboard_host"
-                                                           required>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Port</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['dashboard'].dashboard_port"
-                                                           min="1"
-                                                           max="65535"
-                                                           required>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Max Signals</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['dashboard'].dashboard_signals"
-                                                           min="1"
-                                                           required>
-                                                    <div class="form-text">Maximum number of signals to display</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Optional Arguments Section (Expert Mode) -->
-                                    <div class="mb-4" x-show="expertMode" x-transition>
-                                        <h6 class="border-bottom pb-2">
-                                            <i class="fas fa-cogs text-muted me-2"></i>
-                                            Optional Arguments
-                                            <small class="text-muted ms-2">(Expert Mode)</small>
-                                        </h6>
-                                        <div class="row">
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Verbose Level</label>
-                                                    <input type="number" 
-                                                           class="form-control" 
-                                                           x-model.number="config['optional arguments'].verbose"
-                                                           min="0"
-                                                           required>
-                                                    <div class="form-text">(0=warning, 1=info, 2=debug)</div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Station Name</label>
-                                                    <input type="text" 
-                                                           class="form-control" 
-                                                           x-model="config['optional arguments'].station"
-                                                           placeholder="Optional station identifier">
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="mb-3">
-                                                    <label class="form-label">&nbsp;</label>
-                                                    <div class="form-check form-switch">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               x-model="config['optional arguments'].calibrate" 
-                                                               id="calibrate">
-                                                        <label class="form-check-label" for="calibrate">Calibration Mode</label>
-                                                    </div>
-                                                    <div class="form-text">Enable calibration mode for the radio receiver</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Form Actions -->
-                                    <div class="d-flex justify-content-between gap-2">
-                                        <div class="d-flex gap-2">
-                                            <button type="button" 
-                                                    class="btn btn-outline-secondary" 
-                                                    @click="resetConfig()"
-                                                    :disabled="!configLoaded">
-                                                Reset
-                                            </button>
-                                            <button type="button" 
-                                                    class="btn btn-outline-primary" 
-                                                    @click="downloadConfig()"
-                                                    :disabled="!configLoaded">
-                                                <i class="fas fa-download me-1"></i>
-                                                Download
-                                            </button>
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button type="submit" 
-                                                    class="btn btn-success"
-                                                    :disabled="!configLoaded">
-                                                <i class="fas fa-save me-1"></i>
-                                                Save
-                                            </button>
-                                            <button type="button" 
-                                                    class="btn btn-warning" 
-                                                    @click="saveAndRestartService()"
-                                                    :disabled="!configLoaded">
-                                                <i class="fas fa-save me-1"></i>
-                                                <i class="fas fa-redo me-1"></i>
-                                                Save & Restart
-                                            </button>
-                                        </div>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                        </div>
-                    </div>
+<!-- Radio Tracking Configuration -->
+<div x-show="activeConfig === 'radiotracking'" x-cloak>
+    <div class="row">
+        <div class="col">
+            <div class="card" x-data="radiotrackingConfig()" x-init="init()" x-destroy="cleanup()">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <h5 class="card-title mb-0 me-3">Radio Tracking Configuration</h5>
+                <!-- Service Status Indicator -->
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge d-flex align-items-center gap-1" 
+                            :class="{
+                                'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                            }">
+                        <i :class="{
+                                'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
+                                'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
+                                'fas fa-question-circle': serviceStatus.status === 'not-found',
+                                'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                            }" 
+                            style="font-size: 0.7em;"></i>
+                        <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
+                    </span>
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        <span x-text="serviceStatus.uptime"></span>
+                    </small>
                 </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" 
+                        class="btn btn-outline-info btn-sm" 
+                        @click="streamLogs('radiotracking')"
+                        title="View radiotracking service logs">
+                    <i class="fas fa-file-alt me-1"></i>
+                    <span class="d-none d-md-inline">View Logs</span>
+                    <span class="d-md-none">Logs</span>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+                <!-- Loading State -->
+                <div x-show="!configLoaded" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="mt-2">Loading configuration...</div>
+                </div>
+
+                <!-- Configuration Form -->
+                <form x-show="configLoaded" @submit.prevent="saveConfig">
+                    <!-- RTL-SDR Section -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-microchip me-2"></i>
+                            RTL-SDR Settings
+                        </h6>
+                        
+                        <!-- Device Configuration -->
+                        <div class="mb-3">
+                            <!-- Normal Mode: Device Count -->
+                            <div x-show="!expertMode">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Number of Devices</label>
+                                        <select class="form-select" 
+                                                x-model="deviceCount"
+                                                @change="updateDeviceList"
+                                                x-bind:disabled="!configLoaded">
+                                            <template x-for="i in 8" :key="i">
+                                                <option :value="i" x-text="i"></option>
+                                            </template>
+                                        </select>
+                                        <div class="form-text">
+                                            Select the number of RTL-SDR devices to use (1-8)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Expert Mode: Detailed Device List -->
+                            <div x-show="expertMode" x-transition>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0">Devices</h6>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-primary" 
+                                            @click="addDevice"
+                                            x-bind:disabled="!configLoaded">
+                                        Add Device
+                                    </button>
+                                </div>
+                                <div class="form-text mb-3">
+                                    Configure multiple RTL-SDR devices. Each device needs a device index and calibration offset.
+                                </div>
+                                <template x-if="configLoaded">
+                                    <template x-for="(device, index) in config['rtl-sdr'].device" :key="index">
+                                        <div class="card mb-2">
+                                            <div class="card-body">
+                                                <div class="row align-items-center">
+                                                    <div class="col-md-5">
+                                                        <label class="form-label">Device Index</label>
+                                                        <input type="text" 
+                                                                class="form-control" 
+                                                                x-model="config['rtl-sdr'].device[index]"
+                                                                :placeholder="index.toString()"
+                                                                required>
+                                                    </div>
+                                                    <div class="col-md-5">
+                                                        <label class="form-label">Calibration Offset (dBm)</label>
+                                                        <input type="number" 
+                                                                class="form-control" 
+                                                                x-model.number="config['rtl-sdr'].calibration[index]"
+                                                                step="0.1"
+                                                                required>
+                                                        <div class="form-text">Signal strength calibration offset in dBm</div>
+                                                    </div>
+                                                    <div class="col-md-2 d-flex align-items-end">
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger w-100"
+                                                                @click="removeDevice(index)"
+                                                                :disabled="!configLoaded || config['rtl-sdr'].device.length <= 1">
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Common Settings -->
+                        <template x-if="configLoaded">
+                            <div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Center Frequency (MHz)</label>
+                                            <input type="number" 
+                                                    class="form-control" 
+                                                    x-model.number="centerFreqMHz"
+                                                    min="24"
+                                                    max="1766"
+                                                    step="0.001"
+                                                    @input="updateCenterFreq"
+                                                    required>
+                                            <div class="form-text">Center frequency in MHz (24-1766 MHz)</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Sample Rate (kHz)</label>
+                                            <input type="number" 
+                                                    class="form-control" 
+                                                    x-model.number="sampleRateKHz"
+                                                    min="230"
+                                                    max="3200"
+                                                    step="1"
+                                                    @input="updateSampleRate"
+                                                    required>
+                                            <div class="form-text">Must be either 230-300 kHz or 900-3200 kHz</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Expert Mode Gain Settings -->
+                                <div x-show="expertMode" x-transition>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="mb-3">
+                                                <label class="form-label">LNA Gain Stage</label>
+                                                <input type="number" 
+                                                        class="form-control" 
+                                                        x-model.number="config['rtl-sdr'].lna_gain"
+                                                        min="0"
+                                                        max="15"
+                                                        required>
+                                                <div class="form-text">Low Noise Amplifier (LNA) amplifies the incoming RF signal before mixing. Higher values increase sensitivity but may introduce noise.</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="mb-3">
+                                                <label class="form-label">Mixer Gain Stage</label>
+                                                <input type="number" 
+                                                        class="form-control" 
+                                                        x-model.number="config['rtl-sdr'].mixer_gain"
+                                                        min="0"
+                                                        max="15"
+                                                        required>
+                                                <div class="form-text">Controls the gain of the mixer stage which converts RF to IF. Adjust to balance signal strength and image rejection.</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="mb-3">
+                                                <label class="form-label">VGA Gain Stage</label>
+                                                <input type="number" 
+                                                        class="form-control" 
+                                                        x-model.number="config['rtl-sdr'].vga_gain"
+                                                        min="0"
+                                                        max="15"
+                                                        required>
+                                                <div class="form-text">Variable Gain Amplifier (VGA) provides final amplification before ADC. Use to fine-tune signal level for optimal digitization.</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="mb-3">
+                                                <label class="form-label">Gain (deprecated)</label>
+                                                <input type="number" 
+                                                        class="form-control" 
+                                                        x-model.number="config['rtl-sdr'].gain"
+                                                        min="0"
+                                                        step="0.1"
+                                                        required>
+                                                <div class="form-text">Only used with older versions of librtlsdr. Use LNA, Mixer, and VGA gains instead.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Expert Mode RTL-SDR Settings -->
+                        <div x-show="expertMode" x-transition>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Max Restart Attempts</label>
+                                        <input type="number" 
+                                                class="form-control" 
+                                                x-model.number="config['rtl-sdr'].sdr_max_restart"
+                                                min="0"
+                                                required>
+                                        <div class="form-text">Maximum number of restart attempts for the RTL-SDR device</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Timeout (seconds)</label>
+                                        <input type="number" 
+                                                class="form-control" 
+                                                x-model.number="config['rtl-sdr'].sdr_timeout_s"
+                                                min="0.1"
+                                                step="0.1"
+                                                required>
+                                        <div class="form-text">Timeout for RTL-SDR operations in seconds</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Section -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-wave-square me-2"></i>
+                            Signal Analysis
+                        </h6>
+                        <!-- Basic Analysis Settings -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Signal Threshold (dBW)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['analysis'].signal_threshold_dbw"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Minimum signal power level to trigger detection. Lower values (e.g., -100 dBW) detect weaker signals but may increase noise. Typical range: -100 to -80 dBW.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">SNR Threshold (dB)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['analysis'].snr_threshold_db"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Signal-to-Noise Ratio threshold for valid detection. Higher values reduce false positives but may miss weak signals. Typical range: 3-8 dB.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Minimum Signal Duration (ms)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['analysis'].signal_min_duration_ms"
+                                            min="0"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Minimum duration for a valid signal. Filters out brief noise spikes. For radio tags, typically 5-15 ms depending on tag pulse characteristics.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Maximum Signal Duration (ms)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['analysis'].signal_max_duration_ms"
+                                            min="0"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Maximum duration for a valid signal. Prevents detection of continuous interference. For radio tags, typically 20-80 ms depending on tag specifications.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Expert Mode Analysis Settings -->
+                        <div x-show="expertMode" x-transition>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">FFT Segment Size</label>
+                                        <input type="number" 
+                                                class="form-control" 
+                                                x-model.number="config['analysis'].fft_nperseg"
+                                                min="1"
+                                                required>
+                                        <div class="form-text">Number of samples per FFT segment. Larger values improve frequency resolution but reduce time resolution. Power of 2 values (256, 512, 1024) are most efficient. Typical: 256-1024.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">FFT Window</label>
+                                        <select class="form-select" 
+                                                x-model="config['analysis'].fft_window"
+                                                required>
+                                            <option value="hamming">Hamming</option>
+                                            <option value="hanning">Hanning</option>
+                                            <option value="blackman">Blackman</option>
+                                            <option value="bartlett">Bartlett</option>
+                                        </select>
+                                        <div class="form-text">Window function for FFT analysis. Hamming provides good balance of frequency resolution and spectral leakage reduction. Blackman has better leakage suppression but lower resolution.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Matching Section (Expert Mode) -->
+                    <div class="mb-4" x-show="expertMode" x-transition>
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-link text-muted me-2"></i>
+                            Signal Matching
+                            <small class="text-muted ms-2">(Expert Mode)</small>
+                        </h6>
+                        <div class="form-text mb-3">
+                            Signal matching identifies the same radio signal detected across multiple SDR devices. This enables signal confirmation, reduces false positives, and supports triangulation for location tracking.
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Matching Timeout (s)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['matching'].matching_timeout_s"
+                                            min="0"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Maximum time to wait for matching signals from other SDRs. Longer timeouts catch more matches but increase processing delay. Typical: 1-5 seconds.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Time Difference (s)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['matching'].matching_time_diff_s"
+                                            min="0"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Maximum time difference between signals to be considered a match. Accounts for clock drift and processing delays between SDRs. Typical: 0.1-1.0 seconds.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Bandwidth (kHz)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="bandwidthKHz"
+                                            min="0.1"
+                                            step="0.1"
+                                            @input="updateBandwidth"
+                                            required>
+                                    <div class="form-text">Frequency tolerance for matching signals. Allows for Doppler shift, oscillator drift, and frequency estimation errors. For VHF tags, typical: 2-8 kHz.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Duration Difference (ms)</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['matching'].matching_duration_diff_ms"
+                                            min="0"
+                                            step="0.1"
+                                            required>
+                                    <div class="form-text">Maximum difference in signal duration to be considered a match. Accounts for varying signal strength and detection thresholds across SDRs. Typical: 2-10 ms.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Publishing Section (Expert Mode) -->
+                    <div class="mb-4" x-show="expertMode" x-transition>
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-paper-plane text-muted me-2"></i>
+                            Data Publishing
+                            <small class="text-muted ms-2">(Expert Mode)</small>
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                                type="checkbox" 
+                                                x-model="config['publish'].csv" 
+                                                id="csv">
+                                        <label class="form-check-label" for="csv">CSV Export</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="mb-3">
+                                    <label class="form-label">Data Path</label>
+                                    <input type="text" 
+                                            class="form-control" 
+                                            x-model="config['publish'].path"
+                                            required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                                type="checkbox" 
+                                                x-model="config['publish'].mqtt" 
+                                                id="mqtt">
+                                        <label class="form-check-label" for="mqtt">MQTT</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">MQTT Host</label>
+                                    <input type="text" 
+                                            class="form-control" 
+                                            x-model="config['publish'].mqtt_host"
+                                            required>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">MQTT Port</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['publish'].mqtt_port"
+                                            min="1"
+                                            max="65535"
+                                            required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                                type="checkbox" 
+                                                x-model="config['publish'].sig_stdout" 
+                                                id="sig_stdout">
+                                        <label class="form-check-label" for="sig_stdout">Signal to stdout</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                                type="checkbox" 
+                                                x-model="config['publish'].match_stdout" 
+                                                id="match_stdout">
+                                        <label class="form-check-label" for="match_stdout">Matches to stdout</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Section (Expert Mode) -->
+                    <div class="mb-4" x-show="expertMode" x-transition>
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-tachometer-alt text-muted me-2"></i>
+                            Dashboard
+                            <small class="text-muted ms-2">(Expert Mode)</small>
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                                type="checkbox" 
+                                                x-model="config['dashboard'].dashboard" 
+                                                id="dashboard">
+                                        <label class="form-check-label" for="dashboard">Enable Dashboard</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">Host</label>
+                                    <input type="text" 
+                                            class="form-control" 
+                                            x-model="config['dashboard'].dashboard_host"
+                                            required>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">Port</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['dashboard'].dashboard_port"
+                                            min="1"
+                                            max="65535"
+                                            required>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">Max Signals</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['dashboard'].dashboard_signals"
+                                            min="1"
+                                            required>
+                                    <div class="form-text">Maximum number of signals to display</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Optional Arguments Section (Expert Mode) -->
+                    <div class="mb-4" x-show="expertMode" x-transition>
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-cogs text-muted me-2"></i>
+                            Optional Arguments
+                            <small class="text-muted ms-2">(Expert Mode)</small>
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">Verbose Level</label>
+                                    <input type="number" 
+                                            class="form-control" 
+                                            x-model.number="config['optional arguments'].verbose"
+                                            min="0"
+                                            required>
+                                    <div class="form-text">(0=warning, 1=info, 2=debug)</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Station Name</label>
+                                    <input type="text" 
+                                            class="form-control" 
+                                            x-model="config['optional arguments'].station"
+                                            placeholder="Optional station identifier">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                                type="checkbox" 
+                                                x-model="config['optional arguments'].calibrate" 
+                                                id="calibrate">
+                                        <label class="form-check-label" for="calibrate">Calibration Mode</label>
+                                    </div>
+                                    <div class="form-text">Enable calibration mode for the radio receiver</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="d-flex justify-content-between gap-2">
+                        <div class="d-flex gap-2">
+                            <button type="button" 
+                                    class="btn btn-outline-secondary" 
+                                    @click="resetConfig()"
+                                    :disabled="!configLoaded">
+                                Reset
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-primary" 
+                                    @click="downloadConfig()"
+                                    :disabled="!configLoaded">
+                                <i class="fas fa-download me-1"></i>
+                                Download
+                            </button>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" 
+                                    class="btn btn-success"
+                                    :disabled="!configLoaded">
+                                <i class="fas fa-save me-1"></i>
+                                Save
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-warning" 
+                                    @click="saveAndRestartService()"
+                                    :disabled="!configLoaded">
+                                <i class="fas fa-save me-1"></i>
+                                <i class="fas fa-redo me-1"></i>
+                                Save & Restart
+                            </button>
+                        </div>
+                </div>
+            </form>
+        </div>
+    </div>
+        </div>
+    </div>
+</div>
 

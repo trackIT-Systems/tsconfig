@@ -1,0 +1,20 @@
+<!-- Alert for messages -->
+<template x-if="message !== ''">
+    <div x-cloak
+         x-transition
+         x-init="if (message && !error && !warning) setTimeout(() => message = '', 10000)"
+         :class="{
+             'alert-success': !error && !warning,
+             'alert-danger': error,
+             'alert-warning': warning
+         }"
+         class="alert d-flex justify-content-between align-items-center" 
+         role="alert">
+        <span x-text="message"></span>
+        <button type="button" 
+                class="btn-close" 
+                x-on:click="message = ''; error = false; warning = false"
+                aria-label="Close">
+        </button>
+    </div>
+</template> 
