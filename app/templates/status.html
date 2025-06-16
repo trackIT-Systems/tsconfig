@@ -1,0 +1,516 @@
+                <!-- Status Section -->
+                <div x-show="activeConfig === 'status'" x-cloak>
+                    <div x-data="statusPage()" x-init="initStatus()">
+                        <!-- Status Header -->
+                        <div class="row mb-4">
+                            <div class="col">
+                                <h2 class="mb-2">
+                                    <i class="fas fa-server me-3"></i>System Status
+                                </h2>
+                                <p class="text-muted">Real-time system information and health monitoring</p>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-outline-primary" 
+                                        @click="refreshStatus()"
+                                        :disabled="loading || refreshing">
+                                    <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading || refreshing }"></i>
+                                    <span x-text="(loading || refreshing) ? 'Refreshing...' : 'Refresh'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Status Error Alert -->
+                        <template x-if="statusError">
+                            <div x-cloak class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <div x-text="statusError"></div>
+                            </div>
+                        </template>
+
+                        <!-- Systemd Services Messages -->
+                        <template x-if="actionMessage || servicesError">
+                            <div class="row mb-4">
+                                <div class="col">
+                                    <!-- Action feedback -->
+                                    <template x-if="actionMessage">
+                                        <div class="alert" 
+                                             :class="actionError ? 'alert-danger' : 'alert-success'" 
+                                             role="alert">
+                                            <i :class="actionError ? 'fas fa-exclamation-triangle' : 'fas fa-check-circle'" class="me-2"></i>
+                                            <span x-text="actionMessage"></span>
+                                        </div>
+                                    </template>
+
+                                    <!-- Error state -->
+                                    <template x-if="servicesError">
+                                        <div class="alert alert-danger d-flex align-items-center" role="alert">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <div x-text="servicesError"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Systemd Services -->
+                        <div class="row mb-4">
+                            <div class="col">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">
+                                            <i class="fas fa-cogs me-2"></i>System Services
+                                        </h5>
+                                    </div>
+
+                                        <!-- Loading state -->
+                                        <template x-if="servicesLoading && services.length === 0">
+                                            <div class="card-body">
+                                                <div class="text-center py-3">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2 text-muted">Loading services...</p>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                                                <!-- Modern Services List -->
+                        <template x-if="getFilteredServices(expertMode).length > 0">
+                            <div class="card-body p-0">
+                                <div class="list-group list-group-flush">
+                                    <template x-for="service in getFilteredServices(expertMode)" :key="service.name">
+                                        <div class="list-group-item border-0 border-start border-4 py-3 px-4" 
+                                             :class="{
+                                                 'border-success': service.active && service.status === 'active',
+                                                 'border-danger': !service.active && service.status !== 'not-found' && service.status !== 'timeout' && service.status !== 'error',
+                                                 'border-secondary': service.status === 'not-found',
+                                                 'border-warning': service.status === 'timeout' || service.status === 'error'
+                                             }">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <!-- Left section: Service info -->
+                                                <div class="flex-grow-1 me-3">
+                                                    <div class="d-flex align-items-center mb-1">
+                                                        <!-- Status dot -->
+                                                        <div class="me-3">
+                                                            <i :class="{
+                                                                   'fas fa-circle text-success': service.active && service.status === 'active',
+                                                                   'fas fa-circle text-danger': !service.active && service.status !== 'not-found' && service.status !== 'timeout' && service.status !== 'error',
+                                                                   'fas fa-question-circle text-secondary': service.status === 'not-found',
+                                                                   'fas fa-exclamation-triangle text-warning': service.status === 'timeout' || service.status === 'error'
+                                                               }" 
+                                                               style="font-size: 0.8em;"></i>
+                                                        </div>
+                                                        
+                                                        <!-- Service name and main status -->
+                                                        <div class="flex-grow-1">
+                                                            <h6 class="mb-0 fw-bold">
+                                                                <code class="text-primary" x-text="service.name"></code>
+                                                            </h6>
+                                                            <div class="d-flex align-items-center gap-3 mt-1">
+                                                                <small class="text-muted" x-text="service.description"></small>
+                                                                <span class="d-none d-lg-inline">
+                                                                    <small class="text-muted">
+                                                                        <i class="fas fa-clock me-1"></i>
+                                                                        <span x-text="service.uptime || 'N/A'"></span>
+                                                                    </small>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Mobile uptime info -->
+                                                    <div class="d-lg-none mt-1">
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-clock me-1"></i>
+                                                            <span x-text="service.uptime || 'N/A'"></span>
+                                                        </small>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Center section: Status badges -->
+                                                <div class="d-flex align-items-center gap-2 me-3">
+                                                    <!-- Active status -->
+                                                    <span class="badge d-flex align-items-center gap-1" 
+                                                          :class="{
+                                                              'bg-success': service.active && service.status === 'active',
+                                                              'bg-danger': !service.active && service.status !== 'not-found' && service.status !== 'timeout' && service.status !== 'error',
+                                                              'bg-secondary': service.status === 'not-found',
+                                                              'bg-warning': service.status === 'timeout' || service.status === 'error'
+                                                          }">
+                                                        <span class="d-none d-sm-inline" x-text="service.active ? 'Active' : (service.status === 'not-found' ? 'Not Found' : (service.status === 'timeout' || service.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                                                        <span class="d-sm-none" x-text="service.active ? 'ON' : 'OFF'"></span>
+                                                    </span>
+                                                    
+                                                    <!-- Enabled status -->
+                                                    <span class="badge" 
+                                                          :class="service.enabled ? 'bg-success bg-opacity-25 text-success border border-success border-opacity-25' : 'bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25'">
+                                                        <i :class="service.enabled ? 'fas fa-check' : 'fas fa-times'" style="font-size: 0.7em;"></i>
+                                                        <span class="d-none d-md-inline ms-1" x-text="service.enabled ? 'Enabled' : 'Disabled'"></span>
+                                                    </span>
+                                                </div>
+
+                                                <!-- Right section: Action buttons -->
+                                                <div class="d-flex gap-1">
+                                                    <button class="btn btn-sm" 
+                                                            :class="service.active ? 'btn-outline-danger' : 'btn-outline-success'"
+                                                            @click="performAction(service.name, service.active ? 'stop' : 'start')"
+                                                            :disabled="actionLoading || service.status === 'not-found'"
+                                                            :title="service.active ? 'Stop service' : 'Start service'">
+                                                        <i :class="service.active ? 'fas fa-stop' : 'fas fa-play'"></i>
+                                                        <span class="d-none d-lg-inline ms-1" x-text="service.active ? 'Stop' : 'Start'"></span>
+                                                    </button>
+                                                    <button class="btn btn-outline-warning btn-sm" 
+                                                            @click="performAction(service.name, 'restart')"
+                                                            :disabled="actionLoading || service.status === 'not-found'"
+                                                            title="Restart service">
+                                                        <i class="fas fa-redo"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-info btn-sm" 
+                                                            @click="streamLogs(service.name)"
+                                                            :disabled="service.status === 'not-found'"
+                                                            title="View logs">
+                                                        <i class="fas fa-file-alt"></i>
+                                                        <span class="d-none d-xl-inline ms-1">Logs</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Status Cards -->
+                            <div x-show="systemInfo" x-cloak>
+                                <div class="row g-4 mt-4">
+                                    <!-- Operating System -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 status-card">
+                                            <div class="card-body text-center">
+                                                <div class="mb-3">
+                                                    <i class="fas fa-desktop fa-2x text-primary"></i>
+                                                </div>
+                                                <h6 class="card-title text-muted">Operating System</h6>
+                                                <div class="status-value" x-text="systemInfo?.os_release?.PRETTY_NAME || systemInfo?.operating_system || 'Loading...'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Uptime -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 status-card">
+                                            <div class="card-body text-center">
+                                                <div class="mb-3">
+                                                    <i class="fas fa-clock fa-2x text-success"></i>
+                                                </div>
+                                                <h6 class="card-title text-muted">Uptime</h6>
+                                                <div class="status-value text-success" x-text="formatUptime(systemInfo?.uptime)"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Current DateTime -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 status-card">
+                                            <div class="card-body text-center">
+                                                <div class="mb-3">
+                                                    <i class="fas fa-calendar-alt fa-2x text-info"></i>
+                                                </div>
+                                                <h6 class="card-title text-muted">Current Date & Time</h6>
+                                                <div class="status-value" x-text="formatDateTime(systemInfo?.current_datetime)"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Timezone -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 status-card">
+                                            <div class="card-body text-center">
+                                                <div class="mb-3">
+                                                    <i class="fas fa-globe fa-2x text-warning"></i>
+                                                </div>
+                                                <h6 class="card-title text-muted">Timezone</h6>
+                                                <div class="status-value" x-text="systemInfo?.timezone || 'Loading...'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Comprehensive System Information -->
+                            <div class="row mt-4" x-show="systemInfo">
+                                <div class="col">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-chart-bar me-2"></i>System Resources
+                                            </h5>
+                                            <button class="btn btn-outline-danger btn-sm" 
+                                                    @click="rebootSystem()"
+                                                    :disabled="rebootLoading">
+                                                <i class="fas fa-power-off me-1" :class="{ 'fa-spin': rebootLoading }"></i>
+                                                <span x-text="rebootLoading ? 'Rebooting...' : 'Reboot System'"></span>
+                                            </button>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- CPU Information -->
+                                            <div class="row mb-4">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-microchip me-2"></i>CPU Load</h6>
+                                                    <template x-if="systemInfo?.cpu?.load_avg">
+                                                        <div>
+                                                            <!-- Layered Load Average Progress Bar (matching memory bar colors) -->
+                                                            <div class="progress mb-2" style="position: relative; overflow: hidden;">
+                                                                <!-- 15min load (bottom/background layer) -->
+                                                                <div class="progress-bar bg-warning" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[2] / systemInfo.cpu.count_logical * 100))}%; height: 100%; position: absolute; top: 0; left: 0;`">
+                                                                </div>
+                                                                <!-- 5min load (middle layer) -->
+                                                                <div class="progress-bar bg-primary" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[1] / systemInfo.cpu.count_logical * 100))}%; height: 100%; position: absolute; top: 0; left: 0;`">
+                                                                </div>
+                                                                <!-- 1min load (top/foreground layer) -->
+                                                                <div class="progress-bar bg-success" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[0] / systemInfo.cpu.count_logical * 100))}%; height: 100%; position: absolute; top: 0; left: 0;`">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                <div class="d-flex justify-content-between mb-1">
+                                                                    <span>Load Average:</span>
+                                                                    <span>
+                                                                        <span class="badge bg-success me-1" x-text="`1m: ${systemInfo.cpu.load_avg[0].toFixed(2)}`"></span>
+                                                                        <span class="badge bg-primary me-1" x-text="`5m: ${systemInfo.cpu.load_avg[1].toFixed(2)}`"></span>
+                                                                        <span class="badge bg-warning" x-text="`15m: ${systemInfo.cpu.load_avg[2].toFixed(2)}`"></span>
+                                                                    </span>
+                                                                </div>
+                                                                <span x-text="`Cores: ${systemInfo.cpu.count_physical} physical, ${systemInfo.cpu.count_logical} logical`"></span>
+                                                            </small>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!systemInfo?.cpu?.load_avg">
+                                                        <div>
+                                                            <!-- Fallback to CPU percentage if load average not available -->
+                                                            <div class="progress mb-2">
+                                                                <div class="progress-bar" 
+                                                                     :style="`width: ${systemInfo?.cpu?.percent || 0}%`" 
+                                                                     :class="{
+                                                                         'bg-success': (systemInfo?.cpu?.percent || 0) < 50,
+                                                                         'bg-warning': (systemInfo?.cpu?.percent || 0) >= 50 && (systemInfo?.cpu?.percent || 0) < 80,
+                                                                         'bg-danger': (systemInfo?.cpu?.percent || 0) >= 80
+                                                                     }">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                <span x-text="`Usage: ${(systemInfo?.cpu?.percent || 0).toFixed(1)}%`"></span><br>
+                                                                <span x-text="`Cores: ${systemInfo?.cpu?.count_physical} physical, ${systemInfo?.cpu?.count_logical} logical`"></span><br>
+                                                                <span class="text-warning">Load averages not available on this system</span>
+                                                            </small>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-memory me-2"></i>Memory</h6>
+                                                    <template x-if="systemInfo?.memory?.virtual">
+                                                        <div>
+                                                            <!-- htop-style Memory Progress Bar -->
+                                                            <div class="progress mb-2">
+                                                                <!-- Actual Used memory (green) -->
+                                                                <div class="progress-bar bg-success" 
+                                                                     :style="`width: ${Math.min(100, ((systemInfo.memory.virtual.used - systemInfo.memory.virtual.buffers - systemInfo.memory.virtual.cached) / systemInfo.memory.virtual.total * 100))}%`">
+                                                                </div>
+                                                                <!-- Buffers (blue) -->
+                                                                <div class="progress-bar bg-primary" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.memory.virtual.buffers / systemInfo.memory.virtual.total * 100))}%`">
+                                                                </div>
+                                                                <!-- Cache (yellow/orange) -->
+                                                                <div class="progress-bar bg-warning" 
+                                                                     :style="`width: ${Math.min(100, (systemInfo.memory.virtual.cached / systemInfo.memory.virtual.total * 100))}%`">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                <div class="d-flex justify-content-between mb-1">
+                                                                    <span>Memory:</span>
+                                                                    <span>
+                                                                        <span class="badge bg-success me-1" x-text="`Used: ${formatBytes(systemInfo.memory.virtual.used - systemInfo.memory.virtual.buffers - systemInfo.memory.virtual.cached)}`"></span>
+                                                                        <span class="badge bg-primary me-1" x-text="`Buffers: ${formatBytes(systemInfo.memory.virtual.buffers)}`"></span>
+                                                                        <span class="badge bg-warning" x-text="`Cache: ${formatBytes(systemInfo.memory.virtual.cached)}`"></span>
+                                                                    </span>
+                                                                </div>
+                                                                <span x-text="`${formatBytes(systemInfo.memory.virtual.used)} / ${formatBytes(systemInfo.memory.virtual.total)} (${(systemInfo.memory.virtual.percent || 0).toFixed(1)}%)`"></span>
+                                                            </small>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!systemInfo?.memory?.virtual">
+                                                        <div>
+                                                            <div class="progress mb-2">
+                                                                <div class="progress-bar bg-secondary" style="width: 0%"></div>
+                                                            </div>
+                                                            <small class="text-muted">Loading memory information...</small>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+
+                                            <!-- Disk Usage -->
+                                            <div class="row mb-4" x-show="systemInfo?.disk?.length > 0">
+                                                <div class="col-12">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-hdd me-2"></i>Disk Usage</h6>
+                                                    <template x-for="(disk, diskIndex) in (systemInfo?.disk || []).slice(0, 4)" :key="`${disk.device}-${disk.mountpoint}-${diskIndex}`">
+                                                        <div class="mb-3">
+                                                            <div class="d-flex justify-content-between">
+                                                                <span x-text="`${disk.device} (${disk.mountpoint})`" class="small"></span>
+                                                                <span x-text="`${disk.percent.toFixed(1)}%`" class="small"></span>
+                                                            </div>
+                                                            <div class="progress" style="height: 8px;">
+                                                                <div class="progress-bar" 
+                                                                     :style="`width: ${disk.percent}%`" 
+                                                                     :class="{
+                                                                         'bg-success': disk.percent < 50,
+                                                                         'bg-warning': disk.percent >= 50 && disk.percent < 80,
+                                                                         'bg-danger': disk.percent >= 80
+                                                                     }">
+                                                                </div>
+                                                            </div>
+                                                            <small class="text-muted" x-text="`${formatBytes(disk.used)} / ${formatBytes(disk.total)} (${formatBytes(disk.free)} free)`"></small>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+
+                                            <!-- Network & Temperature -->
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-network-wired me-2"></i>Network</h6>
+                                                    <table class="table table-borderless table-sm">
+                                                        <tr>
+                                                            <td><strong>Active Connections:</strong></td>
+                                                            <td x-text="systemInfo?.network?.connections !== null ? systemInfo?.network?.connections : 'Permission denied'"></td>
+                                                        </tr>
+                                                        <template x-if="systemInfo?.network?.io_counters?.bytes_sent">
+                                                            <tr>
+                                                                <td><strong>Bytes Sent:</strong></td>
+                                                                <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_sent)"></td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="systemInfo?.network?.io_counters?.bytes_recv">
+                                                            <tr>
+                                                                <td><strong>Bytes Received:</strong></td>
+                                                                <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_recv)"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </table>
+                                                </div>
+                                                <div class="col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length > 0">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                                    <template x-for="(sensors, sensorName) in systemInfo?.temperatures || {}" :key="sensorName">
+                                                        <div class="mb-2">
+                                                            <strong x-text="sensorName" class="text-capitalize"></strong>
+                                                            <template x-for="sensor in sensors" :key="sensor.label">
+                                                                <div class="small">
+                                                                    <span x-text="sensor.label"></span>: 
+                                                                    <span x-text="`${sensor.current}°C`" 
+                                                                          :class="{
+                                                                              'text-success': sensor.current < 60,
+                                                                              'text-warning': sensor.current >= 60 && sensor.current < 80,
+                                                                              'text-danger': sensor.current >= 80
+                                                                          }"></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div class="col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length === 0">
+                                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                                    <small class="text-muted">Temperature sensors not available</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- OS Release Information -->
+                            <div class="row mt-4" x-show="systemInfo?.os_release">
+                                <div class="col">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-info-circle me-2"></i>OS Release Information
+                                            </h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- Mobile-friendly OS Release info using definition list -->
+                                            <dl class="row mb-0">
+                                                <template x-if="systemInfo?.os_release?.PRETTY_NAME">
+                                                    <div class="col-sm-6 col-lg-3 mb-2">
+                                                        <dt class="text-muted small">OS Name</dt>
+                                                        <dd class="mb-0" x-text="systemInfo.os_release.PRETTY_NAME"></dd>
+                                                    </div>
+                                                </template>
+                                                <template x-if="systemInfo?.os_release?.ID">
+                                                    <div class="col-sm-6 col-lg-3 mb-2">
+                                                        <dt class="text-muted small">Distribution</dt>
+                                                        <dd class="mb-0" x-text="systemInfo.os_release.ID"></dd>
+                                                    </div>
+                                                </template>
+                                                <!-- URL fields take full width on all screen sizes -->
+                                                <template x-if="systemInfo?.os_release?.HOME_URL">
+                                                    <div class="col-12 mb-2">
+                                                        <dt class="text-muted small">Home URL</dt>
+                                                        <dd class="mb-0">
+                                                            <a :href="systemInfo.os_release.HOME_URL" 
+                                                               target="_blank" 
+                                                               class="text-break"
+                                                               x-text="systemInfo.os_release.HOME_URL"></a>
+                                                        </dd>
+                                                    </div>
+                                                </template>
+                                                <template x-if="systemInfo?.os_release?.SUPPORT_URL">
+                                                    <div class="col-12 mb-2">
+                                                        <dt class="text-muted small">Support URL</dt>
+                                                        <dd class="mb-0">
+                                                            <a :href="systemInfo.os_release.SUPPORT_URL" 
+                                                               target="_blank" 
+                                                               class="text-break"
+                                                               x-text="systemInfo.os_release.SUPPORT_URL"></a>
+                                                        </dd>
+                                                    </div>
+                                                </template>
+                                                <template x-if="systemInfo?.os_release?.BUG_REPORT_URL">
+                                                    <div class="col-12 mb-2">
+                                                        <dt class="text-muted small">Bug Reports</dt>
+                                                        <dd class="mb-0">
+                                                            <a :href="systemInfo.os_release.BUG_REPORT_URL" 
+                                                               target="_blank" 
+                                                               class="text-break"
+                                                               x-text="systemInfo.os_release.BUG_REPORT_URL"></a>
+                                                        </dd>
+                                                    </div>
+                                                </template>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- OS Release Not Available Message -->
+                            <div class="row mt-4" x-show="!systemInfo?.os_release">
+                                <div class="col">
+                                    <div class="card">
+                                        <div class="card-body text-center text-muted">
+                                            <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                            <p class="mb-0">OS release information is not available on this system</p>
+                                            <small>This feature requires a Linux system with freedesktop.org OS release specification support</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                    </div>
+                </div>
+

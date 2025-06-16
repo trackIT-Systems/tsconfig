@@ -1,0 +1,404 @@
+                <!-- Soundscapepipe Configuration -->
+                <div x-show="activeConfig === 'soundscapepipe'" x-cloak>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card" x-data="soundscapepipeConfig()" x-init="init()" x-destroy="cleanup()">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <h5 class="card-title mb-0 me-3">Soundscapepipe Configuration</h5>
+                                        <!-- Service Status Indicator -->
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge d-flex align-items-center gap-1" 
+                                                  :class="{
+                                                      'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                      'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                      'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                      'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                  }">
+                                                <i :class="{
+                                                       'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
+                                                       'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
+                                                       'fas fa-question-circle': serviceStatus.status === 'not-found',
+                                                       'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                   }" 
+                                                   style="font-size: 0.7em;"></i>
+                                                <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
+                                            </span>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span x-text="serviceStatus.uptime"></span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button type="button" 
+                                                class="btn btn-outline-info btn-sm" 
+                                                @click="streamLogs('soundscapepipe')"
+                                                :disabled="serviceStatus.status === 'not-found'"
+                                                title="View soundscapepipe service logs">
+                                            <i class="fas fa-file-alt me-1"></i>
+                                            <span class="d-none d-md-inline">View Logs</span>
+                                            <span class="d-md-none">Logs</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Loading State -->
+                                    <div x-show="!configLoaded" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <div class="mt-2">Loading configuration...</div>
+                                    </div>
+
+                                    <!-- Configuration Form -->
+                                    <form x-show="configLoaded" @submit.prevent="saveConfig">
+                                        <!-- Input Device Settings -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-microphone me-2"></i>
+                                                Input Device Settings
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <label class="form-label mb-0">Input Device</label>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    @click="loadAudioDevices()"
+                                                                    :disabled="loadingDevices"
+                                                                    title="Refresh audio devices">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
+                                                            </button>
+                                                        </div>
+                                                        <template x-if="audioDevices.input_devices && audioDevices.input_devices.length > 0">
+                                                            <select class="form-select" 
+                                                                    @change="updateInputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                                                <option value="">Select input device...</option>
+                                                                <template x-for="device in audioDevices.input_devices" :key="device.index">
+                                                                    <option :value="device.name" 
+                                                                            :data-sample-rate="device.default_sample_rate"
+                                                                            :data-max-channels="device.max_input_channels"
+                                                                            :selected="config.input_device_match && config.input_device_match === device.name.split(':')[0].trim()"
+                                                                            x-text="device.name + (device.is_default ? ' (Default)' : '') + ' - ' + device.max_input_channels + ' channels @ ' + Math.round(device.default_sample_rate/1000) + 'kHz'">
+                                                                    </option>
+                                                                </template>
+                                                            </select>
+                                                        </template>
+                                                        <template x-if="!audioDevices.input_devices || audioDevices.input_devices.length === 0">
+                                                            <div class="text-muted">
+                                                                <i class="fas fa-exclamation-triangle"></i> No input devices detected
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Technical Settings Row (Expert Mode) -->
+                                            <div class="row" x-show="expertMode" x-transition>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Device Name <small class="text-muted">(Expert)</small></label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               x-model="config.input_device_match"
+                                                               placeholder="384kHz AudioMoth USB Microphone">
+                                                        <div class="form-text">Exact device name for matching</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Sample Rate <small class="text-muted">(Expert)</small></label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.sample_rate"
+                                                               min="1000"
+                                                               step="1000">
+                                                        <div class="form-text">Audio sample rate (Hz)</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Additional Technical Settings Row (Expert Mode) -->
+                                            <div class="row" x-show="expertMode" x-transition>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Input Length <small class="text-muted">(Expert)</small></label>
+                                                        <input type="number" 
+                                                               class="form-control" 
+                                                               x-model.number="config.input_length_s"
+                                                               min="0.1"
+                                                               max="1.0"
+                                                               step="0.1">
+                                                        <div class="form-text">Input buffer length in seconds (0.1-1.0)</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Channels <small class="text-muted">(Expert)</small></label>
+                                                        <select class="form-select" x-model.number="config.channels">
+                                                            <option value="1">1 (Mono)</option>
+                                                            <option value="2">2 (Stereo)</option>
+                                                        </select>
+                                                        <div class="form-text">Number of audio channels</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+
+                                        <!-- BirdEdge Detector Section -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-dove me-2"></i>
+                                                BirdEdge Detector
+                                            </h6>
+                                            
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label class="form-label mb-0">Enable BirdEdge Detection</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.detectors.birdedge.enabled" 
+                                                               id="birdedgeEnabled">
+                                                        <label class="form-check-label" for="birdedgeEnabled">
+                                                            Enabled
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="row" x-show="config.detectors.birdedge.enabled"  x-transition>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Detection Threshold: <span x-text="config.detectors.birdedge.detection_threshold.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.detectors.birdedge.detection_threshold"
+                                                               min="0.3"
+                                                               max="1.0"
+                                                               step="0.01">
+                                                        <div class="form-text">Species/label identification threshold (0.3-1.0)</div>
+                                                        
+                                                        <div x-show="expertMode" x-transition class="mt-3">
+                                                            <label class="form-label">Classification Threshold: <span x-text="config.detectors.birdedge.class_threshold.toFixed(2)"></span></label>
+                                                            <input type="range" 
+                                                                   class="form-range" 
+                                                                   x-model.number="config.detectors.birdedge.class_threshold"
+                                                                   min="0.0"
+                                                                   max="1.0"
+                                                                   step="0.01">
+                                                            <div class="form-text">Binary bird presence threshold (0.0 disables, 0.0-1.0)</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <label class="form-label mb-0">Model Path</label>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    @click="loadModelFiles()"
+                                                                    :disabled="loadingModels"
+                                                                    title="Refresh model files">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
+                                                            </button>
+                                                        </div>
+                                                        <select class="form-select" 
+                                                                x-model="config.detectors.birdedge.model_path">
+                                                            <option value="">Select BirdEdge model...</option>
+                                                            <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
+                                                                <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
+                                                            </template>
+                                                            <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
+                                                        </select>
+                                                        <div x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0" class="mt-2">
+                                                            <input type="text" 
+                                                                   class="form-control" 
+                                                                   x-model="config.detectors.birdedge.model_path"
+                                                                   placeholder="Enter custom path: /path/to/model.onnx">
+                                                        </div>
+                                                        <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- BirdEdge Detection Schedule -->
+                                                <div x-show="config.detectors.birdedge.enabled" x-transition class="mt-3">
+                                                    <div class="mb-3">
+                                                        <label class="form-label mb-2">Detection Schedule</label>
+                                                        <div class="form-text mb-3">Define time spans when BirdEdge detector should be active. Leave empty for continuous operation.</div>
+                                                        
+                                                        <template x-for="(task, index) in config.detectors.birdedge.tasks" :key="index">
+                                                            <div class="schedule-entry-modern mb-2">
+                                                                <div class="bg-light rounded-2 p-3">
+                                                                    <div class="d-flex align-items-center justify-content-between mb-3">
+                                                                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                                            <i class="fas fa-clock text-primary me-2"></i>
+                                                                            <input type="text" 
+                                                                                   class="form-control form-control-sm fw-medium" 
+                                                                                   x-model="task.name" 
+                                                                                   placeholder="Enter task name..." 
+                                                                                   required>
+                                                                        </div>
+                                                                        <button type="button" 
+                                                                                class="btn btn-outline-danger btn-sm" 
+                                                                                @click="removeDetectorTask('birdedge', index)"
+                                                                                title="Remove task">
+                                                                            <i class="fas fa-trash"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                    <div class="row g-3">
+                                                                        <div class="col-md-6">
+                                                                            <div class="d-flex align-items-center gap-2">
+                                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                                                    <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                                                </label>
+                                                                                <div class="row g-1 flex-grow-1">
+                                                                                    <div class="col">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                x-model="task.startReference"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'start')">
+                                                                                            <option value="time">Clock Time</option>
+                                                                                            <option value="sunrise">Sunrise</option>
+                                                                                            <option value="sunset">Sunset</option>
+                                                                                            <option value="dawn">Dawn</option>
+                                                                                            <option value="dusk">Dusk</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                style="width: 70px;"
+                                                                                                x-model="task.startSign"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'start')"
+                                                                                                :disabled="task.startReference === 'time'">
+                                                                                            <option value="+">+</option>
+                                                                                            <option value="-">-</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <input type="time" 
+                                                                                               class="form-control form-control-sm" 
+                                                                                               style="width: 110px;"
+                                                                                               x-model="task.startOffset"
+                                                                                               @change="updateDetectorTaskTimeString('birdedge', task, 'start')">
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-6">
+                                                                            <div class="d-flex align-items-center gap-2">
+                                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                                                    <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                                                </label>
+                                                                                <div class="row g-1 flex-grow-1">
+                                                                                    <div class="col">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                x-model="task.stopReference"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'stop')">
+                                                                                            <option value="time">Clock Time</option>
+                                                                                            <option value="sunrise">Sunrise</option>
+                                                                                            <option value="sunset">Sunset</option>
+                                                                                            <option value="dawn">Dawn</option>
+                                                                                            <option value="dusk">Dusk</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <select class="form-select form-select-sm" 
+                                                                                                style="width: 70px;"
+                                                                                                x-model="task.stopSign"
+                                                                                                @change="updateDetectorTaskTimeString('birdedge', task, 'stop')"
+                                                                                                :disabled="task.stopReference === 'time'">
+                                                                                            <option value="+">+</option>
+                                                                                            <option value="-">-</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div class="col-auto">
+                                                                                        <input type="time" 
+                                                                                               class="form-control form-control-sm" 
+                                                                                               style="width: 110px;"
+                                                                                               x-model="task.stopOffset"
+                                                                                               @change="updateDetectorTaskTimeString('birdedge', task, 'stop')">
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                        
+                                                        <div class="mt-3">
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                                    @click="addDetectorTask('birdedge')">
+                                                                <i class="fas fa-plus me-2"></i>
+                                                                Add Schedule Entry
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- YoloBat Detector Section -->
+                                        <div class="mb-4">
+                                            <h6 class="border-bottom pb-2">
+                                                <i class="fas fa-moon me-2"></i>
+                                                YoloBat Detector
+                                            </h6>
+                                            
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label class="form-label mb-0">Enable YoloBat Detection</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="config.detectors.yolobat.enabled" 
+                                                               id="yolobatEnabled">
+                                                        <label class="form-check-label" for="yolobatEnabled">
+                                                            Enabled
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="row" x-show="config.detectors.yolobat.enabled"  x-transition>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Detection Threshold: <span x-text="config.detectors.yolobat.detection_threshold.toFixed(2)"></span></label>
+                                                        <input type="range" 
+                                                               class="form-range" 
+                                                               x-model.number="config.detectors.yolobat.detection_threshold"
+                                                               min="0.3"
+                                                               max="1.0"
+                                                               step="0.01">
+                                                        <div class="form-text">Species/label identification threshold (0.3-1.0)</div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <label class="form-label mb-0">Model Path</label>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    @click="loadModelFiles()"
+                                                                    :disabled="loadingModels"
+                                                                    title="Refresh model files">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
+                                                            </button>
+                                                        </div>
+                                                        <select class="form-select" 
+                                                                x-model="config.detectors.yolobat.model_path">
+                                                            <option value="">Select YOLOBat model...</option>
+                                                            <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
+                                                                <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
+                                                            </template>
+                                                            <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
+                                                        </select>
+                                                        <div x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0" class="mt-2">
+                                                            <input type="text" 
+                                                                   class="form-control" 
+                                                                   x-model="config.detectors.yolobat.model_path"
+                                                                   placeholder="Enter custom path: /path/to/model.xml">
+                                                        </div>
+                                                        <div class="form-text">Path to the YOLO model file (.xml)</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- YoloBat Detection Schedule -->
+                                                <div x-show="config.detectors.yolobat.enabled" x-transition class="mt-3">
+                                                    <div class="mb-3">
+                                                        <label class="form-label mb-2">Detection Schedule</label>
