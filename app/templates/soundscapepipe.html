@@ -60,7 +60,7 @@
                                 Input Device Settings
                             </h6>
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-12">
                                     <div class="mb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label class="form-label mb-0">Input Device</label>
@@ -147,14 +147,13 @@
                             </div>
                         </div>
 
-
-
                         <!-- BirdEdge Detector Section -->
                         <div class="mb-4">
                             <h6 class="border-bottom pb-2">
                                 <i class="fas fa-dove me-2"></i>
                                 BirdEdge Detector
                             </h6>
+                            <div class="form-text mb-3">Full-spectrum analysis of audible frequencies using EfficientNet-B3 image recognition to detect European bird species through classification of 5-second audio spectrograms.</div>
                             
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -202,20 +201,22 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
                                             </button>
                                         </div>
-                                        <select class="form-select" 
-                                                x-model="config.detectors.birdedge.model_path">
-                                            <option value="">Select BirdEdge model...</option>
-                                            <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
-                                                <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
-                                            </template>
-                                            <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
-                                        </select>
-                                        <div x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0" class="mt-2">
+                                        <template x-if="!expertMode">
+                                            <select class="form-select" 
+                                                    x-model="config.detectors.birdedge.model_path">
+                                                <option value="">Select BirdEdge model...</option>
+                                                <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
+                                                    <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
+                                                </template>
+                                                <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
+                                            </select>
+                                        </template>
+                                        <template x-if="expertMode">
                                             <input type="text" 
                                                    class="form-control" 
                                                    x-model="config.detectors.birdedge.model_path"
                                                    placeholder="Enter custom path: /path/to/model.onnx">
-                                        </div>
+                                        </template>
                                         <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
                                     </div>
                                 </div>
@@ -344,6 +345,7 @@
                                 <i class="fas fa-moon me-2"></i>
                                 YoloBat Detector
                             </h6>
+                            <div class="form-text mb-3">Performs full spectrum analysis using the YOLO object detection framework to detect bat calls.</div>
                             
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -380,20 +382,22 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
                                             </button>
                                         </div>
-                                        <select class="form-select" 
-                                                x-model="config.detectors.yolobat.model_path">
-                                            <option value="">Select YOLOBat model...</option>
-                                            <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
-                                                <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
-                                            </template>
-                                            <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
-                                        </select>
-                                        <div x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0" class="mt-2">
+                                        <template x-if="!expertMode">
+                                            <select class="form-select" 
+                                                    x-model="config.detectors.yolobat.model_path">
+                                                <option value="">Select YOLOBat model...</option>
+                                                <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
+                                                    <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
+                                                </template>
+                                                <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
+                                            </select>
+                                        </template>
+                                        <template x-if="expertMode">
                                             <input type="text" 
                                                    class="form-control" 
                                                    x-model="config.detectors.yolobat.model_path"
                                                    placeholder="Enter custom path: /path/to/model.xml">
-                                        </div>
+                                        </template>
                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
                                     </div>
                                 </div>
@@ -508,6 +512,146 @@
                                             <button type="button" 
                                                     class="btn btn-outline-primary btn-sm add-schedule-btn" 
                                                     @click="addDetectorTask('yolobat')">
+                                                <i class="fas fa-plus me-2"></i>
+                                                Add Schedule Entry
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Detector -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2">
+                                <i class="fas fa-clock me-2"></i>
+                                Schedule Detector
+                            </h6>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-label mb-0">Enable Schedule Detection</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" 
+                                               type="checkbox" 
+                                               x-model="config.detectors.schedule.enabled" 
+                                               id="scheduleEnabled">
+                                        <label class="form-check-label" for="scheduleEnabled">
+                                            Enabled
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-text mb-3">Trigger detections based on schedule without using any model. Useful for time-based recording.</div>
+
+                                <!-- Schedule Detection Schedule -->
+                                <div x-show="config.detectors.schedule.enabled" x-transition class="mt-3">
+                                    <div class="mb-3">
+                                        <label class="form-label mb-2">Detection Schedule</label>
+                                        <div class="form-text mb-3">Define time spans when schedule detector should trigger detections.</div>
+                                        
+
+                                        <template x-for="(task, index) in config.detectors.schedule.tasks" :key="index">
+                                            <div class="schedule-entry-modern mb-2">
+                                                <div class="bg-light rounded-2 p-3">
+                                                    <div class="d-flex align-items-center justify-content-between mb-3">
+                                                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                            <i class="fas fa-clock text-primary me-2"></i>
+                                                            <input type="text" 
+                                                                   class="form-control form-control-sm fw-medium" 
+                                                                   x-model="task.name" 
+                                                                   placeholder="Enter task name..." 
+                                                                   required>
+                                                        </div>
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm" 
+                                                                @click="removeDetectorTask('schedule', index)"
+                                                                title="Remove task">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                                    <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                                </label>
+                                                                <div class="row g-1 flex-grow-1">
+                                                                    <div class="col">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                x-model="task.startReference"
+                                                                                @change="updateDetectorTaskTimeString('schedule', task, 'start')">
+                                                                            <option value="time">Clock Time</option>
+                                                                            <option value="sunrise">Sunrise</option>
+                                                                            <option value="sunset">Sunset</option>
+                                                                            <option value="dawn">Dawn</option>
+                                                                            <option value="dusk">Dusk</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                style="width: 70px;"
+                                                                                x-model="task.startSign"
+                                                                                @change="updateDetectorTaskTimeString('schedule', task, 'start')"
+                                                                                :disabled="task.startReference === 'time'">
+                                                                            <option value="+">+</option>
+                                                                            <option value="-">-</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="time" 
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.startOffset"
+                                                                               @change="updateDetectorTaskTimeString('schedule', task, 'start')">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                                    <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                                </label>
+                                                                <div class="row g-1 flex-grow-1">
+                                                                    <div class="col">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                x-model="task.stopReference"
+                                                                                @change="updateDetectorTaskTimeString('schedule', task, 'stop')">
+                                                                            <option value="time">Clock Time</option>
+                                                                            <option value="sunrise">Sunrise</option>
+                                                                            <option value="sunset">Sunset</option>
+                                                                            <option value="dawn">Dawn</option>
+                                                                            <option value="dusk">Dusk</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                style="width: 70px;"
+                                                                                x-model="task.stopSign"
+                                                                                @change="updateDetectorTaskTimeString('schedule', task, 'stop')"
+                                                                                :disabled="task.stopReference === 'time'">
+                                                                            <option value="+">+</option>
+                                                                            <option value="-">-</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="time" 
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.stopOffset"
+                                                                               @change="updateDetectorTaskTimeString('schedule', task, 'stop')">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <div class="mt-3">
+                                            <button type="button" 
+                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                    @click="addDetectorTask('schedule')">
                                                 <i class="fas fa-plus me-2"></i>
                                                 Add Schedule Entry
                                             </button>
@@ -640,9 +784,18 @@
                                 Output Device
                             </h6>
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-12">
                                     <div class="mb-3">
-                                        <label class="form-label">Output Device</label>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label mb-0">Output Device</label>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                    @click="loadAudioDevices()"
+                                                    :disabled="loadingDevices"
+                                                    title="Refresh audio devices">
+                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
+                                            </button>
+                                        </div>
                                         <template x-if="audioDevices.output_devices && audioDevices.output_devices.length > 0">
                                             <select class="form-select" 
                                                     @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">

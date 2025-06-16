@@ -989,6 +989,7 @@ function radiotrackingConfig() {
                     },
                     body: JSON.stringify(apiConfig)
                 });
+                
                 if (!response.ok) {
                     const error = await response.json();
                     let errorMessage = error.detail?.message || 'Failed to download radio tracking configuration';
@@ -1081,6 +1082,7 @@ function soundscapepipeConfig() {
                     tasks: []
                 },
                 schedule: {
+                    enabled: false,
                     tasks: []
                 }
             },
@@ -1162,7 +1164,7 @@ function soundscapepipeConfig() {
                     // Handle backward compatibility for detectors - add enabled flags if missing
                     const detectors = data.detectors || {};
                     
-                    // BirdEdge detector - enabled by default if present in config
+                    // BirdEdge detector - enabled if present in config, disabled if not present
                     if (detectors.birdedge) {
                         detectors.birdedge.enabled = detectors.birdedge.enabled !== undefined ? detectors.birdedge.enabled : true;
                         detectors.birdedge.tasks = detectors.birdedge.tasks || [];
@@ -1172,10 +1174,10 @@ function soundscapepipeConfig() {
                             this.parseDetectorTaskTimeString(task, task.stop, 'stop');
                         });
                     } else {
-                        detectors.birdedge = { enabled: true, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", tasks: [] };
+                        detectors.birdedge = { enabled: false, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", tasks: [] };
                     }
                     
-                    // YOLOBat detector - enabled by default if present in config  
+                    // YOLOBat detector - enabled if present in config, disabled if not present
                     if (detectors.yolobat) {
                         detectors.yolobat.enabled = detectors.yolobat.enabled !== undefined ? detectors.yolobat.enabled : true;
                         detectors.yolobat.tasks = detectors.yolobat.tasks || [];
@@ -1194,7 +1196,15 @@ function soundscapepipeConfig() {
                     
                     // Schedule always exists
                     if (!detectors.schedule) {
-                        detectors.schedule = { tasks: [] };
+                        detectors.schedule = { enabled: false, tasks: [] };
+                    } else {
+                        detectors.schedule.enabled = detectors.schedule.enabled !== undefined ? detectors.schedule.enabled : false;
+                        detectors.schedule.tasks = detectors.schedule.tasks || [];
+                        // Parse existing task time strings into UI components
+                        detectors.schedule.tasks.forEach(task => {
+                            this.parseDetectorTaskTimeString(task, task.start, 'start');
+                            this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                        });
                     }
 
                     this.config = {
@@ -1268,6 +1278,8 @@ function soundscapepipeConfig() {
                     delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
                     // Remove class_threshold if it exists (YoloBat only supports detection)
                     delete configToSave.detectors.yolobat.class_threshold;
+                    // Remove schedule if it exists (YoloBat doesn't use schedule property)
+                    delete configToSave.detectors.yolobat.schedule;
                     // Clean up tasks - convert UI components back to time strings
                     if (configToSave.detectors.yolobat.tasks) {
                         configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
@@ -1277,9 +1289,16 @@ function soundscapepipeConfig() {
                     }
                 }
                 
-                // Always include schedule if it exists
-                if (this.config.detectors.schedule) {
-                    configToSave.detectors.schedule = this.config.detectors.schedule;
+                if (this.config.detectors.schedule && this.config.detectors.schedule.enabled) {
+                    configToSave.detectors.schedule = { ...this.config.detectors.schedule };
+                    delete configToSave.detectors.schedule.enabled; // Remove the enabled flag from saved config
+                    // Clean up tasks - convert UI components back to time strings
+                    if (configToSave.detectors.schedule.tasks) {
+                        configToSave.detectors.schedule.tasks = configToSave.detectors.schedule.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
                 }
 
                 const response = await fetch('/api/soundscapepipe', {
@@ -1330,6 +1349,8 @@ function soundscapepipeConfig() {
                     delete configToDownload.detectors.yolobat.enabled; // Remove the enabled flag from downloaded config
                     // Remove class_threshold if it exists (YoloBat only supports detection)
                     delete configToDownload.detectors.yolobat.class_threshold;
+                    // Remove schedule if it exists (YoloBat doesn't use schedule property)
+                    delete configToDownload.detectors.yolobat.schedule;
                     // Clean up tasks - convert UI components back to time strings
                     if (configToDownload.detectors.yolobat.tasks) {
                         configToDownload.detectors.yolobat.tasks = configToDownload.detectors.yolobat.tasks.map(task => {
@@ -1339,9 +1360,16 @@ function soundscapepipeConfig() {
                     }
                 }
                 
-                // Always include schedule if it exists
-                if (this.config.detectors.schedule) {
-                    configToDownload.detectors.schedule = this.config.detectors.schedule;
+                if (this.config.detectors.schedule && this.config.detectors.schedule.enabled) {
+                    configToDownload.detectors.schedule = { ...this.config.detectors.schedule };
+                    delete configToDownload.detectors.schedule.enabled; // Remove the enabled flag from downloaded config
+                    // Clean up tasks - convert UI components back to time strings
+                    if (configToDownload.detectors.schedule.tasks) {
+                        configToDownload.detectors.schedule.tasks = configToDownload.detectors.schedule.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
                 }
 
                 const response = await fetch('/api/soundscapepipe/download', {
