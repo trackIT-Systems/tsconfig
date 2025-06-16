@@ -1,8 +1,18 @@
 <!-- Log Streaming Modal -->
 <div class="modal fade" id="logModal" tabindex="-1" aria-labelledby="logModalLabel" aria-hidden="true" x-data="logViewer()">
     <div class="modal-dialog modal-fullscreen-lg-down modal-xl" style="max-width: 95vw;" data-bs-keyboard="false">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white">
+        <div class="modal-content d-flex flex-column" style="height: 85vh; max-height: 90vh;">
+            <!-- Full height on mobile, limited height on desktop -->
+            <style>
+                @media (max-width: 991.98px) {
+                    #logModal .modal-content {
+                        height: 100vh !important;
+                        height: 100dvh !important;
+                        max-height: none !important;
+                    }
+                }
+            </style>
+            <div class="modal-header bg-dark text-white flex-shrink-0">
                 <h5 class="modal-title" id="logModalLabel">
                     <i class="fas fa-file-alt me-2"></i>
                     Service Logs: <span x-text="currentService"></span>
@@ -11,10 +21,10 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
             </div>
-            <div class="modal-body p-0" style="height: 70vh;">
-                <div class="h-100 bg-dark text-light font-monospace small overflow-auto position-relative" 
+            <div class="modal-body p-0 flex-grow-1 d-flex flex-column" style="min-height: 0;">
+                <div class="h-100 bg-dark text-light font-monospace small position-relative" 
                      id="logContainer" 
-                     style="padding: 1rem; white-space: pre-wrap;">
+                     style="padding: 1rem; white-space: pre-wrap; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;">
                     <!-- Empty state indicator -->
                     <div x-show="!isStreaming && logs.length === 0" 
                          class="position-absolute top-50 start-50 translate-middle text-center text-muted">
@@ -40,7 +50,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer bg-light">
+            <div class="modal-footer bg-light flex-shrink-0">
                 <div class="d-flex justify-content-between w-100 align-items-center">
                     <div class="small text-muted">
                         <span x-text="logs.length"></span> lines
@@ -48,14 +58,14 @@
                             <i class="fas fa-circle fa-xs me-1"></i>Streaming
                         </span>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-warning" @click="restartService()" :disabled="!currentService">
-                            <i class="fas fa-redo me-1"></i>Restart Service
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-outline-warning btn-sm" @click="restartService()" :disabled="!currentService">
+                            <i class="fas fa-redo me-1"></i><span class="d-none d-sm-inline">Restart Service</span><span class="d-sm-none">Restart</span>
                         </button>
-                        <button type="button" class="btn btn-outline-danger" @click="clearLogs()">
-                            <i class="fas fa-trash me-1"></i>Clear
+                        <button type="button" class="btn btn-outline-danger btn-sm" @click="clearLogs()">
+                            <i class="fas fa-trash me-1"></i><span class="d-none d-sm-inline">Clear</span>
                         </button>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
