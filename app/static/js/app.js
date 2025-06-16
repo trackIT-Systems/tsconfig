@@ -1,0 +1,2053 @@
+function configManager() {
+    return {
+        activeConfig: 'status',  // Default to status page
+        message: '',
+        error: false,
+        warning: false,
+        expertMode: false,  // Add expert mode state
+
+        init() {
+            // Set initial active config based on URL hash
+            const hash = window.location.hash.slice(1);
+            if (hash === 'radiotracking') {
+                this.activeConfig = 'radiotracking';
+            } else if (hash === 'schedule') {
+                this.activeConfig = 'schedule';
+            } else if (hash === 'soundscapepipe') {
+                this.activeConfig = 'soundscapepipe';
+            } else if (hash === 'status') {
+                this.activeConfig = 'status';
+            } else {
+                this.activeConfig = 'status';  // Default to status
+            }
+
+            // Update URL hash when active config changes
+            this.$watch('activeConfig', (value) => {
+                window.location.hash = value;
+                
+                // Ensure map is properly initialized when switching to schedule tab
+                if (value === 'schedule') {
+                    setTimeout(() => {
+                        const scheduleComponent = this.$el.querySelector('[x-data*="scheduleConfig"]');
+                        if (scheduleComponent && scheduleComponent._x_dataStack) {
+                            const scheduleData = scheduleComponent._x_dataStack[0];
+                            if (scheduleData && scheduleData.ensureMapVisible) {
+                                scheduleData.ensureMapVisible();
+                            }
+                        }
+                    }, 150);
+                }
+                
+                // Ensure map is properly initialized when switching to soundscapepipe tab
+                if (value === 'soundscapepipe') {
+                    setTimeout(() => {
+                        const soundscapeComponent = this.$el.querySelector('[x-data*="soundscapepipeConfig"]');
+                        if (soundscapeComponent && soundscapeComponent._x_dataStack) {
+                            const soundscapeData = soundscapeComponent._x_dataStack[0];
+                            if (soundscapeData && soundscapeData.ensureMapVisible) {
+                                soundscapeData.ensureMapVisible();
+                            }
+                        }
+                    }, 150);
+                }
+            });
+
+            // Listen for hash changes
+            window.addEventListener('hashchange', () => {
+                const hash = window.location.hash.slice(1);
+                if (hash === 'radiotracking' || hash === 'schedule' || hash === 'soundscapepipe' || hash === 'status') {
+                    this.activeConfig = hash;
+                }
+            });
+
+            // Listen for message events from child components
+            window.addEventListener('show-message', (event) => {
+                this.showMessage(event.detail.message, event.detail.isError);
+            });
+            
+            // Listen for Alpine.js custom events from child components (like soundscapepipe)
+            this.$el.addEventListener('message', (event) => {
+                this.message = event.detail.message;
+                this.error = event.detail.error;
+                this.warning = false;
+            });
+        },
+
+        showMessage(message, isError) {
+            this.message = message;
+            this.error = isError;
+            this.warning = !isError && message.includes("No configuration found");
+        },
+
+        streamLogs(serviceName) {
+            // Show the log modal
+            const modal = new bootstrap.Modal(document.getElementById('logModal'));
+            // Get the log viewer instance and start streaming
+            const logViewerEl = document.getElementById('logModal');
+            if (logViewerEl && logViewerEl._x_dataStack) {
+                const logViewerInstance = logViewerEl._x_dataStack[0];
+                logViewerInstance.startStreaming(serviceName);
+            }
+            modal.show();
+            
+            // Scroll to bottom after modal is shown and content is rendered
+            setTimeout(() => {
+                const container = document.getElementById('logContainer');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, 250);
+        }
+    }
+}
+
+function scheduleConfig() {
+    return {
+        config: {
+            lat: 0,
+            lon: 0,
+            force_on: false,
+            button_delay: "00:00",
+            schedule: []
+        },
+        map: null,
+        marker: null,
+        mapInitialized: false,
+        // Service status tracking
+        serviceStatus: {
+            active: false,
+            enabled: false,
+            status: 'unknown',
+            uptime: 'N/A'
+        },
+        serviceStatusLoading: false,
+        refreshInterval: null, // For periodic service status refresh
+
+        async init() {
+            // Load configuration and set up periodic refresh
+            await this.loadConfig();
+            await this.setupPeriodicRefresh();
+        },
+
+        async setupPeriodicRefresh() {
+            // Get the refresh interval from system config
+            const refreshIntervalSeconds = await getSystemRefreshInterval();
+            
+            // Set up periodic refresh for service status
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+            }
+            
+            this.refreshInterval = setInterval(() => {
+                // Only refresh if schedule tab is active
+                const currentHash = window.location.hash.slice(1);
+                if (currentHash === 'schedule') {
+                    this.loadServiceStatus();
+                }
+            }, refreshIntervalSeconds * 1000);
+        },
+
+        cleanup() {
+            // Clean up interval when component is destroyed
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+            }
+        },
+
+        initMap() {
+            // Only initialize if not already done and container is visible
+            if (this.mapInitialized || !document.getElementById('map')) {
+                return;
+            }
+
+            // Wait a bit to ensure the container is properly rendered
+            setTimeout(() => {
+                if (!document.getElementById('map') || this.mapInitialized) {
+                    return;
+                }
+
+                // Initialize map with loaded coordinates
+                this.map = L.map('map', {
+                    center: [this.config.lat, this.config.lon],
+                    zoom: 13,
+                    zoomControl: true
+                });
+                
+                // Add Mapbox satellite streets layer
+                L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
+                    attribution: '© Mapbox © OpenStreetMap',
+                    maxZoom: 19
+                }).addTo(this.map);
+
+                // Add locate control
+                L.control.locate({
+                    position: 'topleft',
+                    strings: {
+                        title: "Show my location"
+                    },
+                    flyTo: true,
+                    keepCurrentZoomLevel: true,
+                    locateOptions: {
+                        enableHighAccuracy: true
+                    }
+                }).addTo(this.map);
+
+                // Add marker
+                this.marker = L.marker([this.config.lat, this.config.lon], {
+                    draggable: true
+                }).addTo(this.map);
+
+                // Update coordinates when marker is dragged
+                this.marker.on('dragend', (e) => {
+                    const position = e.target.getLatLng();
+                    this.config.lat = position.lat.toFixed(8);
+                    this.config.lon = position.lng.toFixed(8);
+                });
+
+                // Update marker when map is clicked
+                this.map.on('click', (e) => {
+                    const position = e.latlng;
+                    this.marker.setLatLng(position);
+                    this.config.lat = position.lat.toFixed(8);
+                    this.config.lon = position.lng.toFixed(8);
+                });
+
+                // Handle location found event
+                this.map.on('locationfound', (e) => {
+                    this.config.lat = e.latlng.lat.toFixed(8);
+                    this.config.lon = e.latlng.lng.toFixed(8);
+                    this.updateMarkerFromInputs();
+                });
+
+                this.mapInitialized = true;
+                
+                // Force a resize to ensure tiles load properly
+                setTimeout(() => {
+                    if (this.map) {
+                        this.map.invalidateSize();
+                    }
+                }, 100);
+            }, 100);
+        },
+
+        ensureMapVisible() {
+            // Call this when the schedule tab becomes active
+            if (this.map && this.mapInitialized) {
+                setTimeout(() => {
+                    this.map.invalidateSize();
+                    this.map.setView([this.config.lat, this.config.lon], 13);
+                }, 50);
+            } else if (!this.mapInitialized) {
+                this.initMap();
+            }
+        },
+
+        updateMarkerFromInputs() {
+            if (this.marker && this.mapInitialized) {
+                // Ensure coordinates are within bounds and have proper precision
+                const lat = Math.min(Math.max(parseFloat(this.config.lat), -90), 90);
+                const lon = Math.min(Math.max(parseFloat(this.config.lon), -180), 180);
+                
+                // Update the marker and map view
+                this.marker.setLatLng([lat, lon]);
+                this.map.setView([lat, lon]);
+                
+                // Update the input values with properly formatted numbers
+                this.config.lat = lat.toFixed(8);
+                this.config.lon = lon.toFixed(8);
+            }
+        },
+
+        async refreshConfig() {
+            try {
+                // Reset to initial state
+                this.config = {
+                    lat: 0,
+                    lon: 0,
+                    force_on: false,
+                    button_delay: "00:00",
+                    schedule: []
+                };
+                
+                // Clear any existing messages
+                this.message = '';
+                this.error = false;
+                this.warning = false;
+                
+                // Reload the configuration
+                await this.loadConfig();
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        async loadConfig() {
+            try {
+                const response = await fetch('/api/schedule');
+                if (response.status === 404) {
+                    // Set default configuration for schedule
+                    this.config = {
+                        lat: 40.7128,
+                        lon: -74.0060,
+                        force_on: false,
+                        button_delay: "01:00",
+                        schedule: []
+                    };
+                    // Initialize map after config is loaded
+                    if (!this.mapInitialized) {
+                        this.initMap();
+                    } else {
+                        this.updateMarkerFromInputs();
+                    }
+                    this.showMessage("No schedule configuration found. Using default values.", false);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Failed to load schedule configuration');
+                }
+                const data = await response.json();
+                this.config = data;
+                
+                // Process schedule entries to add UI helper properties
+                this.config.schedule.forEach(entry => {
+                    const startParts = this.parseTimeString(entry.start);
+                    entry.startReference = startParts.reference;
+                    entry.startSign = startParts.sign;
+                    entry.startOffset = startParts.offset;
+                    
+                    const stopParts = this.parseTimeString(entry.stop);
+                    entry.stopReference = stopParts.reference;
+                    entry.stopSign = stopParts.sign;
+                    entry.stopOffset = stopParts.offset;
+                });
+                
+                // Initialize map after config is loaded, or update if already initialized
+                if (!this.mapInitialized) {
+                    this.initMap();
+                } else {
+                    this.updateMarkerFromInputs();
+                }
+                
+                // Load service status
+                await this.loadServiceStatus();
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        async loadServiceStatus() {
+            this.serviceStatusLoading = true;
+            try {
+                const response = await fetch('/api/systemd/services');
+                if (response.ok) {
+                    const services = await response.json();
+                    const wittypidService = services.find(service => service.name === 'wittypid');
+                    if (wittypidService) {
+                        this.serviceStatus = {
+                            active: wittypidService.active,
+                            enabled: wittypidService.enabled,
+                            status: wittypidService.status,
+                            uptime: wittypidService.uptime || 'N/A'
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load service status:', error);
+            } finally {
+                this.serviceStatusLoading = false;
+            }
+        },
+
+        parseTimeString(timeStr) {
+            if (timeStr.includes('sunrise')) {
+                return {
+                    reference: 'sunrise',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('sunrise', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('sunset')) {
+                return {
+                    reference: 'sunset',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('sunset', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('dawn')) {
+                return {
+                    reference: 'dawn',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('dawn', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('dusk')) {
+                return {
+                    reference: 'dusk',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('dusk', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('noon')) {
+                return {
+                    reference: 'noon',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('noon', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('midnight')) {
+                return {
+                    reference: 'midnight',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('midnight', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('blue_hour_morning')) {
+                return {
+                    reference: 'blue_hour_morning',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('blue_hour_morning', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('blue_hour_evening')) {
+                return {
+                    reference: 'blue_hour_evening',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('blue_hour_evening', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('golden_hour_morning')) {
+                return {
+                    reference: 'golden_hour_morning',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('golden_hour_morning', '').replace('+', '').replace('-', '').trim()
+                };
+            } else if (timeStr.includes('golden_hour_evening')) {
+                return {
+                    reference: 'golden_hour_evening',
+                    sign: timeStr.includes('-') ? '-' : '+',
+                    offset: timeStr.replace('golden_hour_evening', '').replace('+', '').replace('-', '').trim()
+                };
+            } else {
+                return {
+                    reference: 'time',
+                    sign: '+',
+                    offset: timeStr
+                };
+            }
+        },
+
+        updateTimeString(entry, type) {
+            const reference = entry[`${type}Reference`];
+            const sign = entry[`${type}Sign`];
+            const offset = entry[`${type}Offset`];
+            
+            if (reference === 'time') {
+                entry[type] = offset;
+            } else {
+                entry[type] = `${reference}${sign}${offset}`;
+            }
+        },
+
+        addSchedule() {
+            this.config.schedule.push({
+                name: '',
+                start: '00:00',
+                stop: '00:00',
+                startReference: 'time',
+                startOffset: '00:00',
+                startSign: '+',
+                stopReference: 'time',
+                stopOffset: '00:00',
+                stopSign: '+'
+            });
+        },
+
+        removeSchedule(index) {
+            this.config.schedule.splice(index, 1);
+        },
+
+        async saveConfig() {
+            try {
+                const response = await fetch('/api/schedule', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.config)
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to save schedule configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                    }
+                    if (error.detail?.validation_errors) {
+                        const validationErrors = error.detail.validation_errors.map(err => 
+                            `${err.loc.join('.')}: ${err.msg}`
+                        ).join(', ');
+                        errorMessage += '\nValidation errors: ' + validationErrors;
+                    }
+                    throw new Error(errorMessage);
+                }
+                const data = await response.json();
+                this.showMessage(data.message, false);  // false means not an error, so it will be success
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        async downloadConfig() {
+            try {
+                const response = await fetch('/api/schedule/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.config)
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to download schedule configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                // Create a blob from the response and trigger download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'schedule.yml';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                this.showMessage('Schedule configuration downloaded successfully!', false);
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        async saveAndRestartService() {
+            try {
+                // First save the configuration
+                await this.saveConfig();
+                
+                // Then restart the wittypid service
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: 'wittypid',
+                        action: 'restart'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to restart wittypid service');
+                }
+                
+                this.showMessage(`Configuration saved and ${data.message}`, false);
+                
+                // Refresh service status after restart
+                setTimeout(async () => {
+                    await this.loadServiceStatus();
+                }, 2000);
+                
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        showMessage(message, isError) {
+            // Dispatch a custom event that the parent can listen for
+            window.dispatchEvent(new CustomEvent('show-message', {
+                detail: { message, isError }
+            }));
+        }
+    }
+}
+
+function radiotrackingConfig() {
+    return {
+        config: {
+            "rtl-sdr": {
+                device: [],
+                calibration: [],
+                center_freq: 0,
+                sample_rate: 0,
+                sdr_callback_length: null,
+                lna_gain: 0,
+                mixer_gain: 0,
+                vga_gain: 0,
+                gain: 0,
+                sdr_max_restart: 0,
+                sdr_timeout_s: 0
+            },
+            "analysis": {
+                signal_threshold_dbw: 0,
+                snr_threshold_db: 0,
+                signal_min_duration_ms: 0,
+                signal_max_duration_ms: 0,
+                fft_nperseg: 0,
+                fft_window: ""
+            },
+            "matching": {
+                matching_timeout_s: 0,
+                matching_time_diff_s: 0,
+                matching_bandwidth_hz: 0,
+                matching_duration_diff_ms: 0
+            },
+            "publish": {
+                path: "",
+                mqtt_host: "",
+                mqtt_port: 0,
+                sig_stdout: false,
+                match_stdout: false,
+                csv: false,
+                export_config: true,
+                mqtt: false
+            },
+            "dashboard": {
+                dashboard: false,
+                dashboard_host: "",
+                dashboard_port: 0,
+                dashboard_signals: 0
+            },
+            "optional arguments": {
+                verbose: 0,
+                calibrate: false,
+                config: "/boot/firmware/radiotracking.ini",
+                station: null,
+                schedule: []
+            }
+        },
+        configLoaded: false,
+        deviceCount: 1,
+        isLoading: true,
+        // Service status tracking
+        serviceStatus: {
+            active: false,
+            enabled: false,
+            status: 'unknown',
+            uptime: 'N/A'
+        },
+        serviceStatusLoading: false,
+        refreshInterval: null, // For periodic service status refresh
+
+        dispatchMessage(message, isError) {
+            // Dispatch a custom event that the parent can listen for
+            window.dispatchEvent(new CustomEvent('show-message', {
+                detail: { message, isError }
+            }));
+        },
+
+        addDevice() {
+            // Add a new device with default values
+            if (!this.configLoaded) return;
+            this.config["rtl-sdr"].device.push('0');
+            this.config["rtl-sdr"].calibration.push(0.0);
+        },
+
+        removeDevice(index) {
+            // Only remove if there's more than one device
+            if (!this.configLoaded) return;
+            if (this.config["rtl-sdr"].device.length > 1) {
+                this.config["rtl-sdr"].device.splice(index, 1);
+                this.config["rtl-sdr"].calibration.splice(index, 1);
+            }
+        },
+
+        updateDeviceList() {
+            // Update device list based on deviceCount
+            if (!this.configLoaded) return;
+            
+            const currentLength = this.config["rtl-sdr"].device.length;
+            const targetLength = parseInt(this.deviceCount);
+            
+            if (targetLength > currentLength) {
+                // Add new devices
+                for (let i = currentLength; i < targetLength; i++) {
+                    this.config["rtl-sdr"].device.push(i.toString());
+                    this.config["rtl-sdr"].calibration.push(0.0);
+                }
+            } else if (targetLength < currentLength) {
+                // Remove devices
+                this.config["rtl-sdr"].device.splice(targetLength);
+                this.config["rtl-sdr"].calibration.splice(targetLength);
+            }
+        },
+
+        async init() {
+            // Load configuration and set up periodic refresh
+            await this.loadConfig();
+            await this.setupPeriodicRefresh();
+        },
+
+        async setupPeriodicRefresh() {
+            // Get the refresh interval from system config
+            const refreshIntervalSeconds = await getSystemRefreshInterval();
+            
+            // Set up periodic refresh for service status
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+            }
+            
+            this.refreshInterval = setInterval(() => {
+                // Only refresh if radiotracking tab is active
+                const currentHash = window.location.hash.slice(1);
+                if (currentHash === 'radiotracking') {
+                    this.loadServiceStatus();
+                }
+            }, refreshIntervalSeconds * 1000);
+        },
+
+        cleanup() {
+            // Clean up interval when component is destroyed
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+            }
+        },
+
+        async loadServiceStatus() {
+            this.serviceStatusLoading = true;
+            try {
+                const response = await fetch('/api/systemd/services');
+                if (response.ok) {
+                    const services = await response.json();
+                    const radiotrackingService = services.find(service => service.name === 'radiotracking');
+                    if (radiotrackingService) {
+                        this.serviceStatus = {
+                            active: radiotrackingService.active,
+                            enabled: radiotrackingService.enabled,
+                            status: radiotrackingService.status,
+                            uptime: radiotrackingService.uptime || 'N/A'
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load service status:', error);
+            } finally {
+                this.serviceStatusLoading = false;
+            }
+        },
+
+        async loadConfig() {
+            try {
+                this.isLoading = true;
+                this.configLoaded = false;
+                const response = await fetch('/api/radiotracking');
+                if (response.status === 404) {
+                    this.dispatchMessage("No radio tracking configuration found. Please create a configuration file first.", true);
+                    this.isLoading = false;
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Failed to load radio tracking configuration');
+                }
+                const data = await response.json();
+                // Update the existing config object instead of replacing it
+                Object.assign(this.config, data);
+                this.configLoaded = true;
+                this.deviceCount = this.config["rtl-sdr"].device.length;
+                
+                // Load service status
+                await this.loadServiceStatus();
+            } catch (error) {
+                this.dispatchMessage(error.message, true);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        // Add computed property for center frequency in MHz
+        get centerFreqMHz() {
+            if (!this.configLoaded) return 0;
+            return this.config["rtl-sdr"].center_freq / 1000000;
+        },
+        set centerFreqMHz(value) {
+            if (!this.configLoaded) return;
+            this.config["rtl-sdr"].center_freq = Math.round(value * 1000000);
+        },
+
+        // Add method to update center frequency
+        updateCenterFreq() {
+            // Ensure the value is within valid ranges
+            const value = this.centerFreqMHz;
+            if (value < 24) {
+                this.centerFreqMHz = 24;
+            } else if (value > 1766) {
+                this.centerFreqMHz = 1766;
+            }
+        },
+
+        // Add computed property for sample rate in kHz
+        get sampleRateKHz() {
+            if (!this.configLoaded) return 0;
+            return Math.round(this.config["rtl-sdr"].sample_rate / 1000);
+        },
+        set sampleRateKHz(value) {
+            if (!this.configLoaded) return;
+            this.config["rtl-sdr"].sample_rate = value * 1000;
+        },
+
+        // Add method to update center frequency
+        updateCenterFreq() {
+            // Ensure the value is within valid ranges
+            const value = this.centerFreqMHz;
+            if (value < 24) {
+                this.centerFreqMHz = 24;
+            } else if (value > 1766) {
+                this.centerFreqMHz = 1766;
+            }
+        },
+
+        // Add computed property for bandwidth in kHz
+        get bandwidthKHz() {
+            if (!this.configLoaded) return 0;
+            return this.config["matching"].matching_bandwidth_hz / 1000;
+        },
+        set bandwidthKHz(value) {
+            if (!this.configLoaded) return;
+            this.config["matching"].matching_bandwidth_hz = Math.round(value * 1000);
+        },
+
+        updateSampleRate() {
+            // Ensure the value is within valid ranges
+            const value = this.sampleRateKHz;
+            if (value < 230 || (value > 300 && value < 900) || value > 3200) {
+                // If outside valid ranges, set to nearest valid value
+                if (value < 230) {
+                    this.sampleRateKHz = 230;
+                } else if (value > 300 && value < 900) {
+                    this.sampleRateKHz = 300;
+                } else if (value > 3200) {
+                    this.sampleRateKHz = 3200;
+                }
+            }
+        },
+
+        updateBandwidth() {
+            // Ensure the value is valid (minimum 0.1 kHz)
+            const value = this.bandwidthKHz;
+            if (value < 0.1) {
+                this.bandwidthKHz = 0.1;
+            }
+        },
+
+        async resetConfig() {
+            // Reset by reloading from file
+            await this.loadConfig();
+        },
+
+        async saveConfig() {
+            try {
+                // Convert the frontend config format to the API format
+                const apiConfig = {
+                    optional_arguments: {
+                        verbose: this.config["optional arguments"].verbose,
+                        calibrate: this.config["optional arguments"].calibrate,
+                        config: "/boot/firmware/radiotracking.ini", // Required field
+                        station: this.config["optional arguments"].station || null,
+                        schedule: this.config["optional arguments"].schedule || []
+                    },
+                    rtl_sdr: {
+                        device: this.config["rtl-sdr"].device,
+                        calibration: this.config["rtl-sdr"].calibration,
+                        center_freq: this.config["rtl-sdr"].center_freq,
+                        sample_rate: this.config["rtl-sdr"].sample_rate,
+                        sdr_callback_length: this.config["rtl-sdr"].sdr_callback_length,
+                        gain: this.config["rtl-sdr"].gain,
+                        lna_gain: this.config["rtl-sdr"].lna_gain,
+                        mixer_gain: this.config["rtl-sdr"].mixer_gain,
+                        vga_gain: this.config["rtl-sdr"].vga_gain,
+                        sdr_max_restart: this.config["rtl-sdr"].sdr_max_restart,
+                        sdr_timeout_s: this.config["rtl-sdr"].sdr_timeout_s
+                    },
+                    analysis: {
+                        fft_nperseg: this.config["analysis"].fft_nperseg,
+                        fft_window: this.config["analysis"].fft_window,
+                        signal_threshold_dbw: this.config["analysis"].signal_threshold_dbw,
+                        snr_threshold_db: this.config["analysis"].snr_threshold_db,
+                        signal_min_duration_ms: this.config["analysis"].signal_min_duration_ms,
+                        signal_max_duration_ms: this.config["analysis"].signal_max_duration_ms
+                    },
+                    matching: {
+                        matching_timeout_s: this.config["matching"].matching_timeout_s,
+                        matching_time_diff_s: this.config["matching"].matching_time_diff_s,
+                        matching_bandwidth_hz: this.config["matching"].matching_bandwidth_hz,
+                        matching_duration_diff_ms: this.config["matching"].matching_duration_diff_ms
+                    },
+                    publish: {
+                        sig_stdout: this.config["publish"].sig_stdout,
+                        match_stdout: this.config["publish"].match_stdout,
+                        path: this.config["publish"].path,
+                        csv: this.config["publish"].csv,
+                        export_config: this.config["publish"].export_config || true,
+                        mqtt: this.config["publish"].mqtt,
+                        mqtt_host: this.config["publish"].mqtt_host,
+                        mqtt_port: this.config["publish"].mqtt_port
+                    },
+                    dashboard: {
+                        dashboard: this.config["dashboard"].dashboard,
+                        dashboard_host: this.config["dashboard"].dashboard_host,
+                        dashboard_port: this.config["dashboard"].dashboard_port,
+                        dashboard_signals: this.config["dashboard"].dashboard_signals
+                    }
+                };
+
+                const response = await fetch('/api/radiotracking', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(apiConfig)
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to save radio tracking configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                    }
+                    if (error.detail?.validation_errors) {
+                        const validationErrors = error.detail.validation_errors.map(err => 
+                            `${err.loc.join('.')}: ${err.msg}`
+                        ).join(', ');
+                        errorMessage += '\nValidation errors: ' + validationErrors;
+                    }
+                    throw new Error(errorMessage);
+                }
+                const data = await response.json();
+                this.dispatchMessage(data.message, false);  // false means not an error, so it will be success
+            } catch (error) {
+                this.dispatchMessage(error.message, true);
+            }
+        },
+
+        async downloadConfig() {
+            try {
+                // Convert the frontend config format to the API format (same as saveConfig)
+                const apiConfig = {
+                    optional_arguments: {
+                        verbose: this.config["optional arguments"].verbose,
+                        calibrate: this.config["optional arguments"].calibrate,
+                        config: "/boot/firmware/radiotracking.ini", // Required field
+                        station: this.config["optional arguments"].station || null,
+                        schedule: this.config["optional arguments"].schedule || []
+                    },
+                    rtl_sdr: {
+                        device: this.config["rtl-sdr"].device,
+                        calibration: this.config["rtl-sdr"].calibration,
+                        center_freq: this.config["rtl-sdr"].center_freq,
+                        sample_rate: this.config["rtl-sdr"].sample_rate,
+                        sdr_callback_length: this.config["rtl-sdr"].sdr_callback_length,
+                        gain: this.config["rtl-sdr"].gain,
+                        lna_gain: this.config["rtl-sdr"].lna_gain,
+                        mixer_gain: this.config["rtl-sdr"].mixer_gain,
+                        vga_gain: this.config["rtl-sdr"].vga_gain,
+                        sdr_max_restart: this.config["rtl-sdr"].sdr_max_restart,
+                        sdr_timeout_s: this.config["rtl-sdr"].sdr_timeout_s
+                    },
+                    analysis: {
+                        fft_nperseg: this.config["analysis"].fft_nperseg,
+                        fft_window: this.config["analysis"].fft_window,
+                        signal_threshold_dbw: this.config["analysis"].signal_threshold_dbw,
+                        snr_threshold_db: this.config["analysis"].snr_threshold_db,
+                        signal_min_duration_ms: this.config["analysis"].signal_min_duration_ms,
+                        signal_max_duration_ms: this.config["analysis"].signal_max_duration_ms
+                    },
+                    matching: {
+                        matching_timeout_s: this.config["matching"].matching_timeout_s,
+                        matching_time_diff_s: this.config["matching"].matching_time_diff_s,
+                        matching_bandwidth_hz: this.config["matching"].matching_bandwidth_hz,
+                        matching_duration_diff_ms: this.config["matching"].matching_duration_diff_ms
+                    },
+                    publish: {
+                        sig_stdout: this.config["publish"].sig_stdout,
+                        match_stdout: this.config["publish"].match_stdout,
+                        path: this.config["publish"].path,
+                        csv: this.config["publish"].csv,
+                        export_config: this.config["publish"].export_config || true,
+                        mqtt: this.config["publish"].mqtt,
+                        mqtt_host: this.config["publish"].mqtt_host,
+                        mqtt_port: this.config["publish"].mqtt_port
+                    },
+                    dashboard: {
+                        dashboard: this.config["dashboard"].dashboard,
+                        dashboard_host: this.config["dashboard"].dashboard_host,
+                        dashboard_port: this.config["dashboard"].dashboard_port,
+                        dashboard_signals: this.config["dashboard"].dashboard_signals
+                    }
+                };
+
+                const response = await fetch('/api/radiotracking/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(apiConfig)
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to download radio tracking configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                    }
+                    if (error.detail?.validation_errors) {
+                        const validationErrors = error.detail.validation_errors.map(err => 
+                            `${err.loc.join('.')}: ${err.msg}`
+                        ).join(', ');
+                        errorMessage += '\nValidation errors: ' + validationErrors;
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                // Create a blob from the response and trigger download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'radiotracking.ini';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                this.dispatchMessage('Radio tracking configuration downloaded successfully!', false);
+            } catch (error) {
+                this.dispatchMessage(error.message, true);
+            }
+        },
+
+        async saveAndRestartService() {
+            try {
+                // First save the configuration
+                await this.saveConfig();
+                
+                // Then restart the radiotracking service
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: 'radiotracking',
+                        action: 'restart'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to restart radiotracking service');
+                }
+                
+                this.dispatchMessage(`Configuration saved and ${data.message}`, false);
+                
+                // Refresh service status after restart
+                setTimeout(async () => {
+                    await this.loadServiceStatus();
+                }, 2000);
+                
+            } catch (error) {
+                this.dispatchMessage(error.message, true);
+            }
+        }
+    }
+}
+
+function soundscapepipeConfig() {
+    return {
+        config: {
+            stream_port: 5001,
+            lat: 50.85318,
+            lon: 8.78735,
+            input_device_match: "USB AUDIO DEVICE",
+            sample_rate: 48000,
+            input_length_s: 0.1,
+            channels: 1,
+            detectors: {
+                birdedge: {
+                    detection_threshold: 0.3,
+                    class_threshold: 0.0,
+                    tasks: []
+                },
+                yolobat: {
+                    detection_threshold: 0.3,
+                    model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml",
+                    tasks: []
+                },
+                schedule: {
+                    tasks: []
+                }
+            },
+            output_device_match: "USB AUDIO DEVICE",
+            speaker_enable_pin: 27,
+            highpass_freq: 100,
+            lure: {
+                tasks: []
+            },
+            ratio: 0.0,
+            length_s: 20,
+            maximize_confidence: false,
+            groups: {}
+        },
+        configLoaded: false,
+        serviceStatus: {
+            active: false,
+            enabled: false,
+            status: 'unknown',
+            uptime: 'N/A'
+        },
+        refreshInterval: null,
+        map: null,
+        marker: null,
+        mapInitialized: false,
+        audioDevices: {},
+        loadingDevices: false,
+        modelFiles: {},
+        loadingModels: false,
+
+        init() {
+            this.loadConfig();
+            this.loadServiceStatus();
+            this.loadAudioDevices();
+            this.loadModelFiles();
+            
+            // Auto-refresh service status every 30 seconds when tab is active
+            this.refreshInterval = setInterval(() => {
+                // Only refresh if soundscapepipe tab is active
+                const currentHash = window.location.hash.slice(1);
+                if (currentHash === 'soundscapepipe') {
+                    this.loadServiceStatus();
+                }
+            }, 30000);
+        },
+
+        cleanup() {
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+            }
+        },
+
+        async loadServiceStatus() {
+            try {
+                const response = await fetch('/api/systemd/services');
+                if (response.ok) {
+                    const services = await response.json();
+                    const soundscapepipeService = services.find(service => service.name === 'soundscapepipe');
+                    if (soundscapepipeService) {
+                        this.serviceStatus = {
+                            active: soundscapepipeService.active,
+                            enabled: soundscapepipeService.enabled,
+                            status: soundscapepipeService.status,
+                            uptime: soundscapepipeService.uptime || 'N/A'
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load service status:', error);
+            }
+        },
+
+        async loadConfig() {
+            try {
+                const response = await fetch('/api/soundscapepipe');
+                if (response.ok) {
+                    const data = await response.json();
+                    // Handle backward compatibility for detectors - add enabled flags if missing
+                    const detectors = data.detectors || {};
+                    
+                    // BirdEdge detector - enabled by default if present in config
+                    if (detectors.birdedge) {
+                        detectors.birdedge.enabled = detectors.birdedge.enabled !== undefined ? detectors.birdedge.enabled : true;
+                        detectors.birdedge.tasks = detectors.birdedge.tasks || [];
+                        // Parse existing task time strings into UI components
+                        detectors.birdedge.tasks.forEach(task => {
+                            this.parseDetectorTaskTimeString(task, task.start, 'start');
+                            this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                        });
+                    } else {
+                        detectors.birdedge = { enabled: true, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", tasks: [] };
+                    }
+                    
+                    // YOLOBat detector - enabled by default if present in config  
+                    if (detectors.yolobat) {
+                        detectors.yolobat.enabled = detectors.yolobat.enabled !== undefined ? detectors.yolobat.enabled : true;
+                        detectors.yolobat.tasks = detectors.yolobat.tasks || [];
+                        // Parse existing task time strings into UI components
+                        detectors.yolobat.tasks.forEach(task => {
+                            this.parseDetectorTaskTimeString(task, task.start, 'start');
+                            this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                        });
+                        // Remove class_threshold if it exists (YoloBat only supports detection)
+                        if (detectors.yolobat.class_threshold !== undefined) {
+                            delete detectors.yolobat.class_threshold;
+                        }
+                    } else {
+                        detectors.yolobat = { enabled: false, detection_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", tasks: [] };
+                    }
+                    
+                    // Schedule always exists
+                    if (!detectors.schedule) {
+                        detectors.schedule = { tasks: [] };
+                    }
+
+                    this.config = {
+                        // Ensure all sections exist with defaults
+                        stream_port: data.stream_port || 5001,
+                        lat: data.lat || 50.85318,
+                        lon: data.lon || 8.78735,
+                        input_device_match: data.input_device_match || "USB AUDIO DEVICE",
+                        input_length_s: data.input_length_s || 0.1,
+                        channels: data.channels || 1,
+                        sample_rate: data.sample_rate || 48000,
+                        detectors: detectors,
+                        output_device_match: data.output_device_match || "USB AUDIO DEVICE",
+                        speaker_enable_pin: data.speaker_enable_pin || 27,
+                        highpass_freq: data.highpass_freq || 100,
+                        lure: data.lure || { tasks: [] },
+                        ratio: data.ratio || 0.0,
+                        length_s: data.length_s || 20,
+                        maximize_confidence: data.maximize_confidence || false,
+                        groups: data.groups || {}
+                    };
+                    this.configLoaded = true;
+                } else if (response.status === 404) {
+                    // No configuration found, use defaults
+                    this.configLoaded = true;
+                    this.showMessage("No soundscapepipe configuration found. Using default values.", false);
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to load soundscapepipe configuration');
+                }
+                
+                // Initialize map after config is loaded, or update if already initialized
+                if (!this.mapInitialized) {
+                    setTimeout(() => this.initMap(), 200);
+                } else {
+                    this.updateMarkerFromInputs();
+                }
+            } catch (error) {
+                this.showMessage(error.message, true);
+                this.configLoaded = true; // Allow user to see form even if loading failed
+                
+                // Initialize map with defaults even if config loading failed
+                if (!this.mapInitialized) {
+                    setTimeout(() => this.initMap(), 200);
+                }
+            }
+        },
+
+        async saveConfig() {
+            try {
+                // Create a copy of the config and filter out disabled detectors
+                const configToSave = { ...this.config };
+                
+                // Filter detectors to only include enabled ones
+                configToSave.detectors = {};
+                
+                if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
+                    configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
+                    delete configToSave.detectors.birdedge.enabled; // Remove the enabled flag from saved config
+                    // Clean up tasks - convert UI components back to time strings
+                    if (configToSave.detectors.birdedge.tasks) {
+                        configToSave.detectors.birdedge.tasks = configToSave.detectors.birdedge.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+                
+                if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
+                    configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
+                    delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
+                    // Remove class_threshold if it exists (YoloBat only supports detection)
+                    delete configToSave.detectors.yolobat.class_threshold;
+                    // Clean up tasks - convert UI components back to time strings
+                    if (configToSave.detectors.yolobat.tasks) {
+                        configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+                
+                // Always include schedule if it exists
+                if (this.config.detectors.schedule) {
+                    configToSave.detectors.schedule = this.config.detectors.schedule;
+                }
+
+                const response = await fetch('/api/soundscapepipe', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(configToSave)
+                });
+                
+                if (response.ok) {
+                    this.showMessage('Soundscapepipe configuration saved successfully!', false);
+                } else {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
+                    }
+                    throw new Error(errorMessage);
+                }
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        async downloadConfig() {
+            try {
+                // Create a copy of the config and filter out disabled detectors
+                const configToDownload = { ...this.config };
+                
+                // Filter detectors to only include enabled ones
+                configToDownload.detectors = {};
+                
+                if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
+                    configToDownload.detectors.birdedge = { ...this.config.detectors.birdedge };
+                    delete configToDownload.detectors.birdedge.enabled; // Remove the enabled flag from downloaded config
+                    // Clean up tasks - convert UI components back to time strings
+                    if (configToDownload.detectors.birdedge.tasks) {
+                        configToDownload.detectors.birdedge.tasks = configToDownload.detectors.birdedge.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+                
+                if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
+                    configToDownload.detectors.yolobat = { ...this.config.detectors.yolobat };
+                    delete configToDownload.detectors.yolobat.enabled; // Remove the enabled flag from downloaded config
+                    // Remove class_threshold if it exists (YoloBat only supports detection)
+                    delete configToDownload.detectors.yolobat.class_threshold;
+                    // Clean up tasks - convert UI components back to time strings
+                    if (configToDownload.detectors.yolobat.tasks) {
+                        configToDownload.detectors.yolobat.tasks = configToDownload.detectors.yolobat.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+                
+                // Always include schedule if it exists
+                if (this.config.detectors.schedule) {
+                    configToDownload.detectors.schedule = this.config.detectors.schedule;
+                }
+
+                const response = await fetch('/api/soundscapepipe/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(configToDownload)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to download soundscapepipe configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                // Create a blob from the response and trigger download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'soundscapepipe.yml';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                this.showMessage('Soundscapepipe configuration downloaded successfully!', false);
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        async saveAndRestartService() {
+            try {
+                // First save the configuration
+                await this.saveConfig();
+                
+                // Then restart the soundscapepipe service
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: 'soundscapepipe',
+                        action: 'restart'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to restart soundscapepipe service');
+                }
+                
+                this.showMessage(`Configuration saved and ${data.message}`, false);
+                
+                // Refresh service status after restart
+                setTimeout(async () => {
+                    await this.loadServiceStatus();
+                }, 2000);
+                
+            } catch (error) {
+                this.showMessage(error.message, true);
+            }
+        },
+
+        resetConfig() {
+            this.loadConfig();
+        },
+
+        showMessage(message, isError = false) {
+            // Dispatch to parent component
+            this.$dispatch('message', { message, error: isError });
+        },
+
+        streamLogs(serviceName) {
+            // Dispatch to parent component
+            this.$dispatch('streamLogs', { serviceName });
+        },
+
+        initMap() {
+            // Only initialize if not already done and container is visible
+            if (this.mapInitialized || !document.getElementById('soundscapeMap')) {
+                return;
+            }
+
+            // Wait a bit to ensure the container is properly rendered
+            setTimeout(() => {
+                if (!document.getElementById('soundscapeMap') || this.mapInitialized) {
+                    return;
+                }
+
+                // Initialize map with loaded coordinates
+                this.map = L.map('soundscapeMap', {
+                    center: [this.config.lat, this.config.lon],
+                    zoom: 13,
+                    zoomControl: true
+                });
+                
+                // Add Mapbox satellite streets layer
+                L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
+                    attribution: '© Mapbox © OpenStreetMap',
+                    maxZoom: 19
+                }).addTo(this.map);
+
+                // Add locate control
+                L.control.locate({
+                    position: 'topleft',
+                    strings: {
+                        title: "Show my location"
+                    },
+                    flyTo: true,
+                    keepCurrentZoomLevel: true,
+                    locateOptions: {
+                        enableHighAccuracy: true
+                    }
+                }).addTo(this.map);
+
+                // Add marker
+                this.marker = L.marker([this.config.lat, this.config.lon], {
+                    draggable: true
+                }).addTo(this.map);
+
+                // Update coordinates when marker is dragged
+                this.marker.on('dragend', (e) => {
+                    const position = e.target.getLatLng();
+                    this.config.lat = parseFloat(position.lat.toFixed(8));
+                    this.config.lon = parseFloat(position.lng.toFixed(8));
+                });
+
+                // Update marker when map is clicked
+                this.map.on('click', (e) => {
+                    const position = e.latlng;
+                    this.marker.setLatLng(position);
+                    this.config.lat = parseFloat(position.lat.toFixed(8));
+                    this.config.lon = parseFloat(position.lng.toFixed(8));
+                });
+
+                // Handle location found event
+                this.map.on('locationfound', (e) => {
+                    this.config.lat = parseFloat(e.latlng.lat.toFixed(8));
+                    this.config.lon = parseFloat(e.latlng.lng.toFixed(8));
+                    this.updateMarkerFromInputs();
+                });
+
+                this.mapInitialized = true;
+                
+                // Force a resize to ensure tiles load properly
+                setTimeout(() => {
+                    if (this.map) {
+                        this.map.invalidateSize();
+                    }
+                }, 100);
+            }, 100);
+        },
+
+        ensureMapVisible() {
+            // Call this when the soundscapepipe tab becomes active
+            if (this.map && this.mapInitialized) {
+                setTimeout(() => {
+                    this.map.invalidateSize();
+                    this.map.setView([this.config.lat, this.config.lon], 13);
+                }, 50);
+            } else if (!this.mapInitialized) {
+                this.initMap();
+            }
+        },
+
+        updateMarkerFromInputs() {
+            if (this.marker && this.mapInitialized) {
+                // Ensure coordinates are within bounds and have proper precision
+                const lat = Math.min(Math.max(parseFloat(this.config.lat), -90), 90);
+                const lon = Math.min(Math.max(parseFloat(this.config.lon), -180), 180);
+                
+                // Update the marker and map view
+                this.marker.setLatLng([lat, lon]);
+                this.map.setView([lat, lon]);
+                
+                // Update the input values with properly formatted numbers
+                this.config.lat = parseFloat(lat.toFixed(8));
+                this.config.lon = parseFloat(lon.toFixed(8));
+            }
+        },
+
+        async loadAudioDevices() {
+            this.loadingDevices = true;
+            try {
+                const response = await fetch('/api/soundscapepipe/audio-devices');
+                if (response.ok) {
+                    this.audioDevices = await response.json();
+                } else {
+                    const error = await response.json();
+                    this.showMessage(`Failed to load audio devices: ${error.detail}`, true);
+                }
+            } catch (error) {
+                this.showMessage(`Failed to load audio devices: ${error.message}`, true);
+            } finally {
+                this.loadingDevices = false;
+            }
+        },
+
+        updateInputDeviceFromSelection(deviceName, selectedOption) {
+            if (deviceName) {
+                // Extract just the device name part (before the colon if it exists)
+                // e.g. "384kHz AudioMoth USB Microphone: Audio (hw:2,0)" -> "384kHz AudioMoth USB Microphone"
+                
+                const cleanDeviceName = deviceName.split(':')[0].trim();
+                this.config.input_device_match = cleanDeviceName;
+                
+                // Set sample rate from selected device
+                if (selectedOption && selectedOption.dataset.sampleRate) {
+                    this.config.sample_rate = Math.round(parseFloat(selectedOption.dataset.sampleRate));
+                }
+
+                // Set channels from selected device
+                if (selectedOption && selectedOption.dataset.maxChannels) {
+                    this.config.channels = Math.min(parseInt(selectedOption.dataset.maxChannels), 2);
+                }
+            }
+        },
+
+        updateOutputDeviceFromSelection(deviceName, selectedOption) {
+            if (deviceName) {
+                // Extract just the device name part (before the colon if it exists)
+                // e.g. "USB AUDIO DEVICE: Audio (hw:3,0)" -> "USB AUDIO DEVICE"
+                const cleanDeviceName = deviceName.split(':')[0].trim();
+                this.config.output_device_match = cleanDeviceName;
+            }
+        },
+
+        async loadModelFiles() {
+            this.loadingModels = true;
+            try {
+                const response = await fetch('/api/soundscapepipe/model-files');
+                if (response.ok) {
+                    this.modelFiles = await response.json();
+                } else {
+                    const error = await response.json();
+                    this.showMessage(`Failed to load model files: ${error.detail}`, true);
+                }
+            } catch (error) {
+                this.showMessage(`Failed to load model files: ${error.message}`, true);
+            } finally {
+                this.loadingModels = false;
+            }
+        },
+
+        // Detector task management methods
+        updateDetectorTaskTimeString(detectorName, task, type) {
+            const reference = task[`${type}Reference`];
+            const sign = task[`${type}Sign`];
+            const offset = task[`${type}Offset`];
+            
+            if (reference === 'time') {
+                task[type] = offset;
+            } else {
+                task[type] = `${reference}${sign}${offset}`;
+            }
+        },
+
+        addDetectorTask(detectorName) {
+            if (!this.config.detectors[detectorName].tasks) {
+                this.config.detectors[detectorName].tasks = [];
+            }
+            
+            this.config.detectors[detectorName].tasks.push({
+                name: '',
+                start: '00:00',
+                stop: '00:00',
+                startReference: 'time',
+                startOffset: '00:00',
+                startSign: '+',
+                stopReference: 'time',
+                stopOffset: '00:00',
+                stopSign: '+'
+            });
+        },
+
+        removeDetectorTask(detectorName, index) {
+            this.config.detectors[detectorName].tasks.splice(index, 1);
+        },
+
+        parseDetectorTaskTimeString(task, timeStr, type) {
+            if (timeStr.includes('sunrise')) {
+                task[`${type}Reference`] = 'sunrise';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('sunrise', '').replace('+', '').replace('-', '').trim();
+            } else if (timeStr.includes('sunset')) {
+                task[`${type}Reference`] = 'sunset';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('sunset', '').replace('+', '').replace('-', '').trim();
+            } else if (timeStr.includes('dawn')) {
+                task[`${type}Reference`] = 'dawn';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('dawn', '').replace('+', '').replace('-', '').trim();
+            } else if (timeStr.includes('dusk')) {
+                task[`${type}Reference`] = 'dusk';
+                task[`${type}Sign`] = timeStr.includes('-') ? '-' : '+';
+                task[`${type}Offset`] = timeStr.replace('dusk', '').replace('+', '').replace('-', '').trim();
+            } else {
+                // Assume it's a clock time
+                task[`${type}Reference`] = 'time';
+                task[`${type}Sign`] = '+';
+                task[`${type}Offset`] = timeStr;
+            }
+        }
+    }
+}
+
+// Global function to get refresh interval for use across all configurations
+async function getSystemRefreshInterval() {
+    try {
+        const response = await fetch('/api/systemd/config/system');
+        if (response.ok) {
+            const data = await response.json();
+            return data.status_refresh_interval || 30;
+        }
+    } catch (err) {
+        console.warn('Failed to load system config, using default refresh interval:', err);
+    }
+    return 30; // Default fallback
+}
+
+function statusPage() {
+    return {
+        systemInfo: null,
+        loading: true,
+        refreshing: false,
+        statusError: null,
+        lastUpdated: null,
+        refreshInterval: null,
+        refreshIntervalSeconds: 30, // Default value, will be loaded from config
+        // Systemd services properties
+        services: [],
+        servicesLoading: false,
+        servicesError: null,
+        actionLoading: false,
+        actionMessage: '',
+        actionError: false,
+        // Reboot functionality
+        rebootLoading: false,
+
+        async initStatus() {
+            // Load system configuration first to get refresh interval
+            await this.loadSystemConfig();
+            await this.refreshStatus();
+            await this.loadServices();
+            // Auto-refresh using configured interval when status tab is active
+            this.refreshInterval = setInterval(() => {
+                // Only refresh if status tab is active
+                const currentHash = window.location.hash.slice(1);
+                if (currentHash === 'status' || (currentHash === '' && this.activeConfig === 'status')) {
+                    this.refreshStatus();
+                    this.loadServices();
+                }
+            }, this.refreshIntervalSeconds * 1000);
+        },
+
+        async refreshStatus() {
+            // Use different loading states for initial load vs refresh
+            if (this.systemInfo) {
+                this.refreshing = true;
+            } else {
+                this.loading = true;
+            }
+            this.statusError = null;
+            
+            try {
+                // Refresh both system status and services in parallel
+                const [statusResponse] = await Promise.all([
+                    fetch('/api/system-status'),
+                    this.loadServices()
+                ]);
+                
+                if (!statusResponse.ok) {
+                    throw new Error(`HTTP ${statusResponse.status}: ${statusResponse.statusText}`);
+                }
+                
+                const data = await statusResponse.json();
+                this.systemInfo = data;
+                this.lastUpdated = new Date().toLocaleTimeString();
+            } catch (err) {
+                this.statusError = `Failed to load system status: ${err.message}`;
+                console.error('Status refresh error:', err);
+            } finally {
+                this.loading = false;
+                this.refreshing = false;
+            }
+        },
+
+        async loadSystemConfig() {
+            try {
+                const response = await fetch('/api/systemd/config/system');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.refreshIntervalSeconds = data.status_refresh_interval || 30;
+                }
+            } catch (err) {
+                console.warn('Failed to load system config, using default refresh interval:', err);
+                // Keep default value of 30 seconds
+            }
+        },
+
+        formatUptime(seconds) {
+            if (!seconds) return 'N/A';
+            
+            const days = Math.floor(seconds / (24 * 3600));
+            const hours = Math.floor((seconds % (24 * 3600)) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) {
+                return `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else {
+                return `${minutes}m`;
+            }
+        },
+
+        formatDateTime(isoString) {
+            if (!isoString) return 'N/A';
+            
+            try {
+                const date = new Date(isoString);
+                return date.toLocaleString();
+            } catch (err) {
+                return isoString;
+            }
+        },
+
+        formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+
+        // Systemd services methods
+        async loadServices() {
+            this.servicesLoading = true;
+            this.servicesError = null;
+            
+            try {
+                const response = await fetch('/api/systemd/services');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                // Only update services if request was successful
+                this.services = data;
+                // Clear any previous errors on successful load
+                this.servicesError = null;
+            } catch (err) {
+                this.servicesError = `Failed to load services: ${err.message}`;
+                console.error('Services load error:', err);
+                // Don't clear services on error, keep showing previous data
+            } finally {
+                this.servicesLoading = false;
+            }
+        },
+
+        // Function to get filtered services based on expert mode
+        getFilteredServices(expertMode) {
+            if (expertMode) {
+                return this.services;
+            } else {
+                return this.services.filter(service => !service.expert);
+            }
+        },
+
+        async performAction(serviceName, action) {
+            this.actionLoading = true;
+            this.actionMessage = '';
+            this.actionError = false;
+            
+            try {
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: serviceName,
+                        action: action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to ${action} service`);
+                }
+                
+                this.actionMessage = data.message;
+                this.actionError = false;
+                
+                // Refresh services list after action
+                setTimeout(() => {
+                    this.loadServices();
+                }, 1000);
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                }, 5000);
+                
+            } catch (err) {
+                this.actionMessage = err.message;
+                this.actionError = true;
+                console.error(`Service ${action} error:`, err);
+                
+                // Clear error message after 10 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                    this.actionError = false;
+                }, 10000);
+            } finally {
+                this.actionLoading = false;
+            }
+        },
+
+        streamLogs(serviceName) {
+            // Show the log modal
+            const modal = new bootstrap.Modal(document.getElementById('logModal'));
+            // Get the log viewer instance and start streaming
+            const logViewerEl = document.getElementById('logModal');
+            if (logViewerEl && logViewerEl._x_dataStack) {
+                const logViewerInstance = logViewerEl._x_dataStack[0];
+                logViewerInstance.startStreaming(serviceName);
+            }
+            modal.show();
+            
+            // Scroll to bottom after modal is shown and content is rendered
+            setTimeout(() => {
+                const container = document.getElementById('logContainer');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, 250);
+        },
+
+        async rebootSystem() {
+            // Show confirmation dialog
+            if (!confirm('Are you sure you want to reboot the system? This will restart the device and temporarily interrupt all services.')) {
+                return;
+            }
+
+            this.rebootLoading = true;
+            
+            try {
+                const response = await fetch('/api/systemd/reboot', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to reboot system');
+                }
+                
+                const data = await response.json();
+                
+                // Show success message
+                window.dispatchEvent(new CustomEvent('show-message', {
+                    detail: { 
+                        message: data.message || 'System reboot initiated. The system will restart shortly.', 
+                        isError: false 
+                    }
+                }));
+                
+                // Keep the loading state since the system will reboot
+                // The page will become inaccessible, so no need to reset loading state
+                
+            } catch (err) {
+                this.rebootLoading = false;
+                
+                // Show error message
+                window.dispatchEvent(new CustomEvent('show-message', {
+                    detail: { 
+                        message: `Failed to reboot system: ${err.message}`, 
+                        isError: true 
+                    }
+                }));
+                
+                console.error('Reboot error:', err);
+            }
+        }
+    }
+}
+
+// Log Viewer Component for streaming journalctl logs
+function logViewer() {
+    return {
+        currentService: '',
+        logs: [],
+        isStreaming: false,
+        streamError: null,
+        autoScroll: true,
+        eventSource: null,
+        maxLogs: 1000, // Limit to prevent memory issues
+
+        init() {
+            // Listen for modal close event to cleanup
+            const modal = document.getElementById('logModal');
+            modal.addEventListener('hidden.bs.modal', () => {
+                this.stopStreaming();
+            });
+            
+            // Listen for modal shown event to scroll to bottom
+            modal.addEventListener('shown.bs.modal', () => {
+                setTimeout(() => {
+                    const container = document.getElementById('logContainer');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }, 100);
+            });
+        },
+
+        startStreaming(serviceName) {
+            this.currentService = serviceName;
+            this.logs = [];
+            this.streamError = null;
+            this.isStreaming = true;
+
+            try {
+                // Create event source for server-sent events
+                this.eventSource = new EventSource(`/api/systemd/logs/${encodeURIComponent(serviceName)}`);
+                
+                this.eventSource.onmessage = (event) => {
+                    const logLine = event.data;
+                    // Only add non-empty lines to avoid empty lines at the start
+                    if (logLine && logLine.trim()) {
+                        this.logs.push(logLine);
+                        
+                        // Keep only the last maxLogs entries to prevent memory issues
+                        if (this.logs.length > this.maxLogs) {
+                            this.logs = this.logs.slice(-this.maxLogs);
+                        }
+                        
+                        // Auto-scroll to bottom for new log entries
+                        if (this.autoScroll) {
+                            this.$nextTick(() => {
+                                const container = document.getElementById('logContainer');
+                                if (container) {
+                                    container.scrollTop = container.scrollHeight;
+                                }
+                            });
+                        }
+                    }
+                };
+
+                this.eventSource.onerror = (error) => {
+                    console.error('Log stream error:', error);
+                    this.streamError = 'Connection to log stream failed';
+                    this.isStreaming = false;
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
+                    }
+                };
+            } catch (error) {
+                console.error('Error starting log stream:', error);
+                this.streamError = 'Failed to start log streaming';
+                this.isStreaming = false;
+            }
+        },
+
+        stopStreaming() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+            this.isStreaming = false;
+        },
+
+        clearLogs() {
+            // Keep the last log line if there are any logs
+            if (this.logs.length > 0) {
+                this.logs = [this.logs[this.logs.length - 1]];
+            }
+        },
+
+        restartService() {
+            if (this.currentService) {
+                // Find the main status page component and call its performAction method
+                const statusPageElement = document.querySelector('[x-data*="statusPage"]');
+                if (statusPageElement && statusPageElement._x_dataStack) {
+                    const statusPageInstance = statusPageElement._x_dataStack[0];
+                    if (statusPageInstance && statusPageInstance.performAction) {
+                        statusPageInstance.performAction(this.currentService, 'restart');
+                    }
+                }
+            }
+        }
+    };
+}
