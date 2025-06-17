@@ -113,6 +113,8 @@ function configManager() {
         error: false,
         warning: false,
         expertMode: false,  // Add expert mode state
+        availableServices: [],  // List of services with config files available
+        servicesLoaded: false,  // Track if services have been loaded
 
         // URL parameter utilities
         getUrlParams() {
@@ -133,18 +135,21 @@ function configManager() {
             window.history.replaceState({}, '', currentUrl);
         },
 
-        init() {
+        async init() {
+            // Load available services first
+            await this.loadAvailableServices();
+            
             // Read expert mode from URL parameter
             const urlParams = this.getUrlParams();
             this.expertMode = urlParams.get('expert') === 'true';
 
             // Set initial active config based on URL hash
             const hash = window.location.hash.slice(1);
-            if (hash === 'radiotracking') {
+            if (hash === 'radiotracking' && this.isServiceAvailable('radiotracking')) {
                 this.activeConfig = 'radiotracking';
-            } else if (hash === 'schedule') {
+            } else if (hash === 'schedule' && this.isServiceAvailable('schedule')) {
                 this.activeConfig = 'schedule';
-            } else if (hash === 'soundscapepipe') {
+            } else if (hash === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe')) {
                 this.activeConfig = 'soundscapepipe';
             } else if (hash === 'status') {
                 this.activeConfig = 'status';
@@ -194,7 +199,10 @@ function configManager() {
             // Listen for hash changes
             window.addEventListener('hashchange', () => {
                 const hash = window.location.hash.slice(1);
-                if (hash === 'radiotracking' || hash === 'schedule' || hash === 'soundscapepipe' || hash === 'status') {
+                if (hash === 'status' || 
+                    (hash === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
+                    (hash === 'schedule' && this.isServiceAvailable('schedule')) ||
+                    (hash === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
                     this.activeConfig = hash;
                 }
             });
@@ -211,7 +219,10 @@ function configManager() {
                 
                 // Update active config based on hash
                 const hash = window.location.hash.slice(1);
-                if (hash === 'radiotracking' || hash === 'schedule' || hash === 'soundscapepipe' || hash === 'status') {
+                if (hash === 'status' || 
+                    (hash === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
+                    (hash === 'schedule' && this.isServiceAvailable('schedule')) ||
+                    (hash === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
                     this.activeConfig = hash;
                 }
             });
@@ -233,6 +244,29 @@ function configManager() {
             this.message = message;
             this.error = isError;
             this.warning = !isError && message.includes("No configuration found");
+        },
+
+        async loadAvailableServices() {
+            try {
+                const response = await fetch('/api/available-services');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.availableServices = data.available_services || [];
+                    this.servicesLoaded = true;
+                } else {
+                    console.error('Failed to load available services');
+                    this.availableServices = [];
+                    this.servicesLoaded = true;
+                }
+            } catch (error) {
+                console.error('Error loading available services:', error);
+                this.availableServices = [];
+                this.servicesLoaded = true;
+            }
+        },
+
+        isServiceAvailable(serviceName) {
+            return this.availableServices.includes(serviceName);
         },
 
         streamLogs(serviceName) {

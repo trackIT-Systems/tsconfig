@@ -14,6 +14,9 @@ from fastapi.templating import Jinja2Templates
 
 from app import __version__
 from app.routers import radiotracking, schedule, soundscapepipe, systemd, shell
+from app.configs.schedule import ScheduleConfig
+from app.configs.radiotracking import RadioTrackingConfig
+from app.configs.soundscapepipe import SoundscapepipeConfig
 
 app = FastAPI(title="tsOS Configuration")
 
@@ -183,3 +186,35 @@ def _get_hardware_info():
         pass
     
     return hardware_info
+
+
+@app.get("/api/available-services")
+async def get_available_services():
+    """Get list of services that have configuration files available."""
+    available_services = []
+    
+    # Check schedule configuration
+    try:
+        schedule_config = ScheduleConfig()
+        if schedule_config.config_file.exists():
+            available_services.append("schedule")
+    except Exception:
+        pass
+    
+    # Check radiotracking configuration
+    try:
+        radiotracking_config = RadioTrackingConfig()
+        if radiotracking_config.config_file.exists():
+            available_services.append("radiotracking")
+    except Exception:
+        pass
+    
+    # Check soundscapepipe configuration
+    try:
+        soundscapepipe_config = SoundscapepipeConfig()
+        if soundscapepipe_config.config_file.exists():
+            available_services.append("soundscapepipe")
+    except Exception:
+        pass
+    
+    return {"available_services": available_services}

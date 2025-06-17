@@ -14,7 +14,7 @@
                         <i class="fas fa-tachometer-alt me-1"></i>Status
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item" x-show="isServiceAvailable('schedule')">
                     <a class="nav-link" 
                        href="#schedule" 
                        @click.prevent="activeConfig = 'schedule'"
@@ -22,7 +22,7 @@
                         <i class="fas fa-calendar-alt me-1"></i>Schedule
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item" x-show="isServiceAvailable('radiotracking')">
                     <a class="nav-link" 
                        href="#radiotracking" 
                        @click.prevent="activeConfig = 'radiotracking'"
@@ -30,7 +30,7 @@
                         <i class="fas fa-broadcast-tower me-1"></i>Radio Tracking
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item" x-show="isServiceAvailable('soundscapepipe')">
                     <a class="nav-link" 
                        href="#soundscapepipe" 
                        @click.prevent="activeConfig = 'soundscapepipe'"

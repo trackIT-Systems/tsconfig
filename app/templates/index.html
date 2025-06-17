@@ -10,8 +10,8 @@
     </template>
 
     <!-- Schedule Section -->
-    <div x-show="activeConfig === 'schedule'" x-cloak>
-        <template x-if="activeConfig === 'schedule'">
+    <div x-show="activeConfig === 'schedule' && isServiceAvailable('schedule')" x-cloak>
+        <template x-if="activeConfig === 'schedule' && isServiceAvailable('schedule')">
             <div>
                 {% include 'schedule.html' %}
             </div>
@@ -19,8 +19,8 @@
     </div>
 
     <!-- Radio Tracking Section -->
-    <div x-show="activeConfig === 'radiotracking'" x-cloak>
-        <template x-if="activeConfig === 'radiotracking'">
+    <div x-show="activeConfig === 'radiotracking' && isServiceAvailable('radiotracking')" x-cloak>
+        <template x-if="activeConfig === 'radiotracking' && isServiceAvailable('radiotracking')">
             <div>
                 {% include 'radiotracking.html' %}
             </div>
@@ -28,8 +28,8 @@
     </div>
 
     <!-- Soundscapepipe Section -->
-    <div x-show="activeConfig === 'soundscapepipe'" x-cloak>
-        <template x-if="activeConfig === 'soundscapepipe'">
+    <div x-show="activeConfig === 'soundscapepipe' && isServiceAvailable('soundscapepipe')" x-cloak>
+        <template x-if="activeConfig === 'soundscapepipe' && isServiceAvailable('soundscapepipe')">
             <div>
                 {% include 'soundscapepipe.html' %}
             </div>
