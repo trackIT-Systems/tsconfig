@@ -68,7 +68,7 @@
     </div>
 </div>
 
-<!-- Include xterm.js and fit addon -->
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" /> 
+<!-- Include xterm.js and fit addon (local resources with source maps) -->
+<script src="{{ url_for('static', path='vendor/xterm/js/xterm.js') }}"></script>
+<script src="{{ url_for('static', path='vendor/xterm/js/xterm-addon-fit.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', path='vendor/xterm/css/xterm.min.css') }}" /> 
