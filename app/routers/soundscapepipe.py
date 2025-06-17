@@ -1,40 +1,15 @@
 """Soundscapepipe configuration endpoints."""
 
-import io
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import sounddevice as sd
-import yaml
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from app.configs.soundscapepipe import (
-    DetectorEntry,
-    GroupEntry,
-    LureTaskEntry,
-    ScheduleTaskEntry,
-    SoundscapepipeConfig,
-)
-
-router = APIRouter(prefix="/api/soundscapepipe", tags=["soundscapepipe"])
-
-# Initialize config
-soundscapepipe_config = SoundscapepipeConfig()
-
-
-def get_soundscapepipe_config() -> SoundscapepipeConfig:
-    """Get the current soundscapepipe configuration instance."""
-    global soundscapepipe_config
-    return soundscapepipe_config
-
-
-def reload_soundscapepipe_config():
-    """Reload the soundscapepipe configuration with updated paths."""
-    global soundscapepipe_config
-    soundscapepipe_config = SoundscapepipeConfig()
+from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.routers.base import BaseConfigRouter
 
 
 class SoundscapepipeConfigUpdate(BaseModel):
@@ -67,94 +42,27 @@ class SoundscapepipeConfigUpdate(BaseModel):
     groups: Optional[Dict[str, Any]] = None
 
 
-@router.post("/reload")
-async def reload_config():
-    """Reload the soundscapepipe configuration with updated file locations."""
-    try:
-        reload_soundscapepipe_config()
-        return {"message": "Soundscapepipe configuration reloaded successfully"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to reload soundscapepipe configuration: {str(e)}"
-        )
+# Create the router using the base class
+soundscapepipe_router = BaseConfigRouter(SoundscapepipeConfig, "soundscapepipe", "soundscapepipe")
+router = soundscapepipe_router.router
 
-
-@router.get("")
-async def get_soundscapepipe() -> Dict[str, Any]:
-    """Get the current soundscapepipe configuration."""
-    try:
-        config = get_soundscapepipe_config()
-        return config.load()
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Soundscapepipe configuration not found")
-
-
+# Override methods to use our specific model
 @router.put("")
-async def update_soundscapepipe(config: SoundscapepipeConfigUpdate) -> Dict[str, Any]:
-    """Update the soundscapepipe configuration."""
-    # Convert to dict for validation
+async def update_soundscapepipe(config: SoundscapepipeConfigUpdate):
     config_dict = config.model_dump()
-    
-    soundscapepipe_cfg = get_soundscapepipe_config()
-
-    # Validate the configuration
-    errors = soundscapepipe_cfg.validate(config_dict)
-    if errors:
-        raise HTTPException(
-            status_code=400, 
-            detail={"message": "Invalid soundscapepipe configuration", "errors": errors}
-        )
-
-    # Save the configuration
-    try:
-        soundscapepipe_cfg.save(config_dict)
-        return {"message": "Soundscapepipe configuration updated successfully", "config": config_dict}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    return soundscapepipe_router.update_config_helper(config_dict)
 
 @router.post("/validate")
-async def validate_soundscapepipe(config: SoundscapepipeConfigUpdate) -> Dict[str, Any]:
-    """Validate a soundscapepipe configuration without saving it."""
+async def validate_soundscapepipe(config: SoundscapepipeConfigUpdate):
     config_dict = config.model_dump()
-    soundscapepipe_cfg = get_soundscapepipe_config()
-    errors = soundscapepipe_cfg.validate(config_dict)
-
-    if errors:
-        return {"valid": False, "errors": errors}
-    return {"valid": True, "message": "Soundscapepipe configuration is valid"}
-
+    return soundscapepipe_router.validate_config_helper(config_dict)
 
 @router.post("/download")
-async def download_soundscapepipe(config: SoundscapepipeConfigUpdate) -> StreamingResponse:
-    """Download the soundscapepipe configuration as a YAML file without saving it."""
-    # Convert to dict for validation
+async def download_soundscapepipe(config: SoundscapepipeConfigUpdate):
     config_dict = config.model_dump()
-    
-    soundscapepipe_cfg = get_soundscapepipe_config()
+    return soundscapepipe_router.download_config_helper(config_dict)
 
-    # Validate the configuration
-    errors = soundscapepipe_cfg.validate(config_dict)
-    if errors:
-        raise HTTPException(
-            status_code=400, 
-            detail={"message": "Invalid soundscapepipe configuration", "errors": errors}
-        )
-
-    # Generate YAML content
-    yaml_content = yaml.safe_dump(config_dict, default_flow_style=False)
-
-    # Create a file-like object from the string
-    file_like = io.StringIO(yaml_content)
-
-    return StreamingResponse(
-        io.BytesIO(yaml_content.encode()),
-        media_type="application/x-yaml",
-        headers={"Content-Disposition": "attachment; filename=soundscapepipe.yml"},
-    )
-
-
+# Keep the special endpoints that are unique to soundscapepipe
 @router.get("/audio-devices")
 async def get_audio_devices() -> Dict[str, Any]:
     """Get available audio input and output devices."""
@@ -198,108 +106,94 @@ async def get_audio_devices() -> Dict[str, Any]:
             
             # Add to input devices if it has input channels
             if device["max_input_channels"] > 0:
-                device_info["is_default"] = (i == default_input)
-                input_devices.append(device_info.copy())
+                if i == default_input:
+                    device_info["is_default"] = True
+                input_devices.append(device_info)
             
             # Add to output devices if it has output channels
             if device["max_output_channels"] > 0:
-                device_info["is_default"] = (i == default_output)
-                output_devices.append(device_info.copy())
-        
-        # Get host API information for context
-        hostapis = []
-        for i, hostapi in enumerate(sd.query_hostapis()):
-            hostapis.append({
-                "index": i,
-                "name": hostapi["name"],
-                "default_input_device": hostapi.get("default_input_device"),
-                "default_output_device": hostapi.get("default_output_device"),
-                "device_count": hostapi.get("device_count", 0)
-            })
+                device_info_output = device_info.copy()
+                if i == default_output:
+                    device_info_output["is_default"] = True
+                output_devices.append(device_info_output)
         
         return {
-            "input_devices": input_devices,
-            "output_devices": output_devices,
-            "hostapis": hostapis,
-            "default_input_device": default_input,
-            "default_output_device": default_output,
-            "total_devices": len(devices)
+            "input": input_devices,
+            "output": output_devices,
+            "default_input": default_input,
+            "default_output": default_output
         }
         
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to query audio devices: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to query audio devices: {str(e)}")
 
 
 @router.get("/model-files")
 async def get_model_files() -> Dict[str, List[str]]:
-    """Get available model files for detectors."""
-    try:
-        result = {
-            "birdedge": [],
-            "yolobat": []
-        }
-        
-        # BirdEdge models - look for .onnx files in /home/pi/pybirdedge/birdedge/models/
-        birdedge_path = Path("/home/pi/pybirdedge/birdedge/models/")
-        if birdedge_path.exists() and birdedge_path.is_dir():
-            # Recursively find all .onnx files
-            for onnx_file in birdedge_path.rglob("*.onnx"):
-                result["birdedge"].append(str(onnx_file))
-        
-        # YOLOBat models - look for .xml files in /home/pi/yolobat/models/
-        yolobat_path = Path("/home/pi/yolobat/models/")
-        if yolobat_path.exists() and yolobat_path.is_dir():
-            # Recursively find all .xml files
-            for xml_file in yolobat_path.rglob("*.xml"):
-                result["yolobat"].append(str(xml_file))
-        
-        # Sort the lists for better UX
-        result["birdedge"].sort()
-        result["yolobat"].sort()
-        
-        return result
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to scan model files: {str(e)}"
-        )
+    """Get available model files for BirdEdge and YoloBat."""
+    model_files = {
+        "birdedge": [],
+        "yolobat": []
+    }
+    
+    # Look for BirdEdge models
+    birdedge_paths = [
+        "/home/pi/pybirdedge/birdedge/models",
+        "/opt/pybirdedge/models"
+    ]
+    
+    for base_path in birdedge_paths:
+        if os.path.exists(base_path):
+            for root, dirs, files in os.walk(base_path):
+                for file in files:
+                    if file.endswith('.onnx'):
+                        model_files["birdedge"].append(os.path.join(root, file))
+    
+    # Look for YoloBat models
+    yolobat_paths = [
+        "/home/pi/yolobat/models",
+        "/opt/yolobat/models"
+    ]
+    
+    for base_path in yolobat_paths:
+        if os.path.exists(base_path):
+            for root, dirs, files in os.walk(base_path):
+                for file in files:
+                    if file.endswith(('.xml', '.onnx')):
+                        model_files["yolobat"].append(os.path.join(root, file))
+    
+    return model_files
 
 
 @router.get("/lure-files")
 async def get_lure_files() -> Dict[str, Any]:
-    """Get available lure audio files and directories."""
-    try:
-        result = {
-            "directories": [],
-            "files": []
-        }
-        
-        lure_path = Path("/data/lure")
-        if lure_path.exists() and lure_path.is_dir():
-            # Common audio file extensions
-            audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma'}
+    """Get available lure files and directories."""
+    lure_base_paths = [
+        "/home/pi/lures",
+        "/opt/lures",
+        "/boot/firmware/lures"
+    ]
+    
+    directories = []
+    files = []
+    
+    for base_path in lure_base_paths:
+        if os.path.exists(base_path):
+            base_path_obj = Path(base_path)
             
-            # Recursively find all directories and audio files
-            for item in lure_path.rglob("*"):
+            # Get all directories
+            for item in base_path_obj.rglob("*"):
                 if item.is_dir():
-                    # Add directory path
-                    result["directories"].append(str(item) + "/")
-                elif item.is_file() and item.suffix.lower() in audio_extensions:
-                    # Add audio file path
-                    result["files"].append(str(item))
+                    directories.append(str(item))
             
-            # Sort the lists for better UX
-            result["directories"].sort()
-            result["files"].sort()
-        
-        return result
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to scan lure files: {str(e)}"
-        ) 
+            # Get all audio files
+            audio_extensions = ['.wav', '.mp3', '.flac', '.ogg', '.m4a']
+            for ext in audio_extensions:
+                for item in base_path_obj.rglob(f"*{ext}"):
+                    if item.is_file():
+                        files.append(str(item))
+    
+    return {
+        "directories": sorted(directories),
+        "files": sorted(files)
+    } 

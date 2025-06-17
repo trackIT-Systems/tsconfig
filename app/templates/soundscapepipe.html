@@ -72,11 +72,11 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
                                             </button>
                                         </div>
-                                        <template x-if="audioDevices.input_devices && audioDevices.input_devices.length > 0">
+                                        <template x-if="audioDevices.input && audioDevices.input.length > 0">
                                             <select class="form-select" 
                                                     @change="updateInputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
                                                 <option value="">Select input device...</option>
-                                                <template x-for="device in audioDevices.input_devices" :key="device.index">
+                                                <template x-for="device in audioDevices.input" :key="device.index">
                                                     <option :value="device.name" 
                                                             :data-sample-rate="device.default_sample_rate"
                                                             :data-max-channels="device.max_input_channels"
@@ -86,7 +86,7 @@
                                                 </template>
                                             </select>
                                         </template>
-                                        <template x-if="!audioDevices.input_devices || audioDevices.input_devices.length === 0">
+                                        <template x-if="!audioDevices.input || audioDevices.input.length === 0">
                                             <div class="text-muted">
                                                 <i class="fas fa-exclamation-triangle"></i> No input devices detected
                                             </div>
@@ -797,21 +797,21 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
                                             </button>
                                         </div>
-                                        <template x-if="audioDevices.output_devices && audioDevices.output_devices.length > 0">
+                                        <template x-if="audioDevices.output && audioDevices.output.length > 0">
                                             <select class="form-select" 
                                                     @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
                                                 <option value="">Select output device...</option>
-                                                <template x-for="device in audioDevices.output_devices" :key="device.index">
+                                                <template x-for="device in audioDevices.output" :key="device.index">
                                                     <option :value="device.name" 
                                                             :data-sample-rate="device.default_sample_rate"
-                                                        :data-max-channels="device.max_input_channels"
+                                                        :data-max-channels="device.max_output_channels"
                                                             :selected="config.output_device_match && config.output_device_match === device.name.split(':')[0].trim()"
                                                             x-text="device.name + (device.is_default ? ' (Default)' : '') + ' - ' + device.max_output_channels + ' channels @ ' + Math.round(device.default_sample_rate/1000) + 'kHz'">
                                                     </option>
                                                 </template>
                                             </select>
                                         </template>
-                                        <template x-if="!audioDevices.output_devices || audioDevices.output_devices.length === 0">
+                                        <template x-if="!audioDevices.output || audioDevices.output.length === 0">
                                             <div class="text-muted">
                                                 <i class="fas fa-exclamation-triangle"></i> No output devices detected
                                             </div>
