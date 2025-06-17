@@ -186,4 +186,122 @@ main {
         border: none;
         border-radius: 0;
     }
+}
+
+/* Shell modal styles */
+#shellContainer {
+    padding: 0 !important;
+}
+
+#terminal {
+    width: 100% !important;
+    height: 100% !important;
+    padding: 8px;
+}
+
+/* Override xterm.js styles for better integration */
+.xterm {
+    font-feature-settings: "liga" 0;
+    position: relative;
+    user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+}
+
+.xterm.focus,
+.xterm:focus {
+    outline: none;
+}
+
+.xterm .xterm-helpers {
+    position: absolute;
+    top: 0;
+    z-index: 5;
+}
+
+.xterm .xterm-helper-textarea {
+    position: absolute;
+    opacity: 0;
+    left: -9999em;
+    top: 0;
+    width: 0;
+    height: 0;
+    z-index: -5;
+    white-space: nowrap;
+    overflow: hidden;
+    resize: none;
+}
+
+.xterm .composition-view {
+    background: #000;
+    color: #FFF;
+    display: none;
+    position: absolute;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.xterm .composition-view.active {
+    display: block;
+}
+
+.xterm .xterm-viewport {
+    background-color: #000;
+    overflow-y: scroll;
+    cursor: default;
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.xterm .xterm-screen {
+    position: relative;
+}
+
+.xterm .xterm-screen canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.xterm .xterm-scroll-area {
+    visibility: hidden;
+}
+
+.xterm-char-measure-element {
+    display: inline-block;
+    visibility: hidden;
+    position: absolute;
+    top: 0;
+    left: -9999em;
+    line-height: normal;
+}
+
+.xterm .xterm-rows {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    overflow: hidden;
+}
+
+.xterm .xterm-rows > div {
+    white-space: pre;
+}
+
+/* Shell modal mobile optimization */
+@media (max-width: 991.98px) {
+    #shellModal .modal-dialog {
+        margin: 0 !important;
+        max-width: 100vw !important;
+        height: 100vh;
+    }
+    #shellModal .modal-content {
+        height: 100vh;
+        border: none;
+        border-radius: 0;
+    }
 } 

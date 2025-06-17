@@ -1,0 +1,74 @@
+<!-- Interactive Shell Modal -->
+<div class="modal fade" id="shellModal" tabindex="-1" aria-labelledby="shellModalLabel" aria-hidden="true" x-data="shellViewer()">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl" style="max-width: 95vw;" data-bs-keyboard="false">
+        <div class="modal-content d-flex flex-column" style="height: 85vh; max-height: 90vh;">
+            <!-- Full height on mobile, limited height on desktop -->
+            <style>
+                @media (max-width: 991.98px) {
+                    #shellModal .modal-content {
+                        height: 100vh !important;
+                        height: 100dvh !important;
+                        max-height: none !important;
+                    }
+                }
+            </style>
+            <div class="modal-header bg-dark text-white flex-shrink-0">
+                <h5 class="modal-title" id="shellModalLabel">
+                    <i class="fas fa-terminal me-2"></i>
+                    Interactive Shell
+                </h5>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="small">
+                        <span x-show="isConnected" class="text-success">
+                            <i class="fas fa-circle fa-xs me-1"></i>Connected
+                        </span>
+                        <span x-show="!isConnected && !isConnecting" class="text-secondary">
+                            <i class="fas fa-times-circle fa-xs me-1"></i>Disconnected
+                        </span>
+                        <span x-show="isConnecting" class="text-warning">
+                            <i class="fas fa-spinner fa-spin fa-xs me-1"></i>Connecting
+                        </span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0 flex-grow-1 d-flex flex-column rounded-bottom" style="min-height: 0;">
+                <!-- Terminal container -->
+                <div class="h-100 bg-black position-relative rounded-bottom" id="shellContainer">
+                    <!-- Empty state indicator -->
+                    <div x-show="!isConnected && !isConnecting" 
+                         class="position-absolute top-50 start-50 translate-middle text-center text-muted"
+                         style="cursor: pointer;" @click="connect()">
+                        <i class="fas fa-terminal fa-3x mb-3 d-block"></i>
+                        <p class="mb-0">Shell not connected</p>
+                        <small>Click to start a new terminal session</small>
+                    </div>
+                    <!-- Loading indicator -->
+                    <div x-show="isConnecting" 
+                         class="position-absolute top-50 start-50 translate-middle text-center text-muted">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mb-0">Connecting to shell...</p>
+                    </div>
+                    <!-- Error indicator -->
+                    <div x-show="connectionError" 
+                         class="position-absolute top-50 start-50 translate-middle text-center text-danger">
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3 d-block"></i>
+                        <p class="mb-2" x-text="connectionError"></p>
+                        <button class="btn btn-outline-primary btn-sm" @click="connect()">
+                            <i class="fas fa-redo me-1"></i>Retry
+                        </button>
+                    </div>
+                    <!-- Terminal will be mounted here -->
+                    <div id="terminal" class="h-100" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include xterm.js and fit addon -->
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" /> 
