@@ -3,23 +3,37 @@
 {% block content %}
 <div>
     <!-- Status Section -->
-    <div x-show="activeConfig === 'status'" x-cloak>
-        {% include 'status.html' %}
-    </div>
+    <template x-if="activeConfig === 'status'">
+        <div>
+            {% include 'status.html' %}
+        </div>
+    </template>
 
     <!-- Schedule Section -->
     <div x-show="activeConfig === 'schedule'" x-cloak>
-        {% include 'schedule.html' %}
+        <template x-if="activeConfig === 'schedule'">
+            <div>
+                {% include 'schedule.html' %}
+            </div>
+        </template>
     </div>
 
     <!-- Radio Tracking Section -->
     <div x-show="activeConfig === 'radiotracking'" x-cloak>
-        {% include 'radiotracking.html' %}
+        <template x-if="activeConfig === 'radiotracking'">
+            <div>
+                {% include 'radiotracking.html' %}
+            </div>
+        </template>
     </div>
 
     <!-- Soundscapepipe Section -->
     <div x-show="activeConfig === 'soundscapepipe'" x-cloak>
-        {% include 'soundscapepipe.html' %}
+        <template x-if="activeConfig === 'soundscapepipe'">
+            <div>
+                {% include 'soundscapepipe.html' %}
+            </div>
+        </template>
     </div>
 </div>
 {% endblock %} 

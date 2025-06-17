@@ -1,3 +1,41 @@
+
+// Shared System Config Manager - prevents duplicate API calls
+const systemConfigManager = {
+    config: null,
+    fetchPromise: null,
+    
+    async getSystemConfig() {
+        // If there's already a fetch in progress, return that promise
+        if (this.fetchPromise) {
+            return this.fetchPromise;
+        }
+        
+        // Return cached config if available
+        if (this.config) {
+            return this.config;
+        }
+        
+        // Create and store the fetch promise
+        this.fetchPromise = this.fetchSystemConfig();
+        
+        try {
+            const config = await this.fetchPromise;
+            this.config = config;
+            return config;
+        } finally {
+            this.fetchPromise = null;
+        }
+    },
+    
+    async fetchSystemConfig() {
+        const response = await fetch('/api/systemd/config/system');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    }
+};
+
 // Shared Service Manager - prevents duplicate API calls
 const serviceManager = {
     services: [],
@@ -27,7 +65,7 @@ const serviceManager = {
     // Get services with caching and deduplication
     async getServices(forceRefresh = false) {
         const now = Date.now();
-        const cacheValid = this.lastFetch && (now - this.lastFetch) < 2000; // 2 second cache
+        const cacheValid = this.lastFetch && (now - this.lastFetch) < 5000; // 5 second cache
         
         // Return cached data if valid and not forcing refresh
         if (!forceRefresh && cacheValid && this.services.length > 0) {
@@ -242,6 +280,9 @@ function scheduleConfig() {
         refreshInterval: null, // For periodic service status refresh
 
         async init() {
+            // Small delay to prevent simultaneous API calls during page load
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
             // Load configuration and set up periodic refresh
             await this.loadConfig();
             await this.setupPeriodicRefresh();
@@ -767,6 +808,9 @@ function radiotrackingConfig() {
         },
 
         async init() {
+            // Small delay to prevent simultaneous API calls during page load
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             // Load configuration and set up periodic refresh
             await this.loadConfig();
             await this.setupPeriodicRefresh();
@@ -1199,7 +1243,10 @@ function soundscapepipeConfig() {
         lureFiles: {},
         loadingLureFiles: false,
 
-        init() {
+        async init() {
+            // Small delay to prevent simultaneous API calls during page load
+            await new Promise(resolve => setTimeout(resolve, 150));
+            
             this.loadConfig();
             this.loadServiceStatus();
             this.loadAudioDevices();
@@ -1926,15 +1973,12 @@ function soundscapepipeConfig() {
 // Global function to get refresh interval for use across all configurations
 async function getSystemRefreshInterval() {
     try {
-        const response = await fetch('/api/systemd/config/system');
-        if (response.ok) {
-            const data = await response.json();
-            return data.status_refresh_interval || 30;
-        }
+        const data = await systemConfigManager.getSystemConfig();
+        return data.status_refresh_interval || 30;
     } catch (err) {
         console.warn('Failed to load system config, using default refresh interval:', err);
+        return 30; // Default fallback
     }
-    return 30; // Default fallback
 }
 
 function statusPage() {
@@ -2010,11 +2054,8 @@ function statusPage() {
 
         async loadSystemConfig() {
             try {
-                const response = await fetch('/api/systemd/config/system');
-                if (response.ok) {
-                    const data = await response.json();
-                    this.refreshIntervalSeconds = data.status_refresh_interval || 30;
-                }
+                const data = await systemConfigManager.getSystemConfig();
+                this.refreshIntervalSeconds = data.status_refresh_interval || 30;
             } catch (err) {
                 console.warn('Failed to load system config, using default refresh interval:', err);
                 // Keep default value of 30 seconds
