@@ -6,7 +6,30 @@ function configManager() {
         warning: false,
         expertMode: false,  // Add expert mode state
 
+        // URL parameter utilities
+        getUrlParams() {
+            return new URLSearchParams(window.location.search);
+        },
+
+        updateUrlParams(params) {
+            const currentUrl = new URL(window.location);
+            Object.entries(params).forEach(([key, value]) => {
+                if (value === null || value === undefined || value === false) {
+                    currentUrl.searchParams.delete(key);
+                } else {
+                    currentUrl.searchParams.set(key, value);
+                }
+            });
+            
+            // Update URL without reloading the page
+            window.history.replaceState({}, '', currentUrl);
+        },
+
         init() {
+            // Read expert mode from URL parameter
+            const urlParams = this.getUrlParams();
+            this.expertMode = urlParams.get('expert') === 'true';
+
             // Set initial active config based on URL hash
             const hash = window.location.hash.slice(1);
             if (hash === 'radiotracking') {
@@ -20,6 +43,14 @@ function configManager() {
             } else {
                 this.activeConfig = 'status';  // Default to status
             }
+
+            // Watch for expert mode changes and update URL
+            this.$watch('expertMode', (value, oldValue) => {
+                // Only update URL if this isn't the initial load
+                if (oldValue !== undefined) {
+                    this.updateUrlParams({ expert: value || null });
+                }
+            });
 
             // Update URL hash when active config changes
             this.$watch('activeConfig', (value) => {
@@ -54,6 +85,23 @@ function configManager() {
 
             // Listen for hash changes
             window.addEventListener('hashchange', () => {
+                const hash = window.location.hash.slice(1);
+                if (hash === 'radiotracking' || hash === 'schedule' || hash === 'soundscapepipe' || hash === 'status') {
+                    this.activeConfig = hash;
+                }
+            });
+
+            // Listen for browser navigation changes (back/forward buttons)
+            window.addEventListener('popstate', () => {
+                const urlParams = this.getUrlParams();
+                const newExpertMode = urlParams.get('expert') === 'true';
+                
+                // Update expert mode if it changed via browser navigation
+                if (this.expertMode !== newExpertMode) {
+                    this.expertMode = newExpertMode;
+                }
+                
+                // Update active config based on hash
                 const hash = window.location.hash.slice(1);
                 if (hash === 'radiotracking' || hash === 'schedule' || hash === 'soundscapepipe' || hash === 'status') {
                     this.activeConfig = hash;
