@@ -331,27 +331,27 @@
                                             <div class="progress mb-2">
                                                 <!-- Actual Used memory (green) -->
                                                 <div class="progress-bar bg-success" 
-                                                        :style="`width: ${Math.min(100, ((systemInfo.memory.virtual.used - systemInfo.memory.virtual.buffers - systemInfo.memory.virtual.cached) / systemInfo.memory.virtual.total * 100))}%`">
+                                                        :style="`width: ${Math.min(100, Math.max(0, ((systemInfo.memory.virtual.used || 0) - (systemInfo.memory.virtual.buffers || 0) - (systemInfo.memory.virtual.cached || 0)) / Math.max(1, systemInfo.memory.virtual.total || 1) * 100))}%`">
                                                 </div>
                                                 <!-- Buffers (blue) -->
                                                 <div class="progress-bar bg-primary" 
-                                                        :style="`width: ${Math.min(100, (systemInfo.memory.virtual.buffers / systemInfo.memory.virtual.total * 100))}%`">
+                                                        :style="`width: ${Math.min(100, Math.max(0, (systemInfo.memory.virtual.buffers || 0) / Math.max(1, systemInfo.memory.virtual.total || 1) * 100))}%`">
                                                 </div>
                                                 <!-- Cache (yellow/orange) -->
                                                 <div class="progress-bar bg-warning" 
-                                                        :style="`width: ${Math.min(100, (systemInfo.memory.virtual.cached / systemInfo.memory.virtual.total * 100))}%`">
+                                                        :style="`width: ${Math.min(100, Math.max(0, (systemInfo.memory.virtual.cached || 0) / Math.max(1, systemInfo.memory.virtual.total || 1) * 100))}%`">
                                                 </div>
                                             </div>
                                             <small class="text-muted">
                                                 <div class="d-flex justify-content-between mb-1">
                                                     <span>Memory:</span>
                                                     <span>
-                                                        <span class="badge bg-success me-1" x-text="`Used: ${formatBytes(systemInfo.memory.virtual.used - systemInfo.memory.virtual.buffers - systemInfo.memory.virtual.cached)}`"></span>
-                                                        <span class="badge bg-primary me-1" x-text="`Buffers: ${formatBytes(systemInfo.memory.virtual.buffers)}`"></span>
-                                                        <span class="badge bg-warning" x-text="`Cache: ${formatBytes(systemInfo.memory.virtual.cached)}`"></span>
+                                                        <span class="badge bg-success me-1" x-text="`Used: ${formatBytes((systemInfo.memory.virtual.used || 0) - (systemInfo.memory.virtual.buffers || 0) - (systemInfo.memory.virtual.cached || 0))}`"></span>
+                                                        <span class="badge bg-primary me-1" x-text="`Buffers: ${formatBytes(systemInfo.memory.virtual.buffers || 0)}`"></span>
+                                                        <span class="badge bg-warning" x-text="`Cache: ${formatBytes(systemInfo.memory.virtual.cached || 0)}`"></span>
                                                     </span>
                                                 </div>
-                                                <span x-text="`${formatBytes(systemInfo.memory.virtual.used)} / ${formatBytes(systemInfo.memory.virtual.total)} (${(systemInfo.memory.virtual.percent || 0).toFixed(1)}%)`"></span>
+                                                <span x-text="`${formatBytes(systemInfo.memory.virtual.used || 0)} / ${formatBytes(systemInfo.memory.virtual.total || 0)} (${(systemInfo.memory.virtual.percent || 0).toFixed(1)}%)`"></span>
                                             </small>
                                         </div>
                                     </template>
