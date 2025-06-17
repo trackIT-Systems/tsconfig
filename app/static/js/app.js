@@ -1999,8 +1999,13 @@ function statusPage() {
         actionError: false,
         // Reboot functionality
         rebootLoading: false,
+        // Reboot protection functionality
+        rebootProtectionEnabled: false,
+        rebootProtectionLoading: false,
 
         async initStatus() {
+            // Load reboot protection status
+            await this.loadRebootProtectionStatus();
             // Load system configuration first to get refresh interval
             await this.loadSystemConfig();
             await this.refreshStatus();
@@ -2251,6 +2256,75 @@ function statusPage() {
                 }));
                 
                 console.error('Reboot error:', err);
+            }
+        },
+
+        // Reboot protection methods
+        async loadRebootProtectionStatus() {
+            try {
+                const response = await fetch('/api/systemd/reboot-protection');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                this.rebootProtectionEnabled = data.enabled;
+            } catch (err) {
+                console.error('Failed to load reboot protection status:', err);
+                // Don't show error to user, just log it
+            }
+        },
+
+        async toggleRebootProtection() {
+            this.rebootProtectionLoading = true;
+            
+            try {
+                const response = await fetch('/api/systemd/reboot-protection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        enabled: this.rebootProtectionEnabled
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to toggle reboot protection');
+                }
+                
+                const data = await response.json();
+                
+                // Show success message
+                this.actionMessage = data.message || `Reboot protection ${this.rebootProtectionEnabled ? 'enabled' : 'disabled'}`;
+                this.actionError = false;
+                
+                // Show warnings if any
+                if (data.warnings && data.warnings.length > 0) {
+                    this.actionMessage += ` (Warnings: ${data.warnings.join(', ')})`;
+                }
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                }, 5000);
+                
+            } catch (err) {
+                // Revert the toggle state on error
+                this.rebootProtectionEnabled = !this.rebootProtectionEnabled;
+                
+                this.actionMessage = `Failed to toggle reboot protection: ${err.message}`;
+                this.actionError = true;
+                console.error('Reboot protection toggle error:', err);
+                
+                // Clear error message after 10 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                    this.actionError = false;
+                }, 10000);
+            } finally {
+                this.rebootProtectionLoading = false;
             }
         }
     }

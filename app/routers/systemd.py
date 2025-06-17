@@ -536,4 +536,211 @@ async def stream_service_logs(service_name: str):
             "Connection": "keep-alive",
             "Content-Type": "text/event-stream"
         }
-    ) 
+    )
+
+
+class RebootProtectionStatus(BaseModel):
+    """Reboot protection status model."""
+    enabled: bool
+    services: List[str] = Field(default_factory=list, description="Services with reboot protection")
+
+
+class RebootProtectionToggle(BaseModel):
+    """Reboot protection toggle model."""
+    enabled: bool
+
+
+def get_services_with_reboot_action() -> List[str]:
+    """Get list of services that have StartLimitAction=reboot configured."""
+    services_to_check = ["radiotracking", "soundscapepipe"]
+    services_with_reboot = []
+    
+    for service in services_to_check:
+        try:
+            result = subprocess.run(
+                ["systemctl", "cat", f"{service}.service"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0 and "StartLimitAction=reboot" in result.stdout:
+                services_with_reboot.append(service)
+        except Exception:
+            continue
+    
+    return services_with_reboot
+
+
+def is_reboot_protection_enabled() -> bool:
+    """Check if reboot protection is currently enabled by checking for override directories."""
+    services_to_check = ["radiotracking", "soundscapepipe"]
+    
+    for service in services_to_check:
+        override_dir = Path(f"/etc/systemd/system/{service}.service.d")
+        override_file = override_dir / "reboot-protection.conf"
+        
+        if override_file.exists():
+            try:
+                content = override_file.read_text()
+                if "StartLimitAction=none" in content:
+                    return True
+            except Exception:
+                continue
+    
+    return False
+
+
+def create_service_override(service_name: str) -> bool:
+    """Create a systemd service override to disable reboot action."""
+    try:
+        override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
+        override_file = override_dir / "reboot-protection.conf"
+        
+        # Create override directory
+        result = subprocess.run(
+            ["sudo", "mkdir", "-p", str(override_dir)],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode != 0:
+            return False
+        
+        # Create override file content
+        override_content = """[Service]
+StartLimitAction=none
+"""
+        
+        # Write override file
+        result = subprocess.run(
+            ["sudo", "tee", str(override_file)],
+            input=override_content,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        return result.returncode == 0
+        
+    except Exception:
+        return False
+
+
+def remove_service_override(service_name: str) -> bool:
+    """Remove systemd service override file."""
+    try:
+        override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
+        override_file = override_dir / "reboot-protection.conf"
+        
+        # Remove override file
+        if override_file.exists():
+            result = subprocess.run(
+                ["sudo", "rm", str(override_file)],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                return False
+        
+        # Remove directory if empty
+        try:
+            override_dir.rmdir()
+        except OSError:
+            # Directory not empty, that's fine
+            pass
+        
+        return True
+        
+    except Exception:
+        return False
+
+
+@router.get("/reboot-protection", response_model=RebootProtectionStatus)
+async def get_reboot_protection_status():
+    """Get current reboot protection status."""
+    try:
+        enabled = is_reboot_protection_enabled()
+        services_with_reboot = get_services_with_reboot_action()
+        
+        return RebootProtectionStatus(
+            enabled=enabled,
+            services=services_with_reboot
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get reboot protection status: {str(e)}")
+
+
+@router.post("/reboot-protection")
+async def toggle_reboot_protection(toggle: RebootProtectionToggle):
+    """Enable or disable reboot protection for services."""
+    try:
+        services_to_protect = ["radiotracking", "soundscapepipe"]
+        success = True
+        errors = []
+        
+        for service in services_to_protect:
+            if toggle.enabled:
+                if not create_service_override(service):
+                    success = False
+                    errors.append(f"Failed to create override for {service}")
+            else:
+                if not remove_service_override(service):
+                    success = False
+                    errors.append(f"Failed to remove override for {service}")
+        
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Some operations failed: {', '.join(errors)}")
+        
+        # Reload systemd daemon
+        result = subprocess.run(
+            ["sudo", "systemctl", "daemon-reload"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail="Failed to reload systemd daemon")
+        
+        # Restart services to apply changes
+        for service in services_to_protect:
+            try:
+                # Check if service exists and is active before restarting
+                status_result = subprocess.run(
+                    ["systemctl", "is-active", service],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                
+                if status_result.returncode == 0:  # Service is active
+                    restart_result = subprocess.run(
+                        ["sudo", "systemctl", "restart", service],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    
+                    if restart_result.returncode != 0:
+                        errors.append(f"Failed to restart {service}")
+            except Exception as e:
+                errors.append(f"Error restarting {service}: {str(e)}")
+        
+        if errors:
+            return {
+                "message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} with warnings",
+                "warnings": errors
+            }
+        
+        return {
+            "message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to toggle reboot protection: {str(e)}") 
