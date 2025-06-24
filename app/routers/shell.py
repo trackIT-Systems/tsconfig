@@ -53,7 +53,7 @@ def get_user_shell() -> str:
 class PtyProcess:
     """Manages a pseudo-terminal process for interactive shell sessions."""
     
-    def __init__(self, command: str = None):
+    def __init__(self, command: Optional[str] = None):
         self.command = command or get_user_shell()
         self.pid = None
         self.fd = None
@@ -69,7 +69,14 @@ class PtyProcess:
             self.pid, self.fd = pty.fork()
             
             if self.pid == 0:
-                # Child process - execute the shell
+                # Child process - change to home directory and execute the shell
+                try:
+                    # Change to user's home directory
+                    home_dir = os.path.expanduser('~')
+                    os.chdir(home_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to change to home directory: {e}")
+                
                 os.execvp(self.command, [self.command])
             else:
                 # Parent process - we have the file descriptor
