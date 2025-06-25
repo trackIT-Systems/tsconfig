@@ -1234,12 +1234,12 @@ function soundscapepipeConfig() {
             channels: 1,
             detectors: {
                 birdedge: {
-                    detection_threshold: 0.3,
-                    class_threshold: 0.0,
+                    detection_threshold: 0.0,
+                    class_threshold: 0.3,
                     tasks: []
                 },
                 yolobat: {
-                    detection_threshold: 0.3,
+                    class_threshold: 0.3,
                     model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml",
                     tasks: []
                 },
@@ -1345,7 +1345,7 @@ function soundscapepipeConfig() {
                         detectors.birdedge = { enabled: false, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", tasks: [] };
                     }
                     
-                    // YOLOBat detector - enabled if present in config, disabled if not present
+                                        // YOLOBat detector - enabled if present in config, disabled if not present
                     if (detectors.yolobat) {
                         detectors.yolobat.enabled = detectors.yolobat.enabled !== undefined ? detectors.yolobat.enabled : true;
                         detectors.yolobat.tasks = detectors.yolobat.tasks || [];
@@ -1354,12 +1354,17 @@ function soundscapepipeConfig() {
                             this.parseDetectorTaskTimeString(task, task.start, 'start');
                             this.parseDetectorTaskTimeString(task, task.stop, 'stop');
                         });
-                        // Remove class_threshold if it exists (YoloBat only supports detection)
-                        if (detectors.yolobat.class_threshold !== undefined) {
-                            delete detectors.yolobat.class_threshold;
+                        // Use class_threshold if available, otherwise use detection_threshold for backwards compatibility
+                        if (detectors.yolobat.class_threshold === undefined && detectors.yolobat.detection_threshold !== undefined) {
+                            detectors.yolobat.class_threshold = detectors.yolobat.detection_threshold;
                         }
+                        // Ensure class_threshold exists with default value
+                        if (detectors.yolobat.class_threshold === undefined) {
+                            detectors.yolobat.class_threshold = 0.3;
+                        }
+ 
                     } else {
-                        detectors.yolobat = { enabled: false, detection_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", tasks: [] };
+                        detectors.yolobat = { enabled: false, class_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", tasks: [] };
                     }
                     
                     // Static detector (schedule) - enabled if present in config, disabled if not present
@@ -1462,8 +1467,8 @@ function soundscapepipeConfig() {
                 if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
                     configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
                     delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
-                    // Remove class_threshold if it exists (YoloBat only supports detection)
-                    delete configToSave.detectors.yolobat.class_threshold;
+                    // Set both thresholds to the same value from class_threshold
+                    configToSave.detectors.yolobat.detection_threshold = this.config.detectors.yolobat.class_threshold;
                     // Remove schedule if it exists (YoloBat doesn't use schedule property)
                     delete configToSave.detectors.yolobat.schedule;
                     // Clean up tasks - convert UI components back to time strings
@@ -1561,8 +1566,8 @@ function soundscapepipeConfig() {
                 if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
                     configToDownload.detectors.yolobat = { ...this.config.detectors.yolobat };
                     delete configToDownload.detectors.yolobat.enabled; // Remove the enabled flag from downloaded config
-                    // Remove class_threshold if it exists (YoloBat only supports detection)
-                    delete configToDownload.detectors.yolobat.class_threshold;
+                    // Set both thresholds to the same value from class_threshold
+                    configToDownload.detectors.yolobat.detection_threshold = this.config.detectors.yolobat.class_threshold;
                     // Remove schedule if it exists (YoloBat doesn't use schedule property)
                     delete configToDownload.detectors.yolobat.schedule;
                     // Clean up tasks - convert UI components back to time strings
