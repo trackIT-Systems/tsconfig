@@ -1276,6 +1276,8 @@ function soundscapepipeConfig() {
         loadingModels: false,
         lureFiles: {},
         loadingLureFiles: false,
+        speciesData: {},
+        loadingSpecies: false,
 
         async init() {
             // Small delay to prevent simultaneous API calls during page load
@@ -1289,6 +1291,7 @@ function soundscapepipeConfig() {
             this.loadServiceStatus();
             this.loadAudioDevices();
             this.loadLureFiles();
+            this.loadSpeciesData();
             
             // Auto-refresh service status every 30 seconds when tab is active
             this.refreshInterval = setInterval(() => {
@@ -1889,6 +1892,24 @@ function soundscapepipeConfig() {
             }
         },
 
+        async loadSpeciesData() {
+            this.loadingSpecies = true;
+            try {
+                const response = await fetch('/api/soundscapepipe/species');
+                if (response.ok) {
+                    this.speciesData = await response.json();
+                } else {
+                    console.error('Failed to load species data');
+                    this.speciesData = { birdedge: [], yolobat: [] };
+                }
+            } catch (error) {
+                console.error('Error loading species data:', error);
+                this.speciesData = { birdedge: [], yolobat: [] };
+            } finally {
+                this.loadingSpecies = false;
+            }
+        },
+
         // Detector task management methods
         updateDetectorTaskTimeString(detectorName, task, type) {
             const reference = task[`${type}Reference`];
@@ -2023,6 +2044,114 @@ function soundscapepipeConfig() {
 
         removeLureTaskPath(taskIndex, pathIndex) {
             this.config.lure.tasks[taskIndex].paths.splice(pathIndex, 1);
+        },
+
+        // Species group management methods
+        addGroup() {
+            if (!this.config.groups) {
+                this.config.groups = {};
+            }
+            
+            const groupName = `group_${Object.keys(this.config.groups).length + 1}`;
+            this.config.groups[groupName] = {
+                ratio: 0.0,
+                maximize_confidence: false,
+                length_s: this.config.length_s || 20,
+                species: ['']
+            };
+        },
+
+        removeGroup(groupName) {
+            if (this.config.groups && this.config.groups[groupName]) {
+                delete this.config.groups[groupName];
+            }
+        },
+
+        renameGroup(oldName, newName) {
+            if (!newName || newName === oldName || !this.config.groups || !this.config.groups[oldName]) {
+                return;
+            }
+            
+            // Check if new name already exists
+            if (this.config.groups[newName]) {
+                this.showMessage(`Group name "${newName}" already exists!`, true);
+                return;
+            }
+            
+            // Create new group with new name
+            this.config.groups[newName] = { ...this.config.groups[oldName] };
+            
+            // Delete old group
+            delete this.config.groups[oldName];
+        },
+
+        addSpeciesToGroup(groupName) {
+            if (!this.config.groups || !this.config.groups[groupName]) {
+                return;
+            }
+            
+            if (!this.config.groups[groupName].species) {
+                this.config.groups[groupName].species = [];
+            }
+            
+            this.config.groups[groupName].species.push('');
+        },
+
+        removeSpeciesFromGroup(groupName, speciesIndex) {
+            if (!this.config.groups || !this.config.groups[groupName] || !this.config.groups[groupName].species) {
+                return;
+            }
+            
+            this.config.groups[groupName].species.splice(speciesIndex, 1);
+        },
+
+        updateSpeciesInput(event, groupName, speciesIndex) {
+            const inputValue = event.target.value;
+            
+            // If user typed a common name (English or German), convert to scientific name
+            if (this.speciesData.birdedge) {
+                for (const species of this.speciesData.birdedge) {
+                    // Check if input matches English or German name
+                    if (species.english && species.english.toLowerCase() === inputValue.toLowerCase()) {
+                        this.config.groups[groupName].species[speciesIndex] = species.scientific;
+                        break;
+                    }
+                    if (species.german && species.german.toLowerCase() === inputValue.toLowerCase()) {
+                        this.config.groups[groupName].species[speciesIndex] = species.scientific;
+                        break;
+                    }
+                }
+            }
+        },
+
+        findSpeciesByAnyName(searchTerm) {
+            if (!this.speciesData.birdedge || !searchTerm) {
+                return null;
+            }
+            
+            const term = searchTerm.toLowerCase();
+            return this.speciesData.birdedge.find(species => 
+                species.scientific.toLowerCase() === term ||
+                (species.english && species.english.toLowerCase() === term) ||
+                (species.german && species.german.toLowerCase() === term)
+            );
+        },
+
+        getSpeciesDisplayText(species) {
+            if (!species) return '';
+            
+            let display = species.scientific;
+            
+            // Add common names in parentheses if available
+            const commonNames = [];
+            if (species.english) commonNames.push(species.english);
+            if (species.german) commonNames.push(species.german);
+            
+            if (commonNames.length > 0) {
+                display += ` (${commonNames.join(' / ')})`;
+            }
+            
+            return display;
         }
     }
 }

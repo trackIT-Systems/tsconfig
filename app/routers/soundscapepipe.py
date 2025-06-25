@@ -1,6 +1,7 @@
 """Soundscapepipe configuration endpoints."""
 
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +13,14 @@ from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.routers.base import BaseConfigRouter
 
 
+class SpeciesGroup(BaseModel):
+    """Species group configuration model."""
+    ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
+    maximize_confidence: Optional[bool] = None
+    length_s: Optional[int] = Field(None, gt=0)
+    species: List[str] = Field(default_factory=list)
+
+
 class SoundscapepipeConfigUpdate(BaseModel):
     """Soundscapepipe configuration update model."""
     
@@ -21,6 +30,8 @@ class SoundscapepipeConfigUpdate(BaseModel):
     lon: float = Field(..., ge=-180, le=180)
     input_device_match: Optional[str] = None
     sample_rate: Optional[int] = Field(None, gt=0)
+    input_length_s: Optional[float] = Field(None, gt=0)
+    channels: Optional[int] = Field(None, gt=0)
     
     # Detectors section
     detectors: Dict[str, Any] = Field(default_factory=dict)
@@ -38,8 +49,8 @@ class SoundscapepipeConfigUpdate(BaseModel):
     length_s: Optional[int] = Field(None, gt=0)
     maximize_confidence: Optional[bool] = None
     
-    # Groups section
-    groups: Optional[Dict[str, Any]] = None
+    # Groups section - now properly typed
+    groups: Optional[Dict[str, SpeciesGroup]] = None
 
 
 # Create the router using the base class
@@ -196,4 +207,89 @@ async def get_lure_files() -> Dict[str, Any]:
     return {
         "directories": sorted(directories),
         "files": sorted(files)
-    } 
+    }
+
+
+@router.get("/species")
+async def get_species() -> Dict[str, Any]:
+    """Get available species information from detection models."""
+    species_data = {
+        "birdedge": [],
+        "yolobat": []
+    }
+    
+    # Load BirdEdge species with multi-language support
+    base_paths = [
+        "/home/pi/pybirdedge/birdedge/etc/",
+        "/opt/pybirdedge/etc/"
+    ]
+    
+    for base_path in base_paths:
+        if os.path.exists(base_path):
+            try:
+                # Load scientific names from sci2i.json
+                sci2i_path = os.path.join(base_path, "sci2i.json")
+                eng2sci_path = os.path.join(base_path, "eng2sci.json")
+                ger2sci_path = os.path.join(base_path, "ger2sci.json")
+                
+                scientific_names = set()
+                eng_to_sci = {}
+                ger_to_sci = {}
+                sci_to_eng = {}
+                sci_to_ger = {}
+                
+                # Load scientific names
+                if os.path.exists(sci2i_path):
+                    with open(sci2i_path, 'r', encoding='utf-8') as f:
+                        sci2i_data = json.load(f)
+                        if isinstance(sci2i_data, dict):
+                            scientific_names.update(sci2i_data.keys())
+                
+                # Load English to Scientific mapping
+                if os.path.exists(eng2sci_path):
+                    with open(eng2sci_path, 'r', encoding='utf-8') as f:
+                        eng2sci_data = json.load(f)
+                        if isinstance(eng2sci_data, dict):
+                            eng_to_sci.update(eng2sci_data)
+                            # Create reverse mapping (sci to eng)
+                            for eng, sci in eng2sci_data.items():
+                                if sci in scientific_names:  # Only include if species exists in model
+                                    sci_to_eng[sci] = eng
+                
+                # Load German to Scientific mapping
+                if os.path.exists(ger2sci_path):
+                    with open(ger2sci_path, 'r', encoding='utf-8') as f:
+                        ger2sci_data = json.load(f)
+                        if isinstance(ger2sci_data, dict):
+                            ger_to_sci.update(ger2sci_data)
+                            # Create reverse mapping (sci to ger)
+                            for ger, sci in ger2sci_data.items():
+                                if sci in scientific_names:  # Only include if species exists in model
+                                    sci_to_ger[sci] = ger
+                
+                # Create comprehensive species list with all name variants
+                species_list = []
+                for sci_name in sorted(scientific_names):
+                    eng_name = sci_to_eng.get(sci_name, "")
+                    ger_name = sci_to_ger.get(sci_name, "")
+                    
+                    species_entry = {
+                        "scientific": sci_name,
+                        "english": eng_name,
+                        "german": ger_name,
+                        "display": f"{sci_name}" + (f" ({eng_name})" if eng_name else "") + (f" / {ger_name}" if ger_name else ""),
+                        "searchable": " ".join(filter(None, [sci_name, eng_name, ger_name])).lower()
+                    }
+                    species_list.append(species_entry)
+                
+                species_data["birdedge"] = species_list
+                break  # Use the first path that works
+                
+            except (json.JSONDecodeError, IOError) as e:
+                # Continue to next path if this one fails
+                continue
+    
+    # TODO: Add YoloBat species when available
+    # For now, YoloBat species list remains empty
+    
+    return species_data

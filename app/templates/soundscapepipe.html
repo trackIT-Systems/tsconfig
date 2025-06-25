@@ -770,12 +770,134 @@
                                 Define species groups with custom recording ratios and confidence settings. Groups allow you to prioritize certain species for recording.
                             </div>
                             <div class="mb-3">
-                                <template x-if="Object.keys(config.groups || {}).length === 0">
+                                <template x-for="(group, groupName) in config.groups" :key="groupName">
+                                    <div class="bg-light rounded-2 p-3 mb-3">
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
+                                            <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                <i class="fas fa-layer-group text-primary me-2"></i>
+                                                <input type="text" 
+                                                       class="form-control form-control-sm fw-medium" 
+                                                       :value="groupName"
+                                                       @input="renameGroup(groupName, $event.target.value)"
+                                                       placeholder="Enter group name..." 
+                                                       required>
+                                            </div>
+                                            <button type="button" 
+                                                    class="btn btn-outline-danger btn-sm" 
+                                                    @click="removeGroup(groupName)"
+                                                    title="Remove group">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Group Settings -->
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-4">
+                                                <div class="form-check form-switch mb-2">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           x-model="group.maximize_confidence" 
+                                                           :id="'group-maximize-' + groupName">
+                                                    <label class="form-check-label small" :for="'group-maximize-' + groupName">
+                                                        Maximize Confidence
+                                                    </label>
+                                                </div>
+                                                <div class="form-text small">Record highest confidence detections per day</div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Recording Ratio: <span x-text="(group.ratio || 0).toFixed(2)"></span></label>
+                                                <input type="range" 
+                                                       class="form-range" 
+                                                       x-model.number="group.ratio"
+                                                       min="0.0"
+                                                       max="1.0"
+                                                       step="0.01"
+                                                       :disabled="group.maximize_confidence">
+                                                <div class="form-text small" :class="{ 'text-muted': group.maximize_confidence }">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Recording Length: <span x-text="group.length_s || config.length_s || 20"></span> seconds</label>
+                                                <input type="range" 
+                                                       class="form-range" 
+                                                       x-model.number="group.length_s"
+                                                       min="1"
+                                                       max="60"
+                                                       step="1">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Species List -->
+                                        <div class="mb-3">
+                                            <label class="form-label small mb-2">Species in Group</label>
+                                            <div class="form-text small mb-2">
+                                                Add species by scientific name, English name, or German name (e.g., "Tyto alba", "Barn Owl", or "Schleiereule"). 
+                                                Start typing to see suggestions from BirdEdge model. Common names will be automatically converted to scientific names.
+                                                <template x-if="loadingSpecies">
+                                                    <span class="text-muted"><i class="fas fa-spinner fa-spin ms-1"></i> Loading species...</span>
+                                                </template>
+                                            </div>
+                                            
+                                            <template x-for="(species, speciesIndex) in group.species" :key="speciesIndex">
+                                                <div class="mb-2">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div class="flex-grow-1">
+                                                            <input type="text" 
+                                                                   class="form-control form-control-sm" 
+                                                                   x-model="group.species[speciesIndex]"
+                                                                   :list="'species-list-' + groupName + '-' + speciesIndex"
+                                                                   @input="updateSpeciesInput($event, groupName, speciesIndex)"
+                                                                   placeholder="Enter species name (e.g., Tyto alba, Barn Owl, Schleiereule)">
+                                                            <datalist :id="'species-list-' + groupName + '-' + speciesIndex">
+                                                                <template x-for="species in (speciesData.birdedge || [])" :key="species.scientific">
+                                                                    <option :value="species.scientific" 
+                                                                            x-text="getSpeciesDisplayText(species)"></option>
+                                                                </template>
+                                                            </datalist>
+                                                        </div>
+                                                        <button type="button" 
+                                                                class="btn btn-outline-secondary btn-sm" 
+                                                                @click="loadSpeciesData()"
+                                                                :disabled="loadingSpecies"
+                                                                title="Refresh species list">
+                                                            <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingSpecies }"></i>
+                                                        </button>
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm" 
+                                                                @click="removeSpeciesFromGroup(groupName, speciesIndex)"
+                                                                title="Remove species"
+                                                                :disabled="group.species.length <= 1">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            
+                                            <button type="button" 
+                                                    class="btn btn-outline-secondary btn-sm" 
+                                                    @click="addSpeciesToGroup(groupName)">
+                                                <i class="fas fa-plus me-1"></i>
+                                                Add Species
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <template x-if="!config.groups || Object.keys(config.groups).length === 0">
                                     <div class="text-muted text-center py-2">
                                         <i class="fas fa-info-circle me-1"></i>
                                         No species groups configured. Advanced feature for targeted recording strategies.
                                     </div>
                                 </template>
+                                
+                                <div class="mt-3">
+                                    <button type="button" 
+                                            class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                            @click="addGroup()">
+                                        <i class="fas fa-plus me-2"></i>
+                                        Add Species Group
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
