@@ -2480,15 +2480,48 @@ function logViewer() {
             }
         },
 
-        restartService() {
-            if (this.currentService) {
-                // Find the main status page component and call its performAction method
-                const statusPageElement = document.querySelector('[x-data*="statusPage"]');
-                if (statusPageElement && statusPageElement._x_dataStack) {
-                    const statusPageInstance = statusPageElement._x_dataStack[0];
-                    if (statusPageInstance && statusPageInstance.performAction) {
-                        statusPageInstance.performAction(this.currentService, 'restart');
-                    }
+        async restartService() {
+            if (!this.currentService) return;
+            
+            try {
+                // Call the systemd API directly
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: this.currentService,
+                        action: 'restart'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to restart ${this.currentService} service`);
+                }
+                
+                // Show success message if there's a way to display it
+                // Try to find any component with showMessage method
+                const configComponent = document.querySelector('[x-data*="Config"]');
+                if (configComponent && configComponent._x_dataStack && configComponent._x_dataStack[0].showMessage) {
+                    configComponent._x_dataStack[0].showMessage(`${data.message}`, false);
+                } else {
+                    // Fallback to console log
+                    console.log(`Service restart: ${data.message}`);
+                }
+                
+            } catch (error) {
+                console.error('Failed to restart service:', error);
+                
+                // Show error message if there's a way to display it
+                const configComponent = document.querySelector('[x-data*="Config"]');
+                if (configComponent && configComponent._x_dataStack && configComponent._x_dataStack[0].showMessage) {
+                    configComponent._x_dataStack[0].showMessage(error.message, true);
+                } else {
+                    // Fallback to alert
+                    alert(`Failed to restart service: ${error.message}`);
                 }
             }
         }
