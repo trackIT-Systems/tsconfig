@@ -169,9 +169,8 @@ async def get_model_files() -> Dict[str, List[str]]:
 async def get_lure_files() -> Dict[str, Any]:
     """Get available lure files and directories."""
     lure_base_paths = [
-        "/home/pi/lures",
-        "/opt/lures",
-        "/boot/firmware/lures"
+        "/data/lure",
+        "/home/pi/lure",
     ]
     
     directories = []
@@ -181,13 +180,14 @@ async def get_lure_files() -> Dict[str, Any]:
         if os.path.exists(base_path):
             base_path_obj = Path(base_path)
             
-            # Get all directories
+            # Get all directories (including the base path itself)
+            directories.append(str(base_path_obj))
             for item in base_path_obj.rglob("*"):
                 if item.is_dir():
                     directories.append(str(item))
             
             # Get all audio files
-            audio_extensions = ['.wav', '.mp3', '.flac', '.ogg', '.m4a']
+            audio_extensions = ['.wav', '.mp3', '.flac', '.ogg', '.m4a', '.WAV', '.MP3', '.FLAC', '.OGG', '.M4A']
             for ext in audio_extensions:
                 for item in base_path_obj.rglob(f"*{ext}"):
                     if item.is_file():
