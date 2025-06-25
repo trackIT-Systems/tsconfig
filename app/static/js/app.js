@@ -1281,10 +1281,13 @@ function soundscapepipeConfig() {
             // Small delay to prevent simultaneous API calls during page load
             await new Promise(resolve => setTimeout(resolve, 150));
             
+            // Load model files first to ensure dropdown options are available
+            await this.loadModelFiles();
+            
+            // Then load config and other data
             this.loadConfig();
             this.loadServiceStatus();
             this.loadAudioDevices();
-            this.loadModelFiles();
             this.loadLureFiles();
             
             // Auto-refresh service status every 30 seconds when tab is active
@@ -1677,8 +1680,23 @@ function soundscapepipeConfig() {
         },
 
         streamLogs(serviceName) {
-            // Dispatch to parent component
-            this.$dispatch('streamLogs', { serviceName });
+            // Show the log modal directly
+            const modal = new bootstrap.Modal(document.getElementById('logModal'));
+            // Get the log viewer instance and start streaming
+            const logViewerEl = document.getElementById('logModal');
+            if (logViewerEl && logViewerEl._x_dataStack) {
+                const logViewerInstance = logViewerEl._x_dataStack[0];
+                logViewerInstance.startStreaming(serviceName);
+            }
+            modal.show();
+            
+            // Scroll to bottom after modal is shown and content is rendered
+            setTimeout(() => {
+                const container = document.getElementById('logContainer');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, 250);
         },
 
         initMap() {

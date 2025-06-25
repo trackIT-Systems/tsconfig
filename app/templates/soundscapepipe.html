@@ -201,22 +201,25 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
                                             </button>
                                         </div>
-                                        <template x-if="!expertMode">
-                                            <select class="form-select" 
-                                                    x-model="config.detectors.birdedge.model_path">
-                                                <option value="">Select BirdEdge model...</option>
-                                                <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
-                                                    <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
-                                                </template>
-                                                <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
-                                            </select>
-                                        </template>
-                                        <template x-if="expertMode">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   x-model="config.detectors.birdedge.model_path"
-                                                   placeholder="Enter custom path: /path/to/model.onnx">
-                                        </template>
+                                        <select class="form-select" 
+                                                x-model="config.detectors.birdedge.model_path"
+                                                x-show="!expertMode">
+                                            <option value="">Select BirdEdge model...</option>
+                                            <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
+                                                <option :value="modelPath" x-text="modelPath"></option>
+                                            </template>
+                                            <!-- Show current value if it's not in the list -->
+                                            <template x-if="config.detectors.birdedge.model_path && !(modelFiles.birdedge || []).includes(config.detectors.birdedge.model_path)">
+                                                <option :value="config.detectors.birdedge.model_path" 
+                                                        x-text="config.detectors.birdedge.model_path + ' (custom)'"></option>
+                                            </template>
+                                            <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
+                                        </select>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               x-model="config.detectors.birdedge.model_path"
+                                               x-show="expertMode"
+                                               placeholder="Enter custom path: /path/to/model.onnx">
                                         <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
                                     </div>
                                 </div>
@@ -383,22 +386,25 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
                                             </button>
                                         </div>
-                                        <template x-if="!expertMode">
-                                            <select class="form-select" 
-                                                    x-model="config.detectors.yolobat.model_path">
-                                                <option value="">Select YOLOBat model...</option>
-                                                <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
-                                                    <option :value="modelPath" x-text="modelPath.split('/').pop()"></option>
-                                                </template>
-                                                <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
-                                            </select>
-                                        </template>
-                                        <template x-if="expertMode">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   x-model="config.detectors.yolobat.model_path"
-                                                   placeholder="Enter custom path: /path/to/model.xml">
-                                        </template>
+                                        <select class="form-select" 
+                                                x-model="config.detectors.yolobat.model_path"
+                                                x-show="!expertMode">
+                                            <option value="">Select YOLOBat model...</option>
+                                            <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
+                                                <option :value="modelPath" x-text="modelPath"></option>
+                                            </template>
+                                            <!-- Show current value if it's not in the list -->
+                                            <template x-if="config.detectors.yolobat.model_path && !(modelFiles.yolobat || []).includes(config.detectors.yolobat.model_path)">
+                                                <option :value="config.detectors.yolobat.model_path" 
+                                                        x-text="config.detectors.yolobat.model_path + ' (custom)'"></option>
+                                            </template>
+                                            <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
+                                        </select>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               x-model="config.detectors.yolobat.model_path"
+                                               x-show="expertMode"
+                                               placeholder="Enter custom path: /path/to/model.xml">
                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
                                     </div>
                                 </div>
