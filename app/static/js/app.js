@@ -1339,6 +1339,10 @@ function soundscapepipeConfig() {
                     if (detectors.birdedge) {
                         detectors.birdedge.enabled = detectors.birdedge.enabled !== undefined ? detectors.birdedge.enabled : true;
                         detectors.birdedge.tasks = detectors.birdedge.tasks || [];
+                        // Ensure tasks is always an array, not null
+                        if (!Array.isArray(detectors.birdedge.tasks)) {
+                            detectors.birdedge.tasks = [];
+                        }
                         // Parse existing task time strings into UI components
                         detectors.birdedge.tasks.forEach(task => {
                             this.parseDetectorTaskTimeString(task, task.start, 'start');
@@ -1352,6 +1356,10 @@ function soundscapepipeConfig() {
                     if (detectors.yolobat) {
                         detectors.yolobat.enabled = detectors.yolobat.enabled !== undefined ? detectors.yolobat.enabled : true;
                         detectors.yolobat.tasks = detectors.yolobat.tasks || [];
+                        // Ensure tasks is always an array, not null
+                        if (!Array.isArray(detectors.yolobat.tasks)) {
+                            detectors.yolobat.tasks = [];
+                        }
                         // Parse existing task time strings into UI components
                         detectors.yolobat.tasks.forEach(task => {
                             this.parseDetectorTaskTimeString(task, task.start, 'start');
@@ -1374,6 +1382,10 @@ function soundscapepipeConfig() {
                     if (detectors.schedule) {
                         detectors.schedule.enabled = detectors.schedule.enabled !== undefined ? detectors.schedule.enabled : true;
                         detectors.schedule.tasks = detectors.schedule.tasks || [];
+                        // Ensure tasks is always an array, not null
+                        if (!Array.isArray(detectors.schedule.tasks)) {
+                            detectors.schedule.tasks = [];
+                        }
                         // Parse existing task time strings into UI components
                         detectors.schedule.tasks.forEach(task => {
                             this.parseDetectorTaskTimeString(task, task.start, 'start');
@@ -1385,7 +1397,11 @@ function soundscapepipeConfig() {
 
                     // Handle lure tasks - parse existing time strings into UI components
                     const lure = data.lure || { tasks: [] };
-                    if (lure.tasks) {
+                    // Ensure tasks is always an array, not null
+                    if (!Array.isArray(lure.tasks)) {
+                        lure.tasks = [];
+                    }
+                    if (lure.tasks && lure.tasks.length > 0) {
                         lure.tasks.forEach(task => {
                             this.parseLureTaskTimeString(task, task.start, 'start');
                             this.parseLureTaskTimeString(task, task.stop, 'stop');
@@ -1527,22 +1543,30 @@ function soundscapepipeConfig() {
                     });
                 }
 
-                // Clean up lure tasks - convert UI components back to time strings
+                // Clean up lure tasks - convert UI components back to time strings and filter out empty tasks
                 if (configToSave.lure && configToSave.lure.tasks) {
+                    // Filter out tasks that don't have a species name (empty/incomplete tasks)
+                    const validTasks = configToSave.lure.tasks.filter(task => 
+                        task && task.species && task.species.trim() !== ''
+                    );
+                    
                     // Create a new array to avoid modifying the original that UI is bound to
                     configToSave.lure = {
                         ...configToSave.lure,
-                        tasks: configToSave.lure.tasks.map(task => {
+                        tasks: validTasks.map(task => {
                             const cleanTask = { 
                                 species: task.species, 
-                                paths: task.paths,
-                                start: task.start, 
-                                stop: task.stop,
+                                paths: task.paths || [''],
+                                start: task.start || '00:00', 
+                                stop: task.stop || '00:00',
                                 record: Boolean(task.record)
                             };
                             return cleanTask;
                         })
                     };
+                } else if (configToSave.lure) {
+                    // Ensure tasks is always an empty array, not null
+                    configToSave.lure.tasks = [];
                 }
 
                 // Clean up groups - remove null/undefined values and filter empty species
@@ -1651,18 +1675,26 @@ function soundscapepipeConfig() {
                     }
                 }
 
-                // Clean up lure tasks - convert UI components back to time strings
+                // Clean up lure tasks - convert UI components back to time strings and filter out empty tasks
                 if (configToDownload.lure && configToDownload.lure.tasks) {
-                    configToDownload.lure.tasks = configToDownload.lure.tasks.map(task => {
+                    // Filter out tasks that don't have a species name (empty/incomplete tasks)
+                    const validTasks = configToDownload.lure.tasks.filter(task => 
+                        task && task.species && task.species.trim() !== ''
+                    );
+                    
+                    configToDownload.lure.tasks = validTasks.map(task => {
                         const cleanTask = { 
                             species: task.species, 
-                            paths: task.paths,
-                            start: task.start, 
-                            stop: task.stop,
+                            paths: task.paths || [''],
+                            start: task.start || '00:00', 
+                            stop: task.stop || '00:00',
                             record: Boolean(task.record)
                         };
                         return cleanTask;
                     });
+                } else if (configToDownload.lure) {
+                    // Ensure tasks is always an empty array, not null
+                    configToDownload.lure.tasks = [];
                 }
 
                 // Clean up groups - remove null/undefined values and filter empty species
