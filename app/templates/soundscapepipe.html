@@ -1,4 +1,22 @@
 <!-- Soundscapepipe Configuration -->
+<style>
+    /* Custom styling for form-range inputs in species groups */
+    .bg-light .form-range::-webkit-slider-track {
+        background: #ffffff !important;
+    }
+    .bg-light .form-range::-moz-range-track {
+        background: #ffffff !important;
+    }
+    .bg-light .form-range::-ms-track {
+        background: #ffffff !important;
+    }
+    .bg-light .form-range::-webkit-slider-runnable-track {
+        background: #ffffff !important;
+    }
+    .bg-light .form-range::-moz-range-progress {
+        background: #ffffff !important;
+    }
+</style>
 <div x-show="activeConfig === 'soundscapepipe'" x-cloak>
     <div class="row">
         <div class="col-12">
@@ -386,6 +404,7 @@
                                         </div>
                                         <select class="form-select" 
                                                 x-model="config.detectors.yolobat.model_path"
+                                                @change="loadYoloBatLabels()"
                                                 x-show="!expertMode">
                                             <option value="">Select YOLOBat model...</option>
                                             <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
@@ -401,6 +420,7 @@
                                         <input type="text" 
                                                class="form-control" 
                                                x-model="config.detectors.yolobat.model_path"
+                                               @change="loadYoloBatLabels()"
                                                x-show="expertMode"
                                                placeholder="Enter custom path: /path/to/model.xml">
                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
@@ -778,7 +798,8 @@
                                                 <input type="text" 
                                                        class="form-control form-control-sm fw-medium" 
                                                        :value="groupName"
-                                                       @input="renameGroup(groupName, $event.target.value)"
+                                                       @blur="renameGroup(groupName, $event.target.value)"
+                                                       @keydown.enter="$event.target.blur()"
                                                        placeholder="Enter group name..." 
                                                        required>
                                             </div>
@@ -812,7 +833,8 @@
                                                        min="0.0"
                                                        max="1.0"
                                                        step="0.01"
-                                                       :disabled="group.maximize_confidence">
+                                                       :disabled="group.maximize_confidence"
+                                                       x-effect="$el.disabled = group.maximize_confidence">
                                                 <div class="form-text small" :class="{ 'text-muted': group.maximize_confidence }">
                                                 </div>
                                             </div>
@@ -831,8 +853,9 @@
                                         <div class="mb-3">
                                             <label class="form-label small mb-2">Species in Group</label>
                                             <div class="form-text small mb-2">
-                                                Add species by scientific name, English name, or German name (e.g., "Tyto alba", "Barn Owl", or "Schleiereule"). 
-                                                Start typing to see suggestions from BirdEdge model. Common names will be automatically converted to scientific names.
+                                                Enter the exact classifier label or select from suggestions. 
+                                                BirdEdge uses scientific names (e.g., "Tyto alba"), YoloBat uses abbreviations (e.g., "Ppip"). 
+                                                Start typing to see available options with translations. Only species for enabled detectors are shown.
                                                 <template x-if="loadingSpecies">
                                                     <span class="text-muted"><i class="fas fa-spinner fa-spin ms-1"></i> Loading species...</span>
                                                 </template>
@@ -847,11 +870,21 @@
                                                                    x-model="group.species[speciesIndex]"
                                                                    :list="'species-list-' + groupName + '-' + speciesIndex"
                                                                    @input="updateSpeciesInput($event, groupName, speciesIndex)"
-                                                                   placeholder="Enter species name (e.g., Tyto alba, Barn Owl, Schleiereule)">
+                                                                   placeholder="Enter classifier label (e.g., Tyto alba, Ppip)">
                                                             <datalist :id="'species-list-' + groupName + '-' + speciesIndex">
-                                                                <template x-for="species in (speciesData.birdedge || [])" :key="species.scientific">
-                                                                    <option :value="species.scientific" 
-                                                                            x-text="getSpeciesDisplayText(species)"></option>
+                                                                <!-- BirdEdge species (only if enabled) -->
+                                                                <template x-if="config.detectors.birdedge?.enabled">
+                                                                    <template x-for="species in (speciesData.birdedge || [])" :key="'birdedge-' + species.scientific">
+                                                                        <option :value="species.scientific" 
+                                                                                x-text="getConsistentSpeciesDisplayText(species, 'BirdEdge')"></option>
+                                                                    </template>
+                                                                </template>
+                                                                <!-- YoloBat species (only if enabled) -->
+                                                                <template x-if="config.detectors.yolobat?.enabled">
+                                                                    <template x-for="species in (speciesData.yolobat || [])" :key="'yolobat-' + species.modelLabel">
+                                                                        <option :value="species.modelLabel" 
+                                                                                x-text="getConsistentSpeciesDisplayText(species, 'YoloBat')"></option>
+                                                                    </template>
                                                                 </template>
                                                             </datalist>
                                                         </div>

@@ -2,6 +2,7 @@
 
 import os
 import json
+import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -289,7 +290,156 @@ async def get_species() -> Dict[str, Any]:
                 # Continue to next path if this one fails
                 continue
     
-    # TODO: Add YoloBat species when available
-    # For now, YoloBat species list remains empty
+    # Load YoloBat species from JSON file (now with abbreviations as keys)
+    try:
+        yolobat_species_path = os.path.join(os.path.dirname(__file__), "..", "data", "yolobat_species.json")
+        if os.path.exists(yolobat_species_path):
+            with open(yolobat_species_path, 'r', encoding='utf-8') as f:
+                yolobat_species_mapping = json.load(f)
+                
+            # Create species list with display information
+            yolobat_species_list = []
+            for abbreviation, data in yolobat_species_mapping.items():
+                scientific = data.get('scientific', abbreviation)
+                english = data.get('english', '')
+                german = data.get('german', '')
+                
+                species_entry = {
+                    "scientific": scientific,
+                    "english": english,
+                    "german": german,
+                    "modelLabel": abbreviation,  # Store the abbreviation for model use
+                    "display": f"{scientific}" + (f" ({english})" if english else "") + (f" / {german}" if german else ""),
+                    "searchable": " ".join(filter(None, [scientific, english, german, abbreviation])).lower()
+                }
+                yolobat_species_list.append(species_entry)
+            
+            species_data["yolobat"] = sorted(yolobat_species_list, key=lambda x: x["scientific"])
+    except (json.JSONDecodeError, IOError) as e:
+        # If loading fails, keep yolobat empty
+        species_data["yolobat"] = []
     
     return species_data
+
+
+@router.get("/yolobat-labels")
+async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
+    """Get available labels for a specific YoloBat model from its metadata.yaml file."""
+    try:
+        if not model_path:
+            raise HTTPException(status_code=400, detail="Model path is required")
+        
+        # Ensure the model path exists
+        if not os.path.exists(model_path):
+            raise HTTPException(status_code=404, detail=f"Model file not found: {model_path}")
+        
+        # Get the directory containing the model file
+        model_dir = os.path.dirname(model_path)
+        metadata_path = os.path.join(model_dir, "metadata.yaml")
+        
+        # Check if metadata.yaml exists
+        if not os.path.exists(metadata_path):
+            raise HTTPException(status_code=404, detail=f"Metadata file not found: {metadata_path}")
+        
+        # Load and parse the metadata.yaml file
+        try:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                metadata = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to parse metadata.yaml: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read metadata.yaml: {str(e)}")
+        
+        # Extract labels from metadata
+        labels = []
+        if isinstance(metadata, dict):
+            # Look for labels in common locations in the metadata structure
+            if 'labels' in metadata:
+                labels = metadata['labels']
+            elif 'classes' in metadata:
+                labels = metadata['classes']
+            elif 'names' in metadata:
+                labels = metadata['names']
+            elif 'species' in metadata:
+                labels = metadata['species']
+            else:
+                # If no common label field found, return the entire metadata for inspection
+                return {
+                    "labels": [],
+                    "raw_metadata": metadata,
+                    "message": "No standard label field found in metadata. Check raw_metadata for available fields."
+                }
+        
+        # Ensure labels is a list
+        if not isinstance(labels, list):
+            if isinstance(labels, dict):
+                # If labels is a dict, try to extract values or keys
+                if all(isinstance(v, str) for v in labels.values()):
+                    labels = list(labels.values())
+                elif all(isinstance(k, (str, int)) for k in labels.keys()):
+                    labels = list(labels.keys())
+                else:
+                    labels = []
+            else:
+                labels = []
+        
+        # Convert to list of strings and filter out empty values
+        clean_labels = []
+        for label in labels:
+            if isinstance(label, str) and label.strip():
+                clean_labels.append(label.strip())
+            elif isinstance(label, (int, float)):
+                clean_labels.append(str(label))
+        
+        # Load YoloBat species mapping to enhance labels with common names
+        enhanced_labels = []
+        yolobat_species_mapping = {}
+        
+        try:
+            # Load species mapping (abbreviation -> species data)
+            yolobat_species_path = os.path.join(os.path.dirname(__file__), "..", "data", "yolobat_species.json")
+            if os.path.exists(yolobat_species_path):
+                with open(yolobat_species_path, 'r', encoding='utf-8') as f:
+                    yolobat_species_mapping = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            # If loading fails, continue with empty mapping
+            pass
+        
+        # Enhance labels with species information
+        for label in clean_labels:
+            # Look up the label directly in the mapping (labels are now keys)
+            if label in yolobat_species_mapping:
+                species_data = yolobat_species_mapping[label]
+                scientific_name = species_data.get('scientific', label)
+                enhanced_label = {
+                    "scientific": scientific_name,
+                    "english": species_data.get('english', ''),
+                    "german": species_data.get('german', ''),
+                    "display": f"{scientific_name}" + (f" ({species_data.get('english', '')})" if species_data.get('english') else "") + (f" / {species_data.get('german', '')}" if species_data.get('german') else ""),
+                    "searchable": " ".join(filter(None, [scientific_name, species_data.get('english', ''), species_data.get('german', ''), label])).lower()
+                }
+            else:
+                # No mapping found, use original label (could be unknown species or non-species like feeding-buzz)
+                enhanced_label = {
+                    "scientific": label,
+                    "english": "",
+                    "german": "",
+                    "display": label,
+                    "searchable": label.lower()
+                }
+            enhanced_labels.append(enhanced_label)
+        
+        return {
+            "labels": clean_labels,
+            "enhanced_labels": enhanced_labels,
+            "model_path": model_path,
+            "metadata_path": metadata_path,
+            "total_labels": len(clean_labels),
+            "enhanced_count": len([l for l in enhanced_labels if l["english"] or l["german"]])
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load YoloBat labels: {str(e)}")

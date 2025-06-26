@@ -1420,6 +1420,23 @@ function soundscapepipeConfig() {
                         maximize_confidence: data.maximize_confidence || false,
                         groups: data.groups || {}
                     };
+                    
+                    // Initialize group ratios and recording lengths with global values if not set
+                    const globalRatio = this.config.ratio;
+                    const globalLength = this.config.length_s;
+                    Object.keys(this.config.groups).forEach(groupName => {
+                        const group = this.config.groups[groupName];
+                        if (group.ratio === undefined || group.ratio === null) {
+                            group.ratio = globalRatio;
+                        }
+                        if (group.length_s === undefined || group.length_s === null) {
+                            group.length_s = globalLength;
+                        }
+                        // Ensure maximize_confidence is always a boolean
+                        if (group.maximize_confidence === undefined || group.maximize_confidence === null) {
+                            group.maximize_confidence = false;
+                        }
+                    });
                     this.configLoaded = true;
                 } else if (response.status === 404) {
                     // No configuration found, use defaults
@@ -1449,6 +1466,13 @@ function soundscapepipeConfig() {
 
         async saveConfig() {
             try {
+                // Validate species groups first
+                const speciesErrors = this.validateSpeciesGroups();
+                if (speciesErrors.length > 0) {
+                    this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
+                    return;
+                }
+
                 // Create a copy of the config and filter out disabled detectors
                 const configToSave = { ...this.config };
                 
@@ -1521,6 +1545,32 @@ function soundscapepipeConfig() {
                     };
                 }
 
+                // Clean up groups - remove null/undefined values and filter empty species
+                if (configToSave.groups) {
+                    configToSave.groups = {};
+                    Object.keys(this.config.groups).forEach(groupName => {
+                        const group = this.config.groups[groupName];
+                        const cleanGroup = {
+                            species: (group.species || []).filter(species => species && species.trim() !== '')
+                        };
+                        
+                        // Only include ratio if it's not null/undefined
+                        if (group.ratio !== null && group.ratio !== undefined) {
+                            cleanGroup.ratio = group.ratio;
+                        }
+                        
+                        // Only include length_s if it's not null/undefined
+                        if (group.length_s !== null && group.length_s !== undefined) {
+                            cleanGroup.length_s = group.length_s;
+                        }
+                        
+                        // Always include maximize_confidence as a boolean
+                        cleanGroup.maximize_confidence = Boolean(group.maximize_confidence);
+                        
+                        configToSave.groups[groupName] = cleanGroup;
+                    });
+                }
+
 
 
                 const response = await fetch('/api/soundscapepipe', {
@@ -1548,6 +1598,13 @@ function soundscapepipeConfig() {
 
         async downloadConfig() {
             try {
+                // Validate species groups first
+                const speciesErrors = this.validateSpeciesGroups();
+                if (speciesErrors.length > 0) {
+                    this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
+                    return;
+                }
+
                 // Create a copy of the config and filter out disabled detectors
                 const configToDownload = { ...this.config };
                 
@@ -1605,6 +1662,32 @@ function soundscapepipeConfig() {
                             record: Boolean(task.record)
                         };
                         return cleanTask;
+                    });
+                }
+
+                // Clean up groups - remove null/undefined values and filter empty species
+                if (configToDownload.groups) {
+                    configToDownload.groups = {};
+                    Object.keys(this.config.groups).forEach(groupName => {
+                        const group = this.config.groups[groupName];
+                        const cleanGroup = {
+                            species: (group.species || []).filter(species => species && species.trim() !== '')
+                        };
+                        
+                        // Only include ratio if it's not null/undefined
+                        if (group.ratio !== null && group.ratio !== undefined) {
+                            cleanGroup.ratio = group.ratio;
+                        }
+                        
+                        // Only include length_s if it's not null/undefined
+                        if (group.length_s !== null && group.length_s !== undefined) {
+                            cleanGroup.length_s = group.length_s;
+                        }
+                        
+                        // Always include maximize_confidence as a boolean
+                        cleanGroup.maximize_confidence = Boolean(group.maximize_confidence);
+                        
+                        configToDownload.groups[groupName] = cleanGroup;
                     });
                 }
 
@@ -1902,11 +1985,59 @@ function soundscapepipeConfig() {
                     console.error('Failed to load species data');
                     this.speciesData = { birdedge: [], yolobat: [] };
                 }
+                
+                // Load YoloBat labels if a model is selected
+                await this.loadYoloBatLabels();
             } catch (error) {
                 console.error('Error loading species data:', error);
                 this.speciesData = { birdedge: [], yolobat: [] };
             } finally {
                 this.loadingSpecies = false;
+            }
+        },
+
+        async loadYoloBatLabels() {
+            try {
+                // Get the selected YoloBat model path
+                const modelPath = this.config.detectors.yolobat?.model_path;
+                if (!modelPath) {
+                    // No model selected, keep yolobat labels empty
+                    this.speciesData.yolobat = [];
+                    return;
+                }
+
+                const response = await fetch(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    // Use enhanced labels if available, otherwise fallback to basic labels
+                    if (data.enhanced_labels && data.enhanced_labels.length > 0) {
+                        // Map enhanced labels to include the original model label for storage
+                        this.speciesData.yolobat = data.enhanced_labels.map((enhanced, index) => ({
+                            scientific: enhanced.scientific,
+                            english: enhanced.english,
+                            german: enhanced.german,
+                            display: enhanced.display,
+                            searchable: enhanced.searchable,
+                            modelLabel: data.labels[index] // Store the original model label (e.g., "Ppip")
+                        }));
+                    } else {
+                        // Fallback to basic labels if no enhanced data available
+                        this.speciesData.yolobat = data.labels.map(label => ({
+                            scientific: label,
+                            english: "",
+                            german: "",
+                            display: label,
+                            searchable: label.toLowerCase(),
+                            modelLabel: label
+                        }));
+                    }
+                } else {
+                    console.error('Failed to load YoloBat labels');
+                    this.speciesData.yolobat = [];
+                }
+            } catch (error) {
+                console.error('Error loading YoloBat labels:', error);
+                this.speciesData.yolobat = [];
             }
         },
 
@@ -2106,22 +2237,10 @@ function soundscapepipeConfig() {
         },
 
         updateSpeciesInput(event, groupName, speciesIndex) {
+            // Simply store whatever the user typed - no automatic conversion
+            // The datalist will provide the correct values for selection
             const inputValue = event.target.value;
-            
-            // If user typed a common name (English or German), convert to scientific name
-            if (this.speciesData.birdedge) {
-                for (const species of this.speciesData.birdedge) {
-                    // Check if input matches English or German name
-                    if (species.english && species.english.toLowerCase() === inputValue.toLowerCase()) {
-                        this.config.groups[groupName].species[speciesIndex] = species.scientific;
-                        break;
-                    }
-                    if (species.german && species.german.toLowerCase() === inputValue.toLowerCase()) {
-                        this.config.groups[groupName].species[speciesIndex] = species.scientific;
-                        break;
-                    }
-                }
-            }
+            this.config.groups[groupName].species[speciesIndex] = inputValue;
         },
 
         findSpeciesByAnyName(searchTerm) {
@@ -2152,6 +2271,82 @@ function soundscapepipeConfig() {
             }
             
             return display;
+        },
+
+        getConsistentSpeciesDisplayText(species, classifier) {
+            if (!species) return '';
+            
+            // Format: "Scientific name, English name, German name (Classifier)"
+            let parts = [species.scientific];
+            
+            if (species.english) {
+                parts.push(species.english);
+            }
+            
+            if (species.german) {
+                parts.push(species.german);
+            }
+            
+            let display = parts.join(', ');
+            display += ` (${classifier})`;
+            
+            return display;
+        },
+
+        validateSpeciesGroups() {
+            const errors = [];
+            
+            if (!this.config.groups) {
+                return errors;
+            }
+            
+            // Get valid species lists for enabled detectors
+            const validBirdEdgeSpecies = new Set();
+            const validYoloBatSpecies = new Set();
+            
+            if (this.config.detectors.birdedge?.enabled && this.speciesData.birdedge) {
+                this.speciesData.birdedge.forEach(species => {
+                    validBirdEdgeSpecies.add(species.scientific);
+                });
+            }
+            
+            if (this.config.detectors.yolobat?.enabled && this.speciesData.yolobat) {
+                this.speciesData.yolobat.forEach(species => {
+                    validYoloBatSpecies.add(species.modelLabel);
+                });
+            }
+            
+            // Check each group
+            for (const [groupName, group] of Object.entries(this.config.groups)) {
+                if (!group.species || !Array.isArray(group.species)) {
+                    continue;
+                }
+                
+                group.species.forEach((species, index) => {
+                    if (!species || species.trim() === '') {
+                        errors.push(`Group "${groupName}": Species at position ${index + 1} cannot be empty. Please enter a species label or remove the empty entry.`);
+                        return;
+                    }
+                    
+                    const isValidBirdEdge = validBirdEdgeSpecies.has(species);
+                    const isValidYoloBat = validYoloBatSpecies.has(species);
+                    
+                    if (!isValidBirdEdge && !isValidYoloBat) {
+                        // Check which detectors are enabled to provide helpful error message
+                        const enabledDetectors = [];
+                        if (this.config.detectors.birdedge?.enabled) enabledDetectors.push('BirdEdge');
+                        if (this.config.detectors.yolobat?.enabled) enabledDetectors.push('YoloBat');
+                        
+                        if (enabledDetectors.length === 0) {
+                            errors.push(`Group "${groupName}": Species "${species}" is invalid because no detectors are enabled.`);
+                        } else {
+                            errors.push(`Group "${groupName}": Species "${species}" is not valid for enabled detectors (${enabledDetectors.join(', ')}).`);
+                        }
+                    }
+                });
+            }
+            
+            return errors;
         }
     }
 }
