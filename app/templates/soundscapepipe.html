@@ -546,12 +546,12 @@
                             </div>
                         </div>
 
-                        <!-- Time-based Recordings -->
+                        <!-- Time-based Continuous Recording -->
                         <div class="mb-4">
                             <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
                                 <h6 class="mb-0">
                                     <i class="fas fa-clock me-2"></i>
-                                    Time-based Recordings
+                                    Time-based Continuous Recording
                                 </h6>
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" 
@@ -563,7 +563,7 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="form-text mb-3">Trigger recordings at specified times without using any detection model. Useful for scheduled audio capture.</div>
+                            <div class="form-text mb-3">Enable continuous audio recording during specified time periods without using any detection model. Useful for scheduled continuous audio capture and monitoring.</div>
                             <div class="mb-3">
 
                                 <!-- Time-based Recording Tasks -->
@@ -732,25 +732,28 @@
                                 <i class="fas fa-record-vinyl me-2"></i>
                                 Recording Settings
                             </h6>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">&nbsp;</label>
-                                        <div class="form-check form-switch">
+                            <div class="bg-light rounded-2 p-3 mb-3">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fas fa-cog text-primary me-2"></i>
+                                    <label class="form-label mb-0 fw-medium">Default Recording Settings</label>
+                                </div>
+                                <div class="form-text mb-3">These settings apply to all species that are not explicitly handled in a recording group defined below. Species-specific groups can override these default values.</div>
+                                
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch mb-2">
                                             <input class="form-check-input" 
                                                    type="checkbox" 
                                                    x-model="config.maximize_confidence" 
                                                    id="maximize_confidence">
-                                            <label class="form-check-label" for="maximize_confidence">
+                                            <label class="form-check-label small" for="maximize_confidence">
                                                 Maximize Confidence
                                             </label>
                                         </div>
-                                        <div class="form-text">Record highest confidence detections per day</div>
+                                        <div class="form-text small">Record highest confidence detections per day</div>
                                     </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">Default Ratio: <span x-text="config.ratio.toFixed(2)"></span></label>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">Default Ratio: <span x-text="config.ratio.toFixed(2)"></span></label>
                                         <input type="range" 
                                                class="form-range" 
                                                x-model.number="config.ratio"
@@ -758,188 +761,256 @@
                                                max="1.0"
                                                step="0.01"
                                                :disabled="config.maximize_confidence">
-                                        <div class="form-text" :class="{ 'text-muted': config.maximize_confidence }">
+                                        <div class="form-text small" :class="{ 'text-muted': config.maximize_confidence }">
                                             <span x-show="!config.maximize_confidence">Ratio of calls to record (0.0-1.0)</span>
                                             <span x-show="config.maximize_confidence">Disabled when maximize confidence is enabled</span>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">Recording Length: <span x-text="config.length_s"></span> seconds</label>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">Recording Length: <span x-text="config.length_s"></span> seconds</label>
                                         <input type="range" 
                                                class="form-range" 
                                                x-model.number="config.length_s"
                                                min="1"
                                                max="60"
                                                step="1">
-                                        <div class="form-text">Seconds to record after detection</div>
+                                        <div class="form-text small">Seconds to record after detection</div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Species Groups Section (Expert Mode) -->
-                        <div class="mb-4" x-show="expertMode" x-transition>
-                            <h6 class="border-bottom pb-2">
-                                <i class="fas fa-layer-group text-muted me-2"></i>
-                                Species Groups
-                                <small class="text-muted ms-2">(Expert Mode)</small>
-                            </h6>
-                            <div class="form-text mb-3">
-                                Define species groups with custom recording ratios and confidence settings. Groups allow you to prioritize certain species for recording.
-                            </div>
-                            <div class="mb-3">
-                                <template x-for="(group, groupName) in config.groups" :key="groupName">
-                                    <div class="bg-light rounded-2 p-3 mb-3">
-                                        <div class="d-flex align-items-center justify-content-between mb-3">
-                                            <div class="d-flex align-items-center flex-grow-1 me-3">
-                                                <i class="fas fa-layer-group text-primary me-2"></i>
-                                                <input type="text" 
-                                                       class="form-control form-control-sm fw-medium" 
-                                                       :value="groupName"
-                                                       @blur="renameGroup(groupName, $event.target.value)"
-                                                       @keydown.enter="$event.target.blur()"
-                                                       placeholder="Enter group name..." 
-                                                       required>
-                                            </div>
-                                            <button type="button" 
-                                                    class="btn btn-outline-danger btn-sm" 
-                                                    @click="removeGroup(groupName)"
-                                                    title="Remove group">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                        
-                                        <!-- Group Settings -->
-                                        <div class="row g-3 mb-3">
-                                            <div class="col-md-4">
-                                                <div class="form-check form-switch mb-2">
-                                                    <input class="form-check-input" 
-                                                           type="checkbox" 
-                                                           x-model="group.maximize_confidence" 
-                                                           :id="'group-maximize-' + groupName">
-                                                    <label class="form-check-label small" :for="'group-maximize-' + groupName">
-                                                        Maximize Confidence
-                                                    </label>
+                            <!-- Recording Groups Section -->
+                            <div class="mt-4">
+                                <div class="mb-3">
+                                    <label class="form-label mb-2">Recording Groups</label>
+                                    <div class="form-text mb-3">Define recording groups with custom recording ratios and confidence settings. Groups allow you to prioritize certain species for recording.</div>
+                                    <template x-for="(group, groupName) in config.groups" :key="groupName">
+                                        <div class="bg-light rounded-2 p-3 mb-3">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                    <i class="fas fa-layer-group text-primary me-2"></i>
+                                                    <input type="text" 
+                                                           class="form-control form-control-sm fw-medium" 
+                                                           :value="groupName"
+                                                           @blur="renameGroup(groupName, $event.target.value)"
+                                                           @keydown.enter="$event.target.blur()"
+                                                           placeholder="Enter group name..." 
+                                                           required>
                                                 </div>
-                                                <div class="form-text small">Record highest confidence detections per day</div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label small">Recording Ratio: <span x-text="(group.ratio || 0).toFixed(2)"></span></label>
-                                                <input type="range" 
-                                                       class="form-range" 
-                                                       x-model.number="group.ratio"
-                                                       min="0.0"
-                                                       max="1.0"
-                                                       step="0.01"
-                                                       :disabled="group.maximize_confidence"
-                                                       x-effect="$el.disabled = group.maximize_confidence">
-                                                <div class="form-text small" :class="{ 'text-muted': group.maximize_confidence }">
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label small">Recording Length: <span x-text="group.length_s || config.length_s || 20"></span> seconds</label>
-                                                <input type="range" 
-                                                       class="form-range" 
-                                                       x-model.number="group.length_s"
-                                                       min="1"
-                                                       max="60"
-                                                       step="1">
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Species List -->
-                                        <div class="mb-3">
-                                            <label class="form-label small mb-2">Species in Group</label>
-                                            <div class="form-text small mb-2">
-                                                Enter the exact classifier label or select from suggestions. 
-                                                BirdEdge uses scientific names (e.g., "Tyto alba"), YoloBat uses abbreviations (e.g., "Ppip"). 
-                                                Start typing to see available options with translations. Only species for enabled detectors are shown.
-                                                <template x-if="loadingSpecies">
-                                                    <span class="text-muted"><i class="fas fa-spinner fa-spin ms-1"></i> Loading species...</span>
-                                                </template>
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger btn-sm" 
+                                                        @click="removeGroup(groupName)"
+                                                        title="Remove group">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
                                             </div>
                                             
-                                            <template x-for="(species, speciesIndex) in group.species" :key="speciesIndex">
-                                                <div class="mb-2">
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <div class="flex-grow-1">
-                                                            <input type="text" 
-                                                                   class="form-control form-control-sm" 
-                                                                   x-model="group.species[speciesIndex]"
-                                                                   :list="'species-list-' + groupName + '-' + speciesIndex"
-                                                                   @input="updateSpeciesInput($event, groupName, speciesIndex)"
-                                                                   placeholder="Enter classifier label (e.g., Tyto alba, Ppip)">
-                                                            <datalist :id="'species-list-' + groupName + '-' + speciesIndex">
-                                                                <!-- BirdEdge species (only if enabled) -->
-                                                                <template x-if="config.detectors.birdedge?.enabled">
-                                                                    <template x-for="species in (speciesData.birdedge || [])" :key="'birdedge-' + species.scientific">
-                                                                        <option :value="species.scientific" 
-                                                                                x-text="getConsistentSpeciesDisplayText(species, 'BirdEdge')"></option>
-                                                                    </template>
-                                                                </template>
-                                                                <!-- YoloBat species (only if enabled) -->
-                                                                <template x-if="config.detectors.yolobat?.enabled">
-                                                                    <template x-for="species in (speciesData.yolobat || [])" :key="'yolobat-' + species.modelLabel">
-                                                                        <option :value="species.modelLabel" 
-                                                                                x-text="getConsistentSpeciesDisplayText(species, 'YoloBat')"></option>
-                                                                    </template>
-                                                                </template>
-                                                            </datalist>
-                                                        </div>
-                                                        <button type="button" 
-                                                                class="btn btn-outline-secondary btn-sm" 
-                                                                @click="loadSpeciesData()"
-                                                                :disabled="loadingSpecies"
-                                                                title="Refresh species list">
-                                                            <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingSpecies }"></i>
-                                                        </button>
-                                                        <button type="button" 
-                                                                class="btn btn-outline-danger btn-sm" 
-                                                                @click="removeSpeciesFromGroup(groupName, speciesIndex)"
-                                                                title="Remove species"
-                                                                :disabled="group.species.length <= 1">
-                                                            <i class="fas fa-times"></i>
-                                                        </button>
+                                            <!-- Group Settings -->
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-4">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="group.maximize_confidence" 
+                                                               :id="'group-maximize-' + groupName">
+                                                        <label class="form-check-label small" :for="'group-maximize-' + groupName">
+                                                            Maximize Confidence
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-text small">Record highest confidence detections per day</div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label small">Recording Ratio: <span x-text="(group.ratio || 0).toFixed(2)"></span></label>
+                                                    <input type="range" 
+                                                           class="form-range" 
+                                                           x-model.number="group.ratio"
+                                                           min="0.0"
+                                                           max="1.0"
+                                                           step="0.01"
+                                                           :disabled="group.maximize_confidence"
+                                                           x-effect="$el.disabled = group.maximize_confidence">
+                                                    <div class="form-text small" :class="{ 'text-muted': group.maximize_confidence }">
                                                     </div>
                                                 </div>
-                                            </template>
+                                                <div class="col-md-4">
+                                                    <label class="form-label small">Recording Length: <span x-text="group.length_s || config.length_s || 20"></span> seconds</label>
+                                                    <input type="range" 
+                                                           class="form-range" 
+                                                           x-model.number="group.length_s"
+                                                           min="1"
+                                                           max="60"
+                                                           step="1">
+                                                </div>
+                                            </div>
                                             
-                                            <button type="button" 
-                                                    class="btn btn-outline-secondary btn-sm" 
-                                                    @click="addSpeciesToGroup(groupName)">
-                                                <i class="fas fa-plus me-1"></i>
-                                                Add Species
-                                            </button>
+                                            <!-- Species List -->
+                                            <div class="mb-3">
+                                                <label class="form-label small mb-2">Species in Group</label>
+                                                <div class="form-text small mb-2">
+                                                    Enter the exact classifier label or select from suggestions. 
+                                                    BirdEdge uses scientific names (e.g., "Tyto alba"), YoloBat uses abbreviations (e.g., "Ppip"). 
+                                                    Start typing to see available options with translations. Only species for enabled detectors are shown.
+                                                    <template x-if="loadingSpecies">
+                                                        <span class="text-muted"><i class="fas fa-spinner fa-spin ms-1"></i> Loading species...</span>
+                                                    </template>
+                                                </div>
+                                                
+                                                                                                <template x-for="(species, speciesIndex) in group.species" :key="speciesIndex">
+                                                    <div class="mb-2" x-data="{ 
+                                                        showDropdown: false, 
+                                                        selectedIndex: -1,
+                                                        filteredSpecies: [],
+                                                        filterSpecies(query) {
+                                                            const allSpecies = [];
+                                                            if (config.detectors.birdedge?.enabled && speciesData.birdedge) {
+                                                                speciesData.birdedge.forEach(s => {
+                                                                    allSpecies.push({
+                                                                        value: s.scientific,
+                                                                        display: getConsistentSpeciesDisplayText(s, 'BirdEdge'),
+                                                                        type: 'birdedge'
+                                                                    });
+                                                                });
+                                                            }
+                                                            if (config.detectors.yolobat?.enabled && speciesData.yolobat) {
+                                                                speciesData.yolobat.forEach(s => {
+                                                                    allSpecies.push({
+                                                                        value: s.modelLabel,
+                                                                        display: getConsistentSpeciesDisplayText(s, 'YoloBat'),
+                                                                        type: 'yolobat'
+                                                                    });
+                                                                });
+                                                            }
+                                                            
+                                                            if (!query || query.length < 1) {
+                                                                this.filteredSpecies = [];
+                                                                return;
+                                                            }
+                                                            
+                                                            this.filteredSpecies = allSpecies.filter(s => 
+                                                                s.value.toLowerCase().includes(query.toLowerCase()) ||
+                                                                s.display.toLowerCase().includes(query.toLowerCase())
+                                                            ).slice(0, 10); // Limit to 10 results
+                                                            this.selectedIndex = this.filteredSpecies.length > 0 ? 0 : -1;
+                                                        },
+                                                        selectSpecies(species) {
+                                                            group.species[speciesIndex] = species.value;
+                                                            this.showDropdown = false;
+                                                            this.selectedIndex = -1;
+                                                            updateSpeciesInput({ target: { value: species.value } }, groupName, speciesIndex);
+                                                        },
+                                                        handleKeydown(event) {
+                                                            if (!this.showDropdown || this.filteredSpecies.length === 0) return;
+                                                            
+                                                            switch(event.key) {
+                                                                case 'ArrowDown':
+                                                                    event.preventDefault();
+                                                                    this.selectedIndex = Math.min(this.selectedIndex + 1, this.filteredSpecies.length - 1);
+                                                                    break;
+                                                                case 'ArrowUp':
+                                                                    event.preventDefault();
+                                                                    this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+                                                                    break;
+                                                                case 'Enter':
+                                                                    event.preventDefault();
+                                                                    if (this.selectedIndex >= 0 && this.selectedIndex < this.filteredSpecies.length) {
+                                                                        this.selectSpecies(this.filteredSpecies[this.selectedIndex]);
+                                                                    }
+                                                                    break;
+                                                                case 'Escape':
+                                                                    this.showDropdown = false;
+                                                                    this.selectedIndex = -1;
+                                                                    break;
+                                                            }
+                                                        }
+                                                    }">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <div class="flex-grow-1 position-relative">
+                                                                <input type="text" 
+                                                                       class="form-control form-control-sm" 
+                                                                       x-model="group.species[speciesIndex]"
+                                                                       @input="filterSpecies($event.target.value); updateSpeciesInput($event, groupName, speciesIndex)"
+                                                                       @focus="filterSpecies($event.target.value); showDropdown = true"
+                                                                       @blur="setTimeout(() => { showDropdown = false; selectedIndex = -1; }, 150)"
+                                                                       @keydown="handleKeydown($event)"
+                                                                       placeholder="Enter classifier label (e.g., Tyto alba, Ppip)"
+                                                                       spellcheck="false"
+                                                                       autocomplete="off">
+                                                                
+                                                                <!-- Custom dropdown -->
+                                                                <div x-show="showDropdown && filteredSpecies.length > 0" 
+                                                                     x-transition:enter="transition ease-out duration-100"
+                                                                     x-transition:enter-start="opacity-0 scale-95"
+                                                                     x-transition:enter-end="opacity-100 scale-100"
+                                                                     x-transition:leave="transition ease-in duration-75"
+                                                                     x-transition:leave-start="opacity-100 scale-100"
+                                                                     x-transition:leave-end="opacity-0 scale-95"
+                                                                     class="position-absolute top-100 start-0 w-100 bg-white border border-secondary rounded shadow-sm mt-1 z-3"
+                                                                     style="max-height: 200px; overflow-y: auto;">
+                                                                    <template x-for="(species, idx) in filteredSpecies" :key="species.value">
+                                                                        <div class="px-3 py-2 cursor-pointer border-bottom border-light small"
+                                                                             :class="{ 'bg-primary text-white': idx === selectedIndex, 'hover:bg-light': idx !== selectedIndex }"
+                                                                             @click="selectSpecies(species)"
+                                                                             @mouseenter="selectedIndex = idx"
+                                                                             x-text="species.display">
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </div>
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-secondary btn-sm" 
+                                                                    @click="loadSpeciesData()"
+                                                                    :disabled="loadingSpecies"
+                                                                    title="Refresh species list">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingSpecies }"></i>
+                                                            </button>
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-danger btn-sm" 
+                                                                    @click="removeSpeciesFromGroup(groupName, speciesIndex)"
+                                                                    title="Remove species"
+                                                                    :disabled="group.species.length <= 1">
+                                                                <i class="fas fa-times"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                
+                                                <button type="button" 
+                                                        class="btn btn-outline-secondary btn-sm" 
+                                                        @click="addSpeciesToGroup(groupName)">
+                                                    <i class="fas fa-plus me-1"></i>
+                                                    Add Species
+                                                </button>
+                                            </div>
                                         </div>
+                                    </template>
+                                    
+                                    <template x-if="!config.groups || Object.keys(config.groups).length === 0">
+                                        <div class="text-muted text-center py-2">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            No recording groups configured. Create groups to apply custom recording settings to specific species.
+                                        </div>
+                                    </template>
+                                    
+                                    <div class="mt-3">
+                                        <button type="button" 
+                                                class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                @click="addGroup()">
+                                            <i class="fas fa-plus me-2"></i>
+                                            Add Recording Group
+                                        </button>
                                     </div>
-                                </template>
-                                
-                                <template x-if="!config.groups || Object.keys(config.groups).length === 0">
-                                    <div class="text-muted text-center py-2">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        No species groups configured. Advanced feature for targeted recording strategies.
-                                    </div>
-                                </template>
-                                
-                                <div class="mt-3">
-                                    <button type="button" 
-                                            class="btn btn-outline-primary btn-sm add-schedule-btn" 
-                                            @click="addGroup()">
-                                        <i class="fas fa-plus me-2"></i>
-                                        Add Species Group
-                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Optional Arguments Section (Expert Mode) -->
-                                                                <!-- Output Device Settings (Expert Mode) -->
+
+
+                        <!-- Output Device Settings (Expert Mode) -->
                         <div class="mb-4" x-show="expertMode" x-transition>
                             <h6 class="border-bottom pb-2">
                                 <i class="fas fa-volume-up me-2"></i>
                                 Output Device
+                                <small class="text-muted ms-2">(Expert Mode)</small>
                             </h6>
                             <div class="row">
                                 <div class="col-12">
@@ -1011,235 +1082,226 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- Lure Playback Section (Expert Mode) -->
-                        <div class="mb-4" x-show="expertMode" x-transition>
-                            <h6 class="border-bottom pb-2">
-                                <i class="fas fa-play text-muted me-2"></i>
-                                Lure Playback
-                                <small class="text-muted ms-2">(Expert Mode)</small>
-                            </h6>
-                            <div class="form-text mb-3">
-                                Configure automated playback of lure calls to attract target species for detection and recording.
-                            </div>
                             
                             <!-- Lure Tasks -->
-                            <div class="mb-3">
-                                <label class="form-label">Lure Tasks</label>
-                                <div class="form-text mb-2">Add tasks to play species-specific lure calls at scheduled times</div>
-                                
-                                <template x-for="(task, index) in config.lure.tasks" :key="index">
-                                    <div class="bg-light rounded-2 p-3 mb-2">
-                                        <div class="d-flex align-items-center justify-content-between mb-3">
-                                            <div class="d-flex align-items-center flex-grow-1 me-3">
-                                                <i class="fas fa-volume-up text-primary me-2"></i>
-                                                <input type="text" 
-                                                       class="form-control form-control-sm fw-medium" 
-                                                       x-model="task.species" 
-                                                       placeholder="Enter species name..." 
-                                                       required>
+                            <div class="mt-4">
+                                <div class="mb-3">
+                                    <label class="form-label mb-2">Lure Tasks</label>
+                                    <div class="form-text mb-3">Configure automated playback of lure calls to attract target species for detection and recording.</div>
+                                    
+                                    <template x-for="(task, index) in config.lure.tasks" :key="index">
+                                        <div class="bg-light rounded-2 p-3 mb-2">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                    <i class="fas fa-volume-up text-primary me-2"></i>
+                                                    <input type="text" 
+                                                           class="form-control form-control-sm fw-medium" 
+                                                           x-model="task.species" 
+                                                           placeholder="Enter species name..." 
+                                                           required>
+                                                </div>
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger btn-sm" 
+                                                        @click="removeLureTask(index)"
+                                                        title="Remove task">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
                                             </div>
-                                            <button type="button" 
-                                                    class="btn btn-outline-danger btn-sm" 
-                                                    @click="removeLureTask(index)"
-                                                    title="Remove task">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                        
-                                        <!-- Time Settings -->
-                                        <div class="row g-3 mb-3">
-                                            <div class="col-md-6">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <label class="text-success fw-semibold small mb-0 schedule-label">
-                                                        <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
-                                                    </label>
-                                                    <div class="row g-1 flex-grow-1">
-                                                        <div class="col">
-                                                            <select class="form-select form-select-sm" 
-                                                                    x-model="task.startReference"
-                                                                    @change="updateLureTaskTimeString(task, 'start')">
-                                                                <option value="time">Clock Time</option>
-                                                                <option value="sunrise">Sunrise</option>
-                                                                <option value="sunset">Sunset</option>
-                                                                <option value="dawn">Dawn</option>
-                                                                <option value="dusk">Dusk</option>
-                                                                <option value="noon">Solar Noon</option>
-                                                            </select>
+                                            
+                                            <!-- Time Settings -->
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                            <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="task.startReference"
+                                                                        @change="updateLureTaskTimeString(task, 'start')">
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="task.startSign"
+                                                                        @change="updateLureTaskTimeString(task, 'start')"
+                                                                        :disabled="task.startReference === 'time'">
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                       class="form-control form-control-sm" 
+                                                                       style="width: 110px;"
+                                                                       x-model="task.startOffset"
+                                                                       @change="updateLureTaskTimeString(task, 'start')">
+                                                            </div>
                                                         </div>
-                                                        <div class="col-auto">
-                                                            <select class="form-select form-select-sm" 
-                                                                    style="width: 70px;"
-                                                                    x-model="task.startSign"
-                                                                    @change="updateLureTaskTimeString(task, 'start')"
-                                                                    :disabled="task.startReference === 'time'">
-                                                                <option value="+">+</option>
-                                                                <option value="-">-</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="col-auto">
-                                                            <input type="time" 
-                                                                   class="form-control form-control-sm" 
-                                                                   style="width: 110px;"
-                                                                   x-model="task.startOffset"
-                                                                   @change="updateLureTaskTimeString(task, 'start')">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                            <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="task.stopReference"
+                                                                        @change="updateLureTaskTimeString(task, 'stop')">
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="task.stopSign"
+                                                                        @change="updateLureTaskTimeString(task, 'stop')"
+                                                                        :disabled="task.stopReference === 'time'">
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                       class="form-control form-control-sm" 
+                                                                       style="width: 110px;"
+                                                                       x-model="task.stopOffset"
+                                                                       @change="updateLureTaskTimeString(task, 'stop')">
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-6">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <label class="text-danger fw-semibold small mb-0 schedule-label">
-                                                        <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
-                                                    </label>
-                                                    <div class="row g-1 flex-grow-1">
-                                                        <div class="col">
-                                                            <select class="form-select form-select-sm" 
-                                                                    x-model="task.stopReference"
-                                                                    @change="updateLureTaskTimeString(task, 'stop')">
-                                                                <option value="time">Clock Time</option>
-                                                                <option value="sunrise">Sunrise</option>
-                                                                <option value="sunset">Sunset</option>
-                                                                <option value="dawn">Dawn</option>
-                                                                <option value="dusk">Dusk</option>
-                                                                <option value="noon">Solar Noon</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="col-auto">
-                                                            <select class="form-select form-select-sm" 
-                                                                    style="width: 70px;"
-                                                                    x-model="task.stopSign"
-                                                                    @change="updateLureTaskTimeString(task, 'stop')"
-                                                                    :disabled="task.stopReference === 'time'">
-                                                                <option value="+">+</option>
-                                                                <option value="-">-</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="col-auto">
-                                                            <input type="time" 
-                                                                   class="form-control form-control-sm" 
-                                                                   style="width: 110px;"
-                                                                   x-model="task.stopOffset"
-                                                                   @change="updateLureTaskTimeString(task, 'stop')">
-                                                        </div>
+                                            
+                                            <!-- Audio Paths -->
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label class="form-label small mb-0">Audio File Paths</label>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" 
+                                                               type="checkbox" 
+                                                               x-model="task.record"
+                                                               :id="'record-' + index">
+                                                        <label class="form-check-label small" :for="'record-' + index">
+                                                            Record Playback
+                                                        </label>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Audio Paths -->
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <label class="form-label small mb-0">Audio File Paths</label>
-                                                <div class="form-check form-switch">
-                                                    <input class="form-check-input" 
-                                                           type="checkbox" 
-                                                           x-model="task.record"
-                                                           :id="'record-' + index">
-                                                    <label class="form-check-label small" :for="'record-' + index">
-                                                        Record Playback
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div class="form-text mb-2">Specify filesystem paths to audio files for playback</div>
-                                            <template x-for="(path, pathIndex) in task.paths" :key="pathIndex">
-                                                <div class="mb-2">
-                                                    <div class="d-flex align-items-start gap-2">
-                                                        <div class="flex-grow-1">
-                                                            <select class="form-select form-select-sm" 
-                                                                    x-model="task.paths[pathIndex]">
-                                                                <option value="">Select audio path...</option>
-                                                                <optgroup label="Directories" x-show="lureFiles.directories && lureFiles.directories.length > 0">
-                                                                    <template x-for="dir in lureFiles.directories" :key="dir">
-                                                                        <option :value="dir" x-text="dir"></option>
-                                                                    </template>
-                                                                </optgroup>
-                                                                <optgroup label="Audio Files" x-show="lureFiles.files && lureFiles.files.length > 0">
-                                                                    <template x-for="file in lureFiles.files" :key="file">
-                                                                        <option :value="file" x-text="file"></option>
-                                                                    </template>
-                                                                </optgroup>
-                                                            </select>
+                                                <div class="form-text mb-2">Specify filesystem paths to audio files for playback</div>
+                                                <template x-for="(path, pathIndex) in task.paths" :key="pathIndex">
+                                                    <div class="mb-2">
+                                                        <div class="d-flex align-items-start gap-2">
+                                                            <div class="flex-grow-1">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="task.paths[pathIndex]">
+                                                                    <option value="">Select audio path...</option>
+                                                                    <optgroup label="Directories" x-show="lureFiles.directories && lureFiles.directories.length > 0">
+                                                                        <template x-for="dir in lureFiles.directories" :key="dir">
+                                                                            <option :value="dir" x-text="dir"></option>
+                                                                        </template>
+                                                                    </optgroup>
+                                                                    <optgroup label="Audio Files" x-show="lureFiles.files && lureFiles.files.length > 0">
+                                                                        <template x-for="file in lureFiles.files" :key="file">
+                                                                            <option :value="file" x-text="file"></option>
+                                                                        </template>
+                                                                    </optgroup>
+                                                                </select>
+                                                            </div>
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-secondary btn-sm" 
+                                                                    @click="loadLureFiles()"
+                                                                    title="Refresh lure files"
+                                                                    :disabled="loadingLureFiles">
+                                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingLureFiles }"></i>
+                                                            </button>
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-danger btn-sm" 
+                                                                    @click="removeLureTaskPath(index, pathIndex)"
+                                                                    title="Remove path"
+                                                                    :disabled="task.paths.length <= 1">
+                                                                <i class="fas fa-times"></i>
+                                                            </button>
                                                         </div>
-                                                        <button type="button" 
-                                                                class="btn btn-outline-secondary btn-sm" 
-                                                                @click="loadLureFiles()"
-                                                                title="Refresh lure files"
-                                                                :disabled="loadingLureFiles">
-                                                            <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingLureFiles }"></i>
-                                                        </button>
-                                                        <button type="button" 
-                                                                class="btn btn-outline-danger btn-sm" 
-                                                                @click="removeLureTaskPath(index, pathIndex)"
-                                                                title="Remove path"
-                                                                :disabled="task.paths.length <= 1">
-                                                            <i class="fas fa-times"></i>
-                                                        </button>
+                                                        <template x-if="loadingLureFiles">
+                                                            <div class="text-muted small mt-1">
+                                                                <i class="fas fa-spinner fa-spin me-1"></i>
+                                                                Loading lure files...
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="!loadingLureFiles && (!lureFiles.directories || lureFiles.directories.length === 0) && (!lureFiles.files || lureFiles.files.length === 0)">
+                                                            <div class="text-muted small mt-1">
+                                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                                No files found in lure directories (/data/lure or /home/pi/lure)
+                                                            </div>
+                                                        </template>
                                                     </div>
-                                                    <template x-if="loadingLureFiles">
-                                                        <div class="text-muted small mt-1">
-                                                            <i class="fas fa-spinner fa-spin me-1"></i>
-                                                            Loading lure files...
-                                                        </div>
-                                                    </template>
-                                                    <template x-if="!loadingLureFiles && (!lureFiles.directories || lureFiles.directories.length === 0) && (!lureFiles.files || lureFiles.files.length === 0)">
-                                                        <div class="text-muted small mt-1">
-                                                            <i class="fas fa-exclamation-triangle me-1"></i>
-                                                            No files found in lure directories (/data/lure or /home/pi/lure)
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                            <button type="button" 
-                                                    class="btn btn-outline-secondary btn-sm" 
-                                                    @click="addLureTaskPath(index)">
-                                                <i class="fas fa-plus me-1"></i>
-                                                Add Path
-                                            </button>
+                                                </template>
+                                                <button type="button" 
+                                                        class="btn btn-outline-secondary btn-sm" 
+                                                        @click="addLureTaskPath(index)">
+                                                    <i class="fas fa-plus me-1"></i>
+                                                    Add Path
+                                                </button>
+                                            </div>
                                         </div>
+                                    </template>
+                                    
+                                    <template x-if="!config.lure.tasks || config.lure.tasks.length === 0">
+                                        <div class="text-muted text-center py-2">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            No lure tasks configured. Advanced feature for automated call playback.
+                                        </div>
+                                    </template>
+                                    
+                                    <div class="mt-3">
+                                        <button type="button" 
+                                                class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                @click="addLureTask()">
+                                            <i class="fas fa-plus me-2"></i>
+                                            Add Lure Task
+                                        </button>
                                     </div>
-                                </template>
-                                
-                                <template x-if="!config.lure.tasks || config.lure.tasks.length === 0">
-                                    <div class="text-muted text-center py-2">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        No lure tasks configured. Advanced feature for automated call playback.
-                                    </div>
-                                </template>
-                                
-                                <div class="mt-3">
-                                    <button type="button" 
-                                            class="btn btn-outline-primary btn-sm add-schedule-btn" 
-                                            @click="addLureTask()">
-                                        <i class="fas fa-plus me-2"></i>
-                                        Add Lure Task
-                                    </button>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Optional Arguments Section (Expert Mode) -->
                         <div class="mb-4" x-show="expertMode" x-transition>
                             <h6 class="border-bottom pb-2">
-                                <i class="fas fa-cogs text-muted me-2"></i>
+                                <i class="fas fa-cogs me-2"></i>
                                 Optional Arguments
                                 <small class="text-muted ms-2">(Expert Mode)</small>
                             </h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Stream Port</label>
-                                        <input type="number" 
-                                               class="form-control" 
-                                               x-model.number="config.stream_port"
-                                               min="1"
-                                               max="65535"
-                                               required>
-                                        <div class="form-text">HTTP audio stream port for real-time audio streaming</div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Stream Port</label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   x-model.number="config.stream_port"
+                                                   min="1"
+                                                   max="65535"
+                                                   required>
+                                            <div class="form-text">HTTP audio stream port for real-time audio streaming</div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
                         </div>
-
 
                         <!-- Form Actions -->
                         <div class="d-flex justify-content-between gap-2">

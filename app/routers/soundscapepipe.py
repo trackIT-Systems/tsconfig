@@ -3,6 +3,7 @@
 import os
 import json
 import yaml
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +13,46 @@ from pydantic import BaseModel, Field
 
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.routers.base import BaseConfigRouter
+
+
+def is_system_default_device(device_name: str) -> bool:
+    """Check if a device is a system default/virtual device that should be filtered out."""
+    # Convert to lowercase for case-insensitive matching
+    name_lower = device_name.lower()
+    
+    # List of system/virtual device names to exclude (using word boundaries for precision)
+    exact_matches = [
+        'default',
+        'sysdefault', 
+        'dmix',
+        'pulse',
+        'pipewire',
+        'jack',
+        'iec958',
+        'spdif',
+        'surround40',
+        'surround51',
+        'surround71',
+        'front',
+        'rear',
+        'center_lfe',
+        '/dev/dsp',  # OSS devices
+        'null',
+        'dummy'
+    ]
+    
+    # Check for exact matches (device name exactly matches or starts with system name)
+    for sys_device in exact_matches:
+        if name_lower == sys_device or name_lower.startswith(sys_device + ' ') or name_lower.startswith(sys_device + ':'):
+            return True
+    
+    # Special case for HDMI devices - check if it's a generic HDMI output
+    if 'hdmi' in name_lower and ('hw:' in name_lower or 'alsa' in name_lower):
+        # Allow specific HDMI devices with meaningful names, filter generic ones
+        if name_lower.strip().endswith('hdmi') or 'hdmi 0' in name_lower or 'hdmi 1' in name_lower:
+            return True
+            
+    return False
 
 
 class SpeciesGroup(BaseModel):
@@ -76,10 +117,54 @@ async def download_soundscapepipe(config: SoundscapepipeConfigUpdate):
 
 # Keep the special endpoints that are unique to soundscapepipe
 @router.get("/audio-devices")
-async def get_audio_devices() -> Dict[str, Any]:
-    """Get available audio input and output devices."""
+async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
+    """Get available audio input and output devices.
+    
+    Args:
+        refresh: Whether to force refresh the device list (default: True)
+    """
     try:
-        # Query all available devices
+        # Force sounddevice to reinitialize and refresh device list if requested
+        # This is necessary because sounddevice caches device info from module import
+        if refresh:
+            try:
+                # Try multiple methods to force device list refresh
+                if hasattr(sd, '_terminate') and hasattr(sd, '_initialize'):
+                    # Method 1: Use private sounddevice methods (most reliable)
+                    sd._terminate()
+                    sd._initialize()
+                elif hasattr(sd, '_get_stream_parameters'):
+                    # Method 2: Try to trigger internal refresh via parameter query
+                    try:
+                        sd._get_stream_parameters(None, None, None, None, None, None)
+                    except:
+                        pass
+                
+                # Method 3: Clear any cached default devices to force re-detection
+                if hasattr(sd.default, '_device'):
+                    try:
+                        # Reset default device cache
+                        sd.default._device = None
+                    except:
+                        pass
+                
+                # Method 4: Force ALSA to refresh device list (Linux-specific)
+                try:
+                    # Run alsactl to force ALSA to scan for new devices
+                    subprocess.run(['alsactl', 'scan'], 
+                                 capture_output=True, 
+                                 timeout=2,
+                                 check=False)
+                except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                    # If alsactl is not available or fails, continue
+                    pass
+                        
+            except Exception as e:
+                # If refresh fails, log it but continue with existing device list
+                print(f"Warning: Could not refresh audio device list: {e}")
+                pass
+        
+        # Query all available devices (should now include newly connected devices)
         devices = sd.query_devices()
         
         # Get default devices
@@ -89,8 +174,19 @@ async def get_audio_devices() -> Dict[str, Any]:
         # Separate input and output devices
         input_devices = []
         output_devices = []
+        filtered_count = 0
         
         for i, device in enumerate(devices):
+            # Skip system default/virtual devices
+            if is_system_default_device(device["name"]):
+                filtered_count += 1
+                continue
+                
+            # Skip devices with unrealistically high channel counts (virtual devices)
+            if (device["max_input_channels"] > 32 or device["max_output_channels"] > 32):
+                filtered_count += 1
+                continue
+            
             # Find maximum supported sample rate
             max_sample_rate = device["default_samplerate"]
             common_rates = [8000, 16000, 22050, 44100, 48000, 88200, 96000, 176400, 192000, 384000]
@@ -133,7 +229,12 @@ async def get_audio_devices() -> Dict[str, Any]:
             "input": input_devices,
             "output": output_devices,
             "default_input": default_input,
-            "default_output": default_output
+            "default_output": default_output,
+            "refresh_attempted": refresh,
+            "total_devices": len(devices),
+            "filtered_devices": filtered_count,
+            "input_device_count": len(input_devices),
+            "output_device_count": len(output_devices)
         }
         
     except Exception as e:
