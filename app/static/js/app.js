@@ -1,4 +1,3 @@
-
 // Shared System Config Manager - prevents duplicate API calls
 const systemConfigManager = {
     config: null,
@@ -1236,11 +1235,13 @@ function soundscapepipeConfig() {
                 birdedge: {
                     detection_threshold: 0.0,
                     class_threshold: 0.3,
+                    channel_strategy: "mix",
                     tasks: []
                 },
                 yolobat: {
                     class_threshold: 0.3,
                     model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml",
+                    channel_strategy: "mix",
                     tasks: []
                 },
                 schedule: {
@@ -1348,8 +1349,12 @@ function soundscapepipeConfig() {
                             this.parseDetectorTaskTimeString(task, task.start, 'start');
                             this.parseDetectorTaskTimeString(task, task.stop, 'stop');
                         });
+                        // Ensure channel_strategy exists with default value
+                        if (detectors.birdedge.channel_strategy === undefined) {
+                            detectors.birdedge.channel_strategy = "mix";
+                        }
                     } else {
-                        detectors.birdedge = { enabled: false, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", tasks: [] };
+                        detectors.birdedge = { enabled: false, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", channel_strategy: "mix", tasks: [] };
                     }
                     
                                         // YOLOBat detector - enabled if present in config, disabled if not present
@@ -1373,9 +1378,13 @@ function soundscapepipeConfig() {
                         if (detectors.yolobat.class_threshold === undefined) {
                             detectors.yolobat.class_threshold = 0.3;
                         }
+                        // Ensure channel_strategy exists with default value
+                        if (detectors.yolobat.channel_strategy === undefined) {
+                            detectors.yolobat.channel_strategy = "mix";
+                        }
  
                     } else {
-                        detectors.yolobat = { enabled: false, class_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", tasks: [] };
+                        detectors.yolobat = { enabled: false, class_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", channel_strategy: "mix", tasks: [] };
                     }
                     
                     // Static detector (schedule) - enabled if present in config, disabled if not present

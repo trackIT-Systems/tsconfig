@@ -15,6 +15,7 @@ class DetectorEntry(BaseModel):
     class_threshold: Optional[float] = None
     model_path: Optional[str] = None
     tasks: Optional[List["ScheduleTaskEntry"]] = None
+    channel_strategy: Optional[str] = "mix"
 
 
 class ScheduleTaskEntry(BaseModel):
@@ -175,6 +176,22 @@ class SoundscapepipeConfig(BaseConfig):
                                 errors.append(f"Detector '{detector_name}' {threshold_key} must be between 0.0 and 1.0")
                         except (ValueError, TypeError):
                             errors.append(f"Detector '{detector_name}' {threshold_key} must be a valid number")
+
+                # Validate channel_strategy for detectors that support it (birdedge and yolobat)
+                if detector_name in ["birdedge", "yolobat"]:
+                    channel_strategy = detector_config.get("channel_strategy")
+                    if channel_strategy is not None:
+                        if isinstance(channel_strategy, str):
+                            if channel_strategy not in ["mix", "any", "every"]:
+                                errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'any', 'every', or a channel number")
+                        else:
+                            # Try to validate as integer channel number
+                            try:
+                                channel_num = int(channel_strategy)
+                                if channel_num < 0:
+                                    errors.append(f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number")
+                            except (ValueError, TypeError):
+                                errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'any', 'every', or a valid channel number")
 
                 # Validate detector tasks (applicable to all detectors except schedule)
                 if detector_name != "schedule":
