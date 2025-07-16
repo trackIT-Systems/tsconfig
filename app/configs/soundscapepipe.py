@@ -182,8 +182,23 @@ class SoundscapepipeConfig(BaseConfig):
                     channel_strategy = detector_config.get("channel_strategy")
                     if channel_strategy is not None:
                         if isinstance(channel_strategy, str):
-                            if channel_strategy not in ["mix", "any", "every"]:
-                                errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'any', 'every', or a channel number")
+                            # Define valid strategies for each detector
+                            if detector_name == "yolobat":
+                                valid_strategies = ["mix", "all"]
+                            else:  # birdedge
+                                valid_strategies = ["mix", "all", "or", "and"]
+                            
+                            if channel_strategy not in valid_strategies:
+                                # Try to validate as string representation of a channel number
+                                try:
+                                    channel_num = int(channel_strategy)
+                                    if channel_num < 0:
+                                        errors.append(f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number")
+                                except (ValueError, TypeError):
+                                    if detector_name == "yolobat":
+                                        errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number")
+                                    else:  # birdedge
+                                        errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', 'or', 'and', or a valid channel number")
                         else:
                             # Try to validate as integer channel number
                             try:
@@ -191,7 +206,10 @@ class SoundscapepipeConfig(BaseConfig):
                                 if channel_num < 0:
                                     errors.append(f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number")
                             except (ValueError, TypeError):
-                                errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'any', 'every', or a valid channel number")
+                                if detector_name == "yolobat":
+                                    errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number")
+                                else:  # birdedge
+                                    errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', 'or', 'and', or a valid channel number")
 
                 # Validate detector tasks (applicable to all detectors except schedule)
                 if detector_name != "schedule":

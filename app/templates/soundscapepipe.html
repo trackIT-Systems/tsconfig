@@ -211,8 +211,9 @@
                                             <label class="form-label">Channel Strategy <small class="text-muted">(Expert)</small></label>
                                             <select class="form-select" x-model="config.detectors.birdedge.channel_strategy">
                                                 <option value="mix">Mix - Combine all channels</option>
-                                                <option value="any">Any - Detection in any channel triggers detection (logical OR)</option>
-                                                <option value="every">Every - Detection required in all channels (logical AND)</option>
+                                                <option value="all">All - Analyze channels separately</option>
+                                                <option value="or">Or - Detection in any channel triggers detection (logical OR)</option>
+                                                <option value="and">And - Detection required in all channels (logical AND)</option>
                                                 <template x-if="audioDevices.input && audioDevices.input.find(d => d.name === config.input_device_match || d.name.startsWith(config.input_device_match))">
                                                     <template x-for="channel in Array.from({length: audioDevices.input.find(d => d.name === config.input_device_match || d.name.startsWith(config.input_device_match))?.max_input_channels || 0}, (_, i) => i)" :key="channel">
                                                         <option :value="channel" x-text="`Channel ${channel}`"></option>
@@ -447,10 +448,9 @@
                                     <div class="col-md-6">
                                         <div class="mb-3">
                                             <label class="form-label">Channel Strategy <small class="text-muted">(Expert)</small></label>
-                                                                                         <select class="form-select" x-model="config.detectors.yolobat.channel_strategy">
+                                                                                                                                                                                    <select class="form-select" x-model="config.detectors.yolobat.channel_strategy">
                                                  <option value="mix">Mix - Combine all channels</option>
-                                                 <option value="any">Any - Detection in any channel triggers detection (logical OR)</option>
-                                                 <option value="every">Every - Detection required in all channels (logical AND)</option>
+                                                 <option value="all">All - Analyze channels separately</option>
                                                 <template x-if="audioDevices.input && audioDevices.input.find(d => d.name === config.input_device_match || d.name.startsWith(config.input_device_match))">
                                                     <template x-for="channel in Array.from({length: audioDevices.input.find(d => d.name === config.input_device_match || d.name.startsWith(config.input_device_match))?.max_input_channels || 0}, (_, i) => i)" :key="channel">
                                                         <option :value="channel" x-text="`Channel ${channel}`"></option>
