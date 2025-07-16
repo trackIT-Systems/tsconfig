@@ -904,14 +904,16 @@
                                                             }
                                                             
                                                             if (!query || query.length < 1) {
-                                                                this.filteredSpecies = [];
+                                                                // Show all species when no query is provided
+                                                                this.filteredSpecies = allSpecies;
+                                                                this.selectedIndex = this.filteredSpecies.length > 0 ? 0 : -1;
                                                                 return;
                                                             }
                                                             
                                                             this.filteredSpecies = allSpecies.filter(s => 
                                                                 s.value.toLowerCase().includes(query.toLowerCase()) ||
                                                                 s.display.toLowerCase().includes(query.toLowerCase())
-                                                            ).slice(0, 10); // Limit to 10 results
+                                                            );
                                                             this.selectedIndex = this.filteredSpecies.length > 0 ? 0 : -1;
                                                         },
                                                         selectSpecies(species) {
