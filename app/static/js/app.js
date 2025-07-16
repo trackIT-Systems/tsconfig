@@ -1235,6 +1235,7 @@ function soundscapepipeConfig() {
                 birdedge: {
                     detection_threshold: 0.0,
                     class_threshold: 0.3,
+                    model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx",
                     channel_strategy: "mix",
                     tasks: []
                 },
@@ -1354,7 +1355,7 @@ function soundscapepipeConfig() {
                             detectors.birdedge.channel_strategy = "mix";
                         }
                     } else {
-                        detectors.birdedge = { enabled: false, detection_threshold: 0.3, class_threshold: 0.0, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", channel_strategy: "mix", tasks: [] };
+                        detectors.birdedge = { enabled: false, detection_threshold: 0.0, class_threshold: 0.3, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", channel_strategy: "mix", tasks: [] };
                     }
                     
                                         // YOLOBat detector - enabled if present in config, disabled if not present

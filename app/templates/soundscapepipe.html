@@ -235,8 +235,7 @@
                                             </button>
                                         </div>
                                         <select class="form-select" 
-                                                x-model="config.detectors.birdedge.model_path"
-                                                x-show="!expertMode">
+                                                x-model="config.detectors.birdedge.model_path">
                                             <option value="">Select BirdEdge model...</option>
                                             <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
                                                 <option :value="modelPath" x-text="modelPath"></option>
@@ -248,11 +247,6 @@
                                             </template>
                                             <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
                                         </select>
-                                        <input type="text" 
-                                               class="form-control" 
-                                               x-model="config.detectors.birdedge.model_path"
-                                               x-show="expertMode"
-                                               placeholder="Enter custom path: /path/to/model.onnx">
                                         <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
                                     </div>
                                 </div>
@@ -420,8 +414,7 @@
                                         </div>
                                         <select class="form-select" 
                                                 x-model="config.detectors.yolobat.model_path"
-                                                @change="loadYoloBatLabels()"
-                                                x-show="!expertMode">
+                                                @change="loadYoloBatLabels()">
                                             <option value="">Select YOLOBat model...</option>
                                             <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
                                                 <option :value="modelPath" x-text="modelPath"></option>
@@ -433,12 +426,6 @@
                                             </template>
                                             <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
                                         </select>
-                                        <input type="text" 
-                                               class="form-control" 
-                                               x-model="config.detectors.yolobat.model_path"
-                                               @change="loadYoloBatLabels()"
-                                               x-show="expertMode"
-                                               placeholder="Enter custom path: /path/to/model.xml">
                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
                                     </div>
                                 </div>
