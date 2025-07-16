@@ -2713,6 +2713,61 @@ function statusPage() {
             }
         },
 
+        async toggleEnable(serviceName, currentlyEnabled) {
+            this.actionLoading = true;
+            this.actionMessage = '';
+            this.actionError = false;
+            
+            try {
+                // Determine the action based on current state
+                const action = currentlyEnabled ? 'disable' : 'enable';
+                
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: serviceName,
+                        action: action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to ${action} service`);
+                }
+                
+                this.actionMessage = data.message;
+                this.actionError = false;
+                
+                // Refresh services list after action
+                setTimeout(async () => {
+                    const services = await serviceManager.getServices(true); // Force refresh
+                    this.services = services;
+                }, 1000);
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                }, 5000);
+                
+            } catch (err) {
+                this.actionMessage = err.message;
+                this.actionError = true;
+                console.error(`Service toggle error:`, err);
+                
+                // Clear error message after 10 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                    this.actionError = false;
+                }, 10000);
+            } finally {
+                this.actionLoading = false;
+            }
+        },
+
         streamLogs(serviceName) {
             // Show the log modal
             const modal = new bootstrap.Modal(document.getElementById('logModal'));
