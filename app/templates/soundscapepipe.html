@@ -121,7 +121,7 @@
                                         <input type="text" 
                                                 class="form-control" 
                                                 x-model="config.input_device_match"
-                                                placeholder="384kHz AudioMoth USB Microphone">
+                                                placeholder="trackIT Analog Frontend">
                                         <div class="form-text">Exact device name for matching</div>
                                     </div>
                                 </div>
@@ -236,7 +236,6 @@
                                         </div>
                                         <select class="form-select" 
                                                 x-model="config.detectors.birdedge.model_path">
-                                            <option value="">Select BirdEdge model...</option>
                                             <template x-for="modelPath in (modelFiles.birdedge || [])" :key="modelPath">
                                                 <option :value="modelPath" x-text="modelPath"></option>
                                             </template>
@@ -245,7 +244,6 @@
                                                 <option :value="config.detectors.birdedge.model_path" 
                                                         x-text="config.detectors.birdedge.model_path + ' (custom)'"></option>
                                             </template>
-                                            <option value="" disabled x-show="!modelFiles.birdedge || modelFiles.birdedge.length === 0">No .onnx files found in /home/pi/pybirdedge/birdedge/models/</option>
                                         </select>
                                         <div class="form-text">Path to the BirdEdge model file (.onnx)</div>
                                     </div>
@@ -415,7 +413,6 @@
                                         <select class="form-select" 
                                                 x-model="config.detectors.yolobat.model_path"
                                                 @change="loadYoloBatLabels()">
-                                            <option value="">Select YOLOBat model...</option>
                                             <template x-for="modelPath in (modelFiles.yolobat || [])" :key="modelPath">
                                                 <option :value="modelPath" x-text="modelPath"></option>
                                             </template>
@@ -424,7 +421,6 @@
                                                 <option :value="config.detectors.yolobat.model_path" 
                                                         x-text="config.detectors.yolobat.model_path + ' (custom)'"></option>
                                             </template>
-                                            <option value="" disabled x-show="!modelFiles.yolobat || modelFiles.yolobat.length === 0">No .xml files found in /home/pi/yolobat/models/</option>
                                         </select>
                                         <div class="form-text">Path to the YOLO model file (.xml)</div>
                                     </div>
@@ -855,7 +851,7 @@
                                                     </div>
                                                 </div>
                                                 <div class="col-md-4">
-                                                    <label class="form-label small">Recording Length: <span x-text="group.length_s || config.length_s || 20"></span> seconds</label>
+                                                    <label class="form-label small">Recording Length: <span x-text="group.length_s || config.length_s || 5"></span> seconds</label>
                                                     <input type="range" 
                                                            class="form-range" 
                                                            x-model.number="group.length_s"
@@ -1080,7 +1076,7 @@
                                         <input type="text" 
                                                class="form-control" 
                                                x-model="config.output_device_match"
-                                               placeholder="USB AUDIO DEVICE">
+                                               placeholder="bcm2835 Headphones">
                                         <div class="form-text">Device identifier pattern</div>
                                     </div>
                                 </div>

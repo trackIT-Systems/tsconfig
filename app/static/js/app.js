@@ -1227,21 +1227,21 @@ function soundscapepipeConfig() {
             stream_port: 5001,
             lat: 50.85318,
             lon: 8.78735,
-            input_device_match: "USB AUDIO DEVICE",
-            sample_rate: 48000,
+            input_device_match: "trackIT Analog Frontend",
+            sample_rate: 384000,
             input_length_s: 0.1,
-            channels: 1,
+            channels: 2,
             detectors: {
                 birdedge: {
                     detection_threshold: 0.0,
                     class_threshold: 0.3,
-                    model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx",
+                    model_path: "",
                     channel_strategy: "mix",
                     tasks: []
                 },
                 yolobat: {
                     class_threshold: 0.3,
-                    model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml",
+                    model_path: "",
                     channel_strategy: "mix",
                     tasks: []
                 },
@@ -1250,14 +1250,14 @@ function soundscapepipeConfig() {
                     tasks: []
                 }
             },
-            output_device_match: "USB AUDIO DEVICE",
+            output_device_match: "bcm2835 Headphones",
             speaker_enable_pin: 27,
             highpass_freq: 100,
             lure: {
                 tasks: []
             },
             ratio: 0.0,
-            length_s: 20,
+            length_s: 5,
             maximize_confidence: false,
             groups: {}
         },
@@ -1289,11 +1289,14 @@ function soundscapepipeConfig() {
             await this.loadModelFiles();
             
             // Then load config and other data
-            this.loadConfig();
+            await this.loadConfig();
             this.loadServiceStatus();
             this.loadAudioDevices();
             this.loadLureFiles();
             this.loadSpeciesData();
+            
+            // Set up watchers for detector enabled state changes
+            this.setupDetectorWatchers();
             
             // Auto-refresh service status every 30 seconds when tab is active
             this.refreshInterval = setInterval(() => {
@@ -1355,7 +1358,7 @@ function soundscapepipeConfig() {
                             detectors.birdedge.channel_strategy = "mix";
                         }
                     } else {
-                        detectors.birdedge = { enabled: false, detection_threshold: 0.0, class_threshold: 0.3, model_path: "/home/pi/pybirdedge/birdedge/models/ger/MarBird_EFL0_GER.onnx", channel_strategy: "mix", tasks: [] };
+                        detectors.birdedge = { enabled: false, detection_threshold: 0.0, class_threshold: 0.3, model_path: "", channel_strategy: "mix", tasks: [] };
                     }
                     
                                         // YOLOBat detector - enabled if present in config, disabled if not present
@@ -1385,7 +1388,7 @@ function soundscapepipeConfig() {
                         }
  
                     } else {
-                        detectors.yolobat = { enabled: false, class_threshold: 0.3, model_path: "/home/pi/yolobat/models/yolobat11_2025.3.2/model.xml", channel_strategy: "mix", tasks: [] };
+                        detectors.yolobat = { enabled: false, class_threshold: 0.3, model_path: "", channel_strategy: "mix", tasks: [] };
                     }
                     
                     // Static detector (schedule) - enabled if present in config, disabled if not present
@@ -1432,17 +1435,17 @@ function soundscapepipeConfig() {
                         stream_port: data.stream_port || 5001,
                         lat: data.lat || 50.85318,
                         lon: data.lon || 8.78735,
-                        input_device_match: data.input_device_match || "USB AUDIO DEVICE",
+                        input_device_match: data.input_device_match || "trackIT Analog Frontend",
                         input_length_s: data.input_length_s || 0.1,
-                        channels: data.channels || 1,
-                        sample_rate: data.sample_rate || 48000,
+                        channels: data.channels || 2,
+                        sample_rate: data.sample_rate || 384000,
                         detectors: detectors,
-                        output_device_match: data.output_device_match || "USB AUDIO DEVICE",
+                        output_device_match: data.output_device_match || "bcm2835 Headphones",
                         speaker_enable_pin: data.speaker_enable_pin || 27,
                         highpass_freq: data.highpass_freq || 100,
                         lure: lure,
                         ratio: data.ratio || 0.0,
-                        length_s: data.length_s || 20,
+                        length_s: data.length_s || 5,
                         maximize_confidence: data.maximize_confidence || false,
                         groups: data.groups || {}
                     };
@@ -1473,6 +1476,9 @@ function soundscapepipeConfig() {
                     throw new Error(error.detail || 'Failed to load soundscapepipe configuration');
                 }
                 
+                // Auto-select default models for enabled detectors without a model
+                this.autoSelectDefaultModels();
+                
                 // Initialize map after config is loaded, or update if already initialized
                 if (!this.mapInitialized) {
                     setTimeout(() => this.initMap(), 200);
@@ -1482,6 +1488,9 @@ function soundscapepipeConfig() {
             } catch (error) {
                 this.showMessage(error.message, true);
                 this.configLoaded = true; // Allow user to see form even if loading failed
+                
+                // Auto-select default models even if config loading failed
+                this.autoSelectDefaultModels();
                 
                 // Initialize map with defaults even if config loading failed
                 if (!this.mapInitialized) {
@@ -1956,7 +1965,7 @@ function soundscapepipeConfig() {
         updateInputDeviceFromSelection(deviceName, selectedOption) {
             if (deviceName) {
                 // Extract just the device name part (before the colon if it exists)
-                // e.g. "384kHz AudioMoth USB Microphone: Audio (hw:2,0)" -> "384kHz AudioMoth USB Microphone"
+                // e.g. "trackIT Analog Frontend: Audio (hw:2,0)" -> "trackIT Analog Frontend"
                 
                 const cleanDeviceName = deviceName.split(':')[0].trim();
                 this.config.input_device_match = cleanDeviceName;
@@ -1988,6 +1997,8 @@ function soundscapepipeConfig() {
                 const response = await fetch('/api/soundscapepipe/model-files');
                 if (response.ok) {
                     this.modelFiles = await response.json();
+                    // Auto-select default models after loading model files
+                    this.autoSelectDefaultModels();
                 } else {
                     const error = await response.json();
                     this.showMessage(`Failed to load model files: ${error.detail}`, true);
@@ -1997,6 +2008,95 @@ function soundscapepipeConfig() {
             } finally {
                 this.loadingModels = false;
             }
+        },
+
+        // Helper function to select default model when enabling a detector
+        selectDefaultModel(detectorType) {
+            if (!this.modelFiles || !this.modelFiles[detectorType]) {
+                return;
+            }
+
+            const availableModels = this.modelFiles[detectorType];
+            if (availableModels.length === 0) {
+                return;
+            }
+
+            let selectedModel = null;
+
+            // Define preferred model patterns
+            const preferredPatterns = {
+                'yolobat': 'yolobat11_2025.6.2',
+                'birdedge': 'MarBird_EFL0_GER.onnx'
+            };
+
+            const preferredPattern = preferredPatterns[detectorType];
+            if (preferredPattern) {
+                // Look for preferred model first
+                selectedModel = availableModels.find(model => 
+                    model.toLowerCase().includes(preferredPattern.toLowerCase())
+                );
+            }
+
+            // Fallback to first available model if no preferred model found
+            if (!selectedModel) {
+                selectedModel = availableModels[0];
+            }
+
+            // Set the selected model
+            this.config.detectors[detectorType].model_path = selectedModel;
+            
+            // For yolobat, also load the labels
+            if (detectorType === 'yolobat') {
+                this.loadYoloBatLabels();
+            }
+        },
+
+
+
+        // Auto-select default models for enabled detectors without a model
+        autoSelectDefaultModels() {
+            if (!this.configLoaded || !this.modelFiles) {
+                return;
+            }
+
+            // Check each detector type
+            ['birdedge', 'yolobat'].forEach(detectorType => {
+                const detector = this.config.detectors[detectorType];
+                if (detector && detector.enabled && !detector.model_path) {
+                    this.selectDefaultModel(detectorType);
+                }
+            });
+        },
+
+        // Set up watchers for detector enabled state changes
+        setupDetectorWatchers() {
+            // Watch for birdedge detector enabled state changes
+            this.$watch('config.detectors.birdedge.enabled', (enabled, oldEnabled) => {
+                if (enabled) {
+                    // If no model path or model path doesn't exist in available models, select default
+                    const shouldAutoSelect = !this.config.detectors.birdedge.model_path || 
+                                           (this.modelFiles.birdedge && 
+                                            !this.modelFiles.birdedge.includes(this.config.detectors.birdedge.model_path));
+                    
+                    if (shouldAutoSelect) {
+                        this.selectDefaultModel('birdedge');
+                    }
+                }
+            });
+
+            // Watch for yolobat detector enabled state changes
+            this.$watch('config.detectors.yolobat.enabled', (enabled, oldEnabled) => {
+                if (enabled) {
+                    // If no model path or model path doesn't exist in available models, select default
+                    const shouldAutoSelect = !this.config.detectors.yolobat.model_path || 
+                                           (this.modelFiles.yolobat && 
+                                            !this.modelFiles.yolobat.includes(this.config.detectors.yolobat.model_path));
+                    
+                    if (shouldAutoSelect) {
+                        this.selectDefaultModel('yolobat');
+                    }
+                }
+            });
         },
 
         async loadLureFiles() {
@@ -2229,7 +2329,7 @@ function soundscapepipeConfig() {
             this.config.groups[groupName] = {
                 ratio: 0.0,
                 maximize_confidence: false,
-                length_s: this.config.length_s || 20,
+                length_s: this.config.length_s || 5,
                 species: ['']
             };
         },

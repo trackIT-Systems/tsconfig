@@ -249,7 +249,7 @@ async def get_model_files() -> Dict[str, List[str]]:
         "yolobat": []
     }
     
-    # Look for BirdEdge models
+    # Look for BirdEdge models (only in subfolders, not root models directory)
     birdedge_paths = [
         "/home/pi/pybirdedge/birdedge/models",
         "/opt/pybirdedge/models"
@@ -257,10 +257,15 @@ async def get_model_files() -> Dict[str, List[str]]:
     
     for base_path in birdedge_paths:
         if os.path.exists(base_path):
-            for root, dirs, files in os.walk(base_path):
-                for file in files:
-                    if file.endswith('.onnx'):
-                        model_files["birdedge"].append(os.path.join(root, file))
+            # Only search in subdirectories of the models folder
+            for item in os.listdir(base_path):
+                item_path = os.path.join(base_path, item)
+                if os.path.isdir(item_path):
+                    # Walk through this subdirectory to find .onnx files
+                    for root, dirs, files in os.walk(item_path):
+                        for file in files:
+                            if file.endswith('.onnx'):
+                                model_files["birdedge"].append(os.path.join(root, file))
     
     # Look for YoloBat models
     yolobat_paths = [
