@@ -81,18 +81,25 @@
                                 <div class="col-12">
                                     <div class="mb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <label class="form-label mb-0">Input Device</label>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <label class="form-label mb-0">Input Device</label>
+                                                <small class="text-muted" x-show="serviceStatus.active">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    Stop soundscapepipe service to refresh audio device lists
+                                                </small>
+                                            </div>
                                             <button type="button" 
                                                     class="btn btn-sm btn-outline-secondary"
                                                     @click="loadAudioDevices()"
-                                                    :disabled="loadingDevices"
+                                                    :disabled="loadingDevices || serviceStatus.active"
                                                     title="Refresh audio devices">
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
                                             </button>
                                         </div>
                                         <template x-if="audioDevices.input && audioDevices.input.length > 0">
                                             <select class="form-select" 
-                                                    @change="updateInputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                                    @change="updateInputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])"
+                                                    :disabled="serviceStatus.active">
                                                 <option value="">Select input device...</option>
                                                 <template x-for="device in audioDevices.input" :key="device.index">
                                                     <option :value="device.name" 
@@ -1036,18 +1043,25 @@
                                 <div class="col-12">
                                     <div class="mb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <label class="form-label mb-0">Output Device</label>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <label class="form-label mb-0">Output Device</label>
+                                                <small class="text-muted" x-show="serviceStatus.active">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    Stop soundscapepipe service to refresh audio device lists
+                                                </small>
+                                            </div>
                                             <button type="button" 
                                                     class="btn btn-sm btn-outline-secondary"
                                                     @click="loadAudioDevices()"
-                                                    :disabled="loadingDevices"
+                                                    :disabled="loadingDevices || serviceStatus.active"
                                                     title="Refresh audio devices">
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
                                             </button>
                                         </div>
                                         <template x-if="audioDevices.output && audioDevices.output.length > 0">
                                             <select class="form-select" 
-                                                    @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                                    @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])"
+                                                    :disabled="serviceStatus.active">
                                                 <option value="">Select output device...</option>
                                                 <template x-for="device in audioDevices.output" :key="device.index">
                                                     <option :value="device.name" 
