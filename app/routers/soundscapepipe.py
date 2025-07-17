@@ -89,6 +89,8 @@ class SoundscapepipeConfigUpdate(BaseModel):
     # Recording section
     ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
     length_s: Optional[int] = Field(None, gt=0)
+    soundfile_limit: Optional[int] = Field(None, gt=0)
+    soundfile_format: Optional[str] = None
     maximize_confidence: Optional[bool] = None
     
     # Groups section - now properly typed

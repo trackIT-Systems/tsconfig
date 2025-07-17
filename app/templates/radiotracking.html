@@ -5,7 +5,19 @@
             <div class="card" x-data="radiotrackingConfig()" x-init="init()" x-destroy="cleanup()">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
-                <h5 class="card-title mb-0 me-3">Radio Tracking Configuration</h5>
+                <!-- Enable/Disable Toggle -->
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           id="enableSwitch-radiotracking"
+                           :checked="serviceStatus.enabled"
+                           @change="toggleEnable('radiotracking', serviceStatus.enabled)"
+                           :disabled="actionLoading || serviceStatus.status === 'not-found'">
+                    <label class="form-check-label" for="enableSwitch-radiotracking" style="display: none;">
+                    </label>
+                </div>
+                
+                <h5 class="card-title mb-0 me-2">radiotracking</h5>
                 <!-- Service Status Indicator -->
                 <div class="d-flex align-items-center gap-2">
                     <span class="badge d-flex align-items-center gap-1" 
@@ -15,14 +27,8 @@
                                 'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
                                 'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
                             }">
-                        <i :class="{
-                                'fas fa-circle': serviceStatus.active && serviceStatus.status === 'active',
-                                'fas fa-circle': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error',
-                                'fas fa-question-circle': serviceStatus.status === 'not-found',
-                                'fas fa-exclamation-triangle': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
-                            }" 
-                            style="font-size: 0.7em;"></i>
-                        <span x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : (serviceStatus.status === 'unknown' ? 'Unknown' : 'Inactive')))"></span>
+                        <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                        <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
                     </span>
                     <small class="text-muted">
                         <i class="fas fa-clock me-1"></i>
@@ -36,7 +42,7 @@
                         @click="streamLogs('radiotracking')"
                         title="View radiotracking service logs">
                     <i class="fas fa-file-alt me-1"></i>
-                    <span class="d-none d-md-inline">View Logs</span>
+                    <span class="d-none d-md-inline">Logs</span>
                     <span class="d-md-none">Logs</span>
                 </button>
             </div>

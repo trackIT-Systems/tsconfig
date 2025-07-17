@@ -311,6 +311,7 @@ function scheduleConfig() {
         },
         serviceStatusLoading: false,
         refreshInterval: null, // For periodic service status refresh
+        actionLoading: false,
 
         async init() {
             // Small delay to prevent simultaneous API calls during page load
@@ -545,6 +546,50 @@ function scheduleConfig() {
                 console.error('Failed to load service status:', error);
             } finally {
                 this.serviceStatusLoading = false;
+            }
+        },
+
+        async toggleEnable(serviceName, currentlyEnabled) {
+            this.actionLoading = true;
+            
+            try {
+                // Determine the action based on current state
+                const action = currentlyEnabled ? 'disable' : 'enable';
+                
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: serviceName,
+                        action: action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to ${action} service`);
+                }
+                
+                // Use the same message system as the schedule component
+                window.dispatchEvent(new CustomEvent('show-message', {
+                    detail: { message: data.message, isError: false }
+                }));
+                
+                // Refresh service status after action
+                setTimeout(async () => {
+                    await this.loadServiceStatus();
+                }, 1000);
+                
+            } catch (err) {
+                window.dispatchEvent(new CustomEvent('show-message', {
+                    detail: { message: err.message, isError: true }
+                }));
+                console.error(`Service toggle error:`, err);
+            } finally {
+                this.actionLoading = false;
             }
         },
 
@@ -796,6 +841,7 @@ function radiotrackingConfig() {
         },
         serviceStatusLoading: false,
         refreshInterval: null, // For periodic service status refresh
+        actionLoading: false,
 
         dispatchMessage(message, isError) {
             // Dispatch a custom event that the parent can listen for
@@ -892,6 +938,45 @@ function radiotrackingConfig() {
                 console.error('Failed to load service status:', error);
             } finally {
                 this.serviceStatusLoading = false;
+            }
+        },
+
+        async toggleEnable(serviceName, currentlyEnabled) {
+            this.actionLoading = true;
+            
+            try {
+                // Determine the action based on current state
+                const action = currentlyEnabled ? 'disable' : 'enable';
+                
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: serviceName,
+                        action: action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to ${action} service`);
+                }
+                
+                this.dispatchMessage(data.message, false);
+                
+                // Refresh service status after action
+                setTimeout(async () => {
+                    await this.loadServiceStatus();
+                }, 1000);
+                
+            } catch (err) {
+                this.dispatchMessage(err.message, true);
+                console.error(`Service toggle error:`, err);
+            } finally {
+                this.actionLoading = false;
             }
         },
 
@@ -1258,6 +1343,8 @@ function soundscapepipeConfig() {
             },
             ratio: 0.0,
             length_s: 5,
+            soundfile_limit: 5,
+            soundfile_format: "flac",
             maximize_confidence: false,
             groups: {}
         },
@@ -1280,6 +1367,7 @@ function soundscapepipeConfig() {
         loadingLureFiles: false,
         speciesData: {},
         loadingSpecies: false,
+        actionLoading: false,
 
         async init() {
             // Small delay to prevent simultaneous API calls during page load
@@ -1329,6 +1417,45 @@ function soundscapepipeConfig() {
                 }
             } catch (error) {
                 console.error('Failed to load service status:', error);
+            }
+        },
+
+        async toggleEnable(serviceName, currentlyEnabled) {
+            this.actionLoading = true;
+            
+            try {
+                // Determine the action based on current state
+                const action = currentlyEnabled ? 'disable' : 'enable';
+                
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: serviceName,
+                        action: action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to ${action} service`);
+                }
+                
+                this.showMessage(data.message, false);
+                
+                // Refresh service status after action
+                setTimeout(async () => {
+                    await this.loadServiceStatus();
+                }, 1000);
+                
+            } catch (err) {
+                this.showMessage(err.message, true);
+                console.error(`Service toggle error:`, err);
+            } finally {
+                this.actionLoading = false;
             }
         },
 
@@ -1446,6 +1573,8 @@ function soundscapepipeConfig() {
                         lure: lure,
                         ratio: data.ratio || 0.0,
                         length_s: data.length_s || 5,
+                        soundfile_limit: data.soundfile_limit || 5,
+                        soundfile_format: data.soundfile_format || "flac",
                         maximize_confidence: data.maximize_confidence || false,
                         groups: data.groups || {}
                     };
