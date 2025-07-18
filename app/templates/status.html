@@ -410,51 +410,104 @@
                                 </div>
                             </div>
 
-                            <!-- Network & Temperature -->
+                            <!-- Network, Temperature & Time Status -->
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-lg-4 col-md-6 mb-3">
                                     <h6 class="text-muted mb-3"><i class="fas fa-network-wired me-2"></i>Network</h6>
-                                    <table class="table table-borderless table-sm">
+                                    <table class="table table-borderless table-sm small">
                                         <tr>
-                                            <td><strong>Active Connections:</strong></td>
+                                            <td class="fw-bold">Active Connections:</td>
                                             <td x-text="systemInfo?.network?.connections !== null ? systemInfo?.network?.connections : 'Permission denied'"></td>
                                         </tr>
                                         <template x-if="systemInfo?.network?.io_counters?.bytes_sent">
                                             <tr>
-                                                <td><strong>Bytes Sent:</strong></td>
+                                                <td class="fw-bold">Bytes Sent:</td>
                                                 <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_sent)"></td>
                                             </tr>
                                         </template>
                                         <template x-if="systemInfo?.network?.io_counters?.bytes_recv">
                                             <tr>
-                                                <td><strong>Bytes Received:</strong></td>
+                                                <td class="fw-bold">Bytes Received:</td>
                                                 <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_recv)"></td>
                                             </tr>
                                         </template>
                                     </table>
                                 </div>
-                                <div class="col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length > 0">
+                                <div class="col-lg-4 col-md-6 mb-3" x-show="Object.keys(systemInfo?.temperatures || {}).length > 0">
                                     <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
-                                    <template x-for="(sensors, sensorName) in systemInfo?.temperatures || {}" :key="sensorName">
-                                        <div class="mb-2">
-                                            <strong x-text="sensorName" class="text-capitalize"></strong>
+                                    <table class="table table-borderless table-sm small">
+                                        <template x-for="(sensors, sensorName) in systemInfo?.temperatures || {}" :key="sensorName">
                                             <template x-for="sensor in sensors" :key="sensor.label">
-                                                <div class="small">
-                                                    <span x-text="sensor.label"></span>: 
-                                                    <span x-text="`${sensor.current}°C`" 
-                                                            :class="{
-                                                                'text-success': sensor.current < 60,
-                                                                'text-warning': sensor.current >= 60 && sensor.current < 80,
-                                                                'text-danger': sensor.current >= 80
-                                                            }"></span>
-                                                </div>
+                                                <tr>
+                                                    <td class="fw-bold text-capitalize" x-text="`${sensor.label}:`"></td>
+                                                    <td>
+                                                        <span x-text="`${sensor.current.toFixed(1)}°C`" 
+                                                                :class="{
+                                                                    'text-success': sensor.current < 60,
+                                                                    'text-warning': sensor.current >= 60 && sensor.current < 80,
+                                                                    'text-danger': sensor.current >= 80
+                                                                }"></span>
+                                                    </td>
+                                                </tr>
                                             </template>
+                                        </template>
+                                    </table>
+                                </div>
+                                <div class="col-lg-4 col-md-6 mb-3" x-show="Object.keys(systemInfo?.temperatures || {}).length === 0">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                    <div class="text-muted small">Temperature sensors not available</div>
+                                </div>
+                                <div class="col-lg-4 col-md-6 mb-3">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-clock me-2"></i>Time & Date</h6>
+                                    <template x-if="timedatectlStatus?.available && timedatectlStatus?.status">
+                                        <div>
+                                            <table class="table table-borderless table-sm small">
+                                                <tr>
+                                                    <td class="fw-bold">Local Time:</td>
+                                                    <td x-text="timedatectlStatus.status.local_time"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="fw-bold">Time Zone:</td>
+                                                    <td x-text="timedatectlStatus.status.time_zone"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="fw-bold">NTP Service:</td>
+                                                    <td>
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'bg-success': timedatectlStatus.status.ntp_service === 'active',
+                                                                  'bg-warning': timedatectlStatus.status.ntp_service === 'inactive',
+                                                                  'bg-secondary': timedatectlStatus.status.ntp_service === 'n/a'
+                                                              }"
+                                                              x-text="timedatectlStatus.status.ntp_service"></span>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="fw-bold">Clock Synchronized:</td>
+                                                    <td>
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'bg-success': timedatectlStatus.status.system_clock_synchronized === true,
+                                                                  'bg-danger': timedatectlStatus.status.system_clock_synchronized === false
+                                                              }"
+                                                              x-text="timedatectlStatus.status.system_clock_synchronized ? 'Yes' : 'No'"></span>
+                                                    </td>
+                                                </tr>
+                                            </table>
                                         </div>
                                     </template>
-                                </div>
-                                <div class="col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length === 0">
-                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
-                                    <small class="text-muted">Temperature sensors not available</small>
+                                    <template x-if="timedatectlError">
+                                        <div class="text-danger small">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            <span x-text="timedatectlError"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!timedatectlStatus?.available && !timedatectlError">
+                                        <div class="text-muted small">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Timedatectl not available
+                                        </div>
+                                    </template>
                                 </div>
                             </div>
                         </div>

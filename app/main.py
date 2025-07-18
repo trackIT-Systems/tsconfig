@@ -4,6 +4,8 @@ import datetime
 import platform
 import socket
 import time
+import subprocess
+import json
 from pathlib import Path
 
 import psutil
@@ -218,3 +220,83 @@ async def get_available_services():
         pass
     
     return {"available_services": available_services}
+
+@app.get("/api/timedatectl-status")
+async def get_timedatectl_status():
+    """Get system time and date status using timedatectl."""
+    try:
+        timedatectl_status = {
+            "available": False,
+            "status": None,
+            "error": None,
+            "timestamp": datetime.datetime.now().isoformat(),
+        }
+        
+        # Check if timedatectl command is available
+        try:
+            test_result = subprocess.run(
+                ["timedatectl", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            timedatectl_status["available"] = test_result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            timedatectl_status["available"] = False
+            timedatectl_status["error"] = "timedatectl command not found"
+            return JSONResponse(content=timedatectl_status)
+        
+        if not timedatectl_status["available"]:
+            timedatectl_status["error"] = "timedatectl command not available"
+            return JSONResponse(content=timedatectl_status)
+        
+        # Get timedatectl status
+        try:
+            status_result = subprocess.run(
+                ["timedatectl", "status"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if status_result.returncode == 0:
+                timedatectl_status["status"] = _parse_timedatectl_status(status_result.stdout)
+            else:
+                timedatectl_status["error"] = f"timedatectl status failed: {status_result.stderr.strip()}"
+        except subprocess.TimeoutExpired:
+            timedatectl_status["error"] = "timedatectl status command timed out"
+        except Exception as e:
+            timedatectl_status["error"] = f"Error executing timedatectl status: {str(e)}"
+        
+        return JSONResponse(content=timedatectl_status)
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Failed to get timedatectl status: {str(e)}"})
+
+
+def _parse_timedatectl_status(status_output):
+    """Parse timedatectl status output into structured data."""
+    timedatectl_info = {}
+    
+    for line in status_output.strip().split('\n'):
+        line = line.strip()
+        if line and ':' in line:
+            key, value = line.split(':', 1)
+            key = key.strip()
+            value = value.strip()
+            
+            # Convert to snake_case and parse specific fields
+            key_snake = key.lower().replace(' ', '_').replace('-', '_')
+            
+            # Parse boolean values
+            if value.lower() in ['yes', 'no']:
+                timedatectl_info[key_snake] = value.lower() == 'yes'
+            else:
+                # Try to parse as integer
+                try:
+                    timedatectl_info[key_snake] = int(value)
+                except ValueError:
+                    timedatectl_info[key_snake] = value
+    
+    return timedatectl_info
+

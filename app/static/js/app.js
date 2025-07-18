@@ -2654,6 +2654,10 @@ function statusPage() {
         // Reboot protection functionality
         rebootProtectionEnabled: false,
         rebootProtectionLoading: false,
+        // Timedatectl status properties
+        timedatectlStatus: null,
+        timedatectlLoading: false,
+        timedatectlError: null,
 
         async initStatus() {
             // Load reboot protection status
@@ -2683,10 +2687,11 @@ function statusPage() {
             this.statusError = null;
             
             try {
-                // Refresh both system status and services in parallel
+                // Refresh system status, services, and timedatectl in parallel
                 // Force refresh services since this is a manual refresh
-                const [statusResponse] = await Promise.all([
+                const [statusResponse, timedatectlResponse] = await Promise.all([
                     fetch('/api/system-status'),
+                    fetch('/api/timedatectl-status'),
                     serviceManager.getServices(true) // Force refresh
                 ]);
                 
@@ -2697,6 +2702,16 @@ function statusPage() {
                 const data = await statusResponse.json();
                 this.systemInfo = data;
                 this.lastUpdated = new Date().toLocaleTimeString();
+                
+                // Handle timedatectl status
+                if (timedatectlResponse.ok) {
+                    const timedatectlData = await timedatectlResponse.json();
+                    this.timedatectlStatus = timedatectlData;
+                    this.timedatectlError = null;
+                } else {
+                    this.timedatectlError = `Failed to load timedatectl status: HTTP ${timedatectlResponse.status}`;
+                    console.error('Timedatectl status error:', this.timedatectlError);
+                }
                 
                 // Update local services data from the forced refresh
                 this.services = serviceManager.services;
