@@ -2454,7 +2454,8 @@ function soundscapepipeConfig() {
                 this.config.groups = {};
             }
             
-            const groupName = `group_${Object.keys(this.config.groups).length + 1}`;
+            // Create group with empty name - user will provide their own name
+            const groupName = '';
             this.config.groups[groupName] = {
                 ratio: 0.0,
                 maximize_confidence: false,
