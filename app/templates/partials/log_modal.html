@@ -59,8 +59,36 @@
                         </span>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <button type="button" class="btn btn-outline-warning btn-sm" @click="restartService()" :disabled="!currentService">
-                            <i class="fas fa-redo me-1"></i><span class="d-none d-sm-inline">Restart Service</span><span class="d-sm-none">Restart</span>
+                        <button type="button" 
+                                class="btn btn-sm"
+                                :class="{
+                                    'btn-outline-warning': restartState === 'idle',
+                                    'btn-primary': restartState === 'restarting',
+                                    'btn-outline-success': restartState === 'restarted'
+                                }"
+                                @click="restartService()" 
+                                :disabled="!currentService || restartState === 'restarting'">
+                            <template x-if="restartState === 'idle'">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-redo me-1"></i>
+                                    <span class="d-none d-sm-inline">Restart Service</span>
+                                    <span class="d-sm-none">Restart</span>
+                                </div>
+                            </template>
+                            <template x-if="restartState === 'restarting'">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                    <span class="d-none d-sm-inline">Restarting...</span>
+                                    <span class="d-sm-none">Restarting</span>
+                                </div>
+                            </template>
+                            <template x-if="restartState === 'restarted'">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-check me-1"></i>
+                                    <span class="d-none d-sm-inline">Restarted!</span>
+                                    <span class="d-sm-none">Restarted</span>
+                                </div>
+                            </template>
                         </button>
                         <button type="button" class="btn btn-outline-danger btn-sm" @click="clearLogs()">
                             <i class="fas fa-trash me-1"></i><span class="d-none d-sm-inline">Clear</span>

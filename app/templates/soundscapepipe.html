@@ -1394,18 +1394,66 @@
                             </div>
                             <div class="d-flex gap-2">
                                 <button type="submit" 
-                                        class="btn btn-success"
-                                        :disabled="!configLoaded">
-                                    <i class="fas fa-save me-1"></i>
-                                    Save
+                                        class="btn"
+                                        :class="{
+                                            'btn-success': saveState === 'idle',
+                                            'btn-primary': saveState === 'saving',
+                                            'btn-outline-success': saveState === 'saved'
+                                        }"
+                                        :disabled="!configLoaded || saveState === 'saving'">
+                                    <template x-if="saveState === 'idle'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-save me-1"></i>
+                                            Save
+                                        </div>
+                                    </template>
+                                    <template x-if="saveState === 'saving'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-spinner fa-spin me-1"></i>
+                                            Saving...
+                                        </div>
+                                    </template>
+                                    <template x-if="saveState === 'saved'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-check me-1"></i>
+                                            Saved!
+                                        </div>
+                                    </template>
                                 </button>
                                 <button type="button" 
-                                        class="btn btn-warning" 
+                                        class="btn"
+                                        :class="{
+                                            'btn-warning': saveRestartState === 'idle',
+                                            'btn-primary': saveRestartState === 'saving' || saveRestartState === 'restarting',
+                                            'btn-outline-success': saveRestartState === 'saved'
+                                        }"
                                         @click="saveAndRestartService()"
-                                        :disabled="!configLoaded || serviceStatus.status === 'not-found'">
-                                    <i class="fas fa-save me-1"></i>
-                                    <i class="fas fa-redo me-1"></i>
-                                    Save & Restart
+                                        :disabled="!configLoaded || serviceStatus.status === 'not-found' || saveRestartState === 'saving' || saveRestartState === 'restarting'">
+                                    <template x-if="saveRestartState === 'idle'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-save me-1"></i>
+                                            <i class="fas fa-redo me-1"></i>
+                                            Save & Restart
+                                        </div>
+                                    </template>
+                                    <template x-if="saveRestartState === 'saving'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-spinner fa-spin me-1"></i>
+                                            Saving...
+                                        </div>
+                                    </template>
+                                    <template x-if="saveRestartState === 'restarting'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-spinner fa-spin me-1"></i>
+                                            Restarting...
+                                        </div>
+                                    </template>
+                                    <template x-if="saveRestartState === 'saved'">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-check me-1"></i>
+                                            Saved & Restarted!
+                                        </div>
+                                    </template>
                                 </button>
                             </div>
                         </div>

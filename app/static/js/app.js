@@ -292,6 +292,7 @@ function configManager() {
 
 function scheduleConfig() {
     return {
+        ...saveStateMixin(),
         config: {
             lat: 0,
             lon: 0,
@@ -666,7 +667,7 @@ function scheduleConfig() {
         },
 
         async saveConfig() {
-            try {
+            const configSaveFunction = async () => {
                 const response = await fetch('/api/schedule', {
                     method: 'PUT',
                     headers: {
@@ -690,9 +691,9 @@ function scheduleConfig() {
                 }
                 const data = await response.json();
                 this.showMessage(data.message, false);  // false means not an error, so it will be success
-            } catch (error) {
-                this.showMessage(error.message, true);
-            }
+            };
+            
+            await this.handleSaveConfig(configSaveFunction);
         },
 
         async downloadConfig() {
@@ -732,10 +733,33 @@ function scheduleConfig() {
         },
 
         async saveAndRestartService() {
-            try {
-                // First save the configuration
-                await this.saveConfig();
-                
+            const configSaveFunction = async () => {
+                const response = await fetch('/api/schedule', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.config)
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to save schedule configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                    }
+                    if (error.detail?.validation_errors) {
+                        const validationErrors = error.detail.validation_errors.map(err => 
+                            `${err.loc.join('.')}: ${err.msg}`
+                        ).join(', ');
+                        errorMessage += '\nValidation errors: ' + validationErrors;
+                    }
+                    throw new Error(errorMessage);
+                }
+                const data = await response.json();
+                this.showMessage(data.message, false);  // false means not an error, so it will be success
+            };
+            
+            const restartFunction = async () => {
                 // Then restart the wittypid service
                 const response = await fetch('/api/systemd/action', {
                     method: 'POST',
@@ -760,10 +784,9 @@ function scheduleConfig() {
                 setTimeout(async () => {
                     await this.loadServiceStatus();
                 }, 2000);
-                
-            } catch (error) {
-                this.showMessage(error.message, true);
-            }
+            };
+            
+            await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
         },
 
         showMessage(message, isError) {
@@ -777,6 +800,7 @@ function scheduleConfig() {
 
 function radiotrackingConfig() {
     return {
+        ...saveStateMixin(),
         config: {
             "rtl-sdr": {
                 device: [],
@@ -1089,7 +1113,7 @@ function radiotrackingConfig() {
         },
 
         async saveConfig() {
-            try {
+            const configSaveFunction = async () => {
                 // Convert the frontend config format to the API format
                 const apiConfig = {
                     optional_arguments: {
@@ -1167,9 +1191,9 @@ function radiotrackingConfig() {
                 }
                 const data = await response.json();
                 this.dispatchMessage(data.message, false);  // false means not an error, so it will be success
-            } catch (error) {
-                this.dispatchMessage(error.message, true);
-            }
+            };
+            
+            await this.handleSaveConfig(configSaveFunction);
         },
 
         async downloadConfig() {
@@ -1270,10 +1294,87 @@ function radiotrackingConfig() {
         },
 
         async saveAndRestartService() {
-            try {
-                // First save the configuration
-                await this.saveConfig();
-                
+            const configSaveFunction = async () => {
+                // Convert the frontend config format to the API format
+                const apiConfig = {
+                    optional_arguments: {
+                        verbose: this.config["optional arguments"].verbose,
+                        calibrate: this.config["optional arguments"].calibrate,
+                        config: "/boot/firmware/radiotracking.ini", // Required field
+                        station: this.config["optional arguments"].station || null,
+                        schedule: this.config["optional arguments"].schedule || []
+                    },
+                    rtl_sdr: {
+                        device: this.config["rtl-sdr"].device,
+                        calibration: this.config["rtl-sdr"].calibration,
+                        center_freq: this.config["rtl-sdr"].center_freq,
+                        sample_rate: this.config["rtl-sdr"].sample_rate,
+                        sdr_callback_length: this.config["rtl-sdr"].sdr_callback_length,
+                        gain: this.config["rtl-sdr"].gain,
+                        lna_gain: this.config["rtl-sdr"].lna_gain,
+                        mixer_gain: this.config["rtl-sdr"].mixer_gain,
+                        vga_gain: this.config["rtl-sdr"].vga_gain,
+                        sdr_max_restart: this.config["rtl-sdr"].sdr_max_restart,
+                        sdr_timeout_s: this.config["rtl-sdr"].sdr_timeout_s
+                    },
+                    analysis: {
+                        fft_nperseg: this.config["analysis"].fft_nperseg,
+                        fft_window: this.config["analysis"].fft_window,
+                        signal_threshold_dbw: this.config["analysis"].signal_threshold_dbw,
+                        snr_threshold_db: this.config["analysis"].snr_threshold_db,
+                        signal_min_duration_ms: this.config["analysis"].signal_min_duration_ms,
+                        signal_max_duration_ms: this.config["analysis"].signal_max_duration_ms
+                    },
+                    matching: {
+                        matching_timeout_s: this.config["matching"].matching_timeout_s,
+                        matching_time_diff_s: this.config["matching"].matching_time_diff_s,
+                        matching_bandwidth_hz: this.config["matching"].matching_bandwidth_hz,
+                        matching_duration_diff_ms: this.config["matching"].matching_duration_diff_ms
+                    },
+                    publish: {
+                        sig_stdout: this.config["publish"].sig_stdout,
+                        match_stdout: this.config["publish"].match_stdout,
+                        path: this.config["publish"].path,
+                        csv: this.config["publish"].csv,
+                        export_config: this.config["publish"].export_config || true,
+                        mqtt: this.config["publish"].mqtt,
+                        mqtt_host: this.config["publish"].mqtt_host,
+                        mqtt_port: this.config["publish"].mqtt_port
+                    },
+                    dashboard: {
+                        dashboard: this.config["dashboard"].dashboard,
+                        dashboard_host: this.config["dashboard"].dashboard_host,
+                        dashboard_port: this.config["dashboard"].dashboard_port,
+                        dashboard_signals: this.config["dashboard"].dashboard_signals
+                    }
+                };
+
+                const response = await fetch('/api/radiotracking', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(apiConfig)
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    let errorMessage = error.detail?.message || 'Failed to save radio tracking configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
+                    }
+                    if (error.detail?.validation_errors) {
+                        const validationErrors = error.detail.validation_errors.map(err => 
+                            `${err.loc.join('.')}: ${err.msg}`
+                        ).join(', ');
+                        errorMessage += '\nValidation errors: ' + validationErrors;
+                    }
+                    throw new Error(errorMessage);
+                }
+                const data = await response.json();
+                this.dispatchMessage(data.message, false);  // false means not an error, so it will be success
+            };
+            
+            const restartFunction = async () => {
                 // Then restart the radiotracking service
                 const response = await fetch('/api/systemd/action', {
                     method: 'POST',
@@ -1298,16 +1399,16 @@ function radiotrackingConfig() {
                 setTimeout(async () => {
                     await this.loadServiceStatus();
                 }, 2000);
-                
-            } catch (error) {
-                this.dispatchMessage(error.message, true);
-            }
+            };
+            
+            await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
         }
     }
 }
 
 function soundscapepipeConfig() {
     return {
+        ...saveStateMixin(),
         config: {
             stream_port: 5001,
             lat: 50.85318,
@@ -1629,12 +1730,12 @@ function soundscapepipeConfig() {
         },
 
         async saveConfig() {
-            try {
+            const configSaveFunction = async () => {
                 // Validate species groups first
                 const speciesErrors = this.validateSpeciesGroups();
                 if (speciesErrors.length > 0) {
                     this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
-                    return;
+                    throw new Error('Species validation failed');
                 }
 
                 // Create a copy of the config and filter out disabled detectors
@@ -1763,9 +1864,9 @@ function soundscapepipeConfig() {
                     }
                     throw new Error(errorMessage);
                 }
-            } catch (error) {
-                this.showMessage(error.message, true);
-            }
+            };
+            
+            await this.handleSaveConfig(configSaveFunction);
         },
 
         async downloadConfig() {
@@ -1907,10 +2008,136 @@ function soundscapepipeConfig() {
         },
 
         async saveAndRestartService() {
-            try {
-                // First save the configuration
-                await this.saveConfig();
+            const configSaveFunction = async () => {
+                // First save the configuration (custom logic to avoid interfering with regular save button)
+                const speciesErrors = this.validateSpeciesGroups();
+                if (speciesErrors.length > 0) {
+                    this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
+                    throw new Error('Species validation failed');
+                }
+
+                // Create a copy of the config and filter out disabled detectors (same logic as saveConfig)
+                const configToSave = { ...this.config };
                 
+                // Filter detectors to only include enabled ones
+                configToSave.detectors = {};
+                
+                if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
+                    configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
+                    delete configToSave.detectors.birdedge.enabled;
+                    if (configToSave.detectors.birdedge.tasks) {
+                        configToSave.detectors.birdedge.tasks = configToSave.detectors.birdedge.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+                
+                if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
+                    configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
+                    delete configToSave.detectors.yolobat.enabled;
+                    configToSave.detectors.yolobat.detection_threshold = this.config.detectors.yolobat.class_threshold;
+                    delete configToSave.detectors.yolobat.schedule;
+                    if (configToSave.detectors.yolobat.tasks) {
+                        configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+                
+                if (this.config.detectors.schedule && this.config.detectors.schedule.enabled) {
+                    configToSave.detectors.schedule = { ...this.config.detectors.schedule };
+                    delete configToSave.detectors.schedule.enabled;
+                    if (configToSave.detectors.schedule.tasks) {
+                        configToSave.detectors.schedule.tasks = configToSave.detectors.schedule.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+
+                // Clean up lure and groups (same logic as saveConfig)
+                if (this.config.lure && this.config.lure.tasks) {
+                    this.config.lure.tasks.forEach(task => {
+                        this.updateLureTaskTimeString(task, 'start');
+                        this.updateLureTaskTimeString(task, 'stop');
+                    });
+                }
+
+                if (configToSave.lure && configToSave.lure.tasks) {
+                    const validTasks = configToSave.lure.tasks.filter(task => 
+                        task && task.species && task.species.trim() !== ''
+                    );
+                    
+                    configToSave.lure = {
+                        ...configToSave.lure,
+                        tasks: validTasks.map(task => {
+                            const cleanTask = { 
+                                species: task.species, 
+                                paths: task.paths || [''],
+                                start: task.start || '00:00', 
+                                stop: task.stop || '00:00',
+                                record: Boolean(task.record)
+                            };
+                            return cleanTask;
+                        })
+                    };
+                } else if (configToSave.lure) {
+                    configToSave.lure.tasks = [];
+                }
+
+                if (configToSave.groups) {
+                    configToSave.groups = {};
+                    Object.keys(this.config.groups).forEach(groupName => {
+                        const group = this.config.groups[groupName];
+                        const cleanGroup = {
+                            species: (group.species || []).filter(species => species && species.trim() !== '')
+                        };
+                        
+                        if (group.ratio !== null && group.ratio !== undefined) {
+                            cleanGroup.ratio = group.ratio;
+                        }
+                        
+                        if (group.length_s !== null && group.length_s !== undefined) {
+                            cleanGroup.length_s = group.length_s;
+                        }
+                        
+                        cleanGroup.maximize_confidence = Boolean(group.maximize_confidence);
+                        
+                        configToSave.groups[groupName] = cleanGroup;
+                    });
+                }
+
+                // Save the configuration
+                const saveResponse = await fetch('/api/soundscapepipe', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(configToSave)
+                });
+                
+                if (!saveResponse.ok) {
+                    const error = await saveResponse.json();
+                    let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                if (!saveResponse.ok) {
+                    const error = await saveResponse.json();
+                    let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
+                    if (error.detail?.errors) {
+                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
+                    }
+                    throw new Error(errorMessage);
+                }
+            };
+            
+            const restartFunction = async () => {
                 // Then restart the soundscapepipe service
                 const response = await fetch('/api/systemd/action', {
                     method: 'POST',
@@ -1935,10 +2162,9 @@ function soundscapepipeConfig() {
                 setTimeout(async () => {
                     await this.loadServiceStatus();
                 }, 2000);
-                
-            } catch (error) {
-                this.showMessage(error.message, true);
-            }
+            };
+            
+            await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
         },
 
         resetConfig() {
@@ -2636,6 +2862,7 @@ async function getSystemRefreshInterval() {
 
 function statusPage() {
     return {
+        ...saveStateMixin(),
         systemInfo: null,
         loading: true,
         refreshing: false,
@@ -2650,6 +2877,10 @@ function statusPage() {
         actionLoading: false,
         actionMessage: '',
         actionError: false,
+        // Service restart states (track individual service restart states)
+        serviceRestartStates: {}, // serviceName -> 'idle' | 'restarting' | 'restarted'
+        // Service start/stop states (track individual service start/stop states)
+        serviceStartStopStates: {}, // serviceName -> 'idle' | 'starting' | 'stopping' | 'started' | 'stopped'
         // Reboot functionality
         rebootLoading: false,
         // Reboot protection functionality
@@ -2806,10 +3037,43 @@ function statusPage() {
             }
         },
 
+        setServiceRestartState(serviceName, state) {
+            this.serviceRestartStates[serviceName] = state;
+            if (state === 'restarted') {
+                setTimeout(() => {
+                    this.serviceRestartStates[serviceName] = 'idle';
+                }, 5000);
+            }
+        },
+
+        getServiceRestartState(serviceName) {
+            return this.serviceRestartStates[serviceName] || 'idle';
+        },
+
+        setServiceStartStopState(serviceName, state) {
+            this.serviceStartStopStates[serviceName] = state;
+            
+            // Auto-reset after 5 seconds for completed states
+            if (state === 'started' || state === 'stopped') {
+                setTimeout(() => {
+                    this.serviceStartStopStates[serviceName] = 'idle';
+                }, 5000);
+            }
+        },
+
+        getServiceStartStopState(serviceName) {
+            return this.serviceStartStopStates[serviceName] || 'idle';
+        },
+
         async performAction(serviceName, action) {
             this.actionLoading = true;
             this.actionMessage = '';
             this.actionError = false;
+            
+            // For restart actions, set the service-specific state
+            if (action === 'restart') {
+                this.setServiceRestartState(serviceName, 'restarting');
+            }
             
             try {
                 const response = await fetch('/api/systemd/action', {
@@ -2832,6 +3096,11 @@ function statusPage() {
                 this.actionMessage = data.message;
                 this.actionError = false;
                 
+                // For restart actions, set the service-specific state
+                if (action === 'restart') {
+                    this.setServiceRestartState(serviceName, 'restarted');
+                }
+                
                 // Refresh services list after action
                 setTimeout(async () => {
                     const services = await serviceManager.getServices(true); // Force refresh
@@ -2847,6 +3116,80 @@ function statusPage() {
                 this.actionMessage = err.message;
                 this.actionError = true;
                 console.error(`Service ${action} error:`, err);
+                
+                // For restart actions, reset the service-specific state
+                if (action === 'restart') {
+                    this.setServiceRestartState(serviceName, 'idle');
+                }
+                
+                // Clear error message after 10 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                    this.actionError = false;
+                }, 10000);
+            } finally {
+                this.actionLoading = false;
+            }
+        },
+
+        async performStartStopAction(serviceName, action) {
+            this.actionLoading = true;
+            this.actionMessage = '';
+            this.actionError = false;
+            
+            // Set the service-specific state
+            if (action === 'start') {
+                this.setServiceStartStopState(serviceName, 'starting');
+            } else if (action === 'stop') {
+                this.setServiceStartStopState(serviceName, 'stopping');
+            }
+            
+            try {
+                const response = await fetch('/api/systemd/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: serviceName,
+                        action: action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `Failed to ${action} service`);
+                }
+                
+                this.actionMessage = data.message;
+                this.actionError = false;
+                
+                // Set the service-specific state to completed
+                if (action === 'start') {
+                    this.setServiceStartStopState(serviceName, 'started');
+                } else if (action === 'stop') {
+                    this.setServiceStartStopState(serviceName, 'stopped');
+                }
+                
+                // Refresh services list after action
+                setTimeout(async () => {
+                    const services = await serviceManager.getServices(true); // Force refresh
+                    this.services = services;
+                }, 1000);
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    this.actionMessage = '';
+                }, 5000);
+                
+            } catch (err) {
+                this.actionMessage = err.message;
+                this.actionError = true;
+                console.error(`Service ${action} error:`, err);
+                
+                // Reset the service-specific state on error
+                this.setServiceStartStopState(serviceName, 'idle');
                 
                 // Clear error message after 10 seconds
                 setTimeout(() => {
@@ -3056,6 +3399,7 @@ function statusPage() {
 // Log Viewer Component for streaming journalctl logs
 function logViewer() {
     return {
+        ...saveStateMixin(),
         currentService: '',
         logs: [],
         isStreaming: false,
@@ -3063,6 +3407,7 @@ function logViewer() {
         autoScroll: true,
         eventSource: null,
         maxLogs: 1000, // Limit to prevent memory issues
+        restartState: 'idle', // 'idle', 'restarting', 'restarted'
 
         init() {
             // Listen for modal close event to cleanup
@@ -3149,7 +3494,7 @@ function logViewer() {
         async restartService() {
             if (!this.currentService) return;
             
-            try {
+            const restartFunction = async () => {
                 // Call the systemd API directly
                 const response = await fetch('/api/systemd/action', {
                     method: 'POST',
@@ -3173,12 +3518,21 @@ function logViewer() {
                 const configComponent = document.querySelector('[x-data*="Config"]');
                 if (configComponent && configComponent._x_dataStack && configComponent._x_dataStack[0].showMessage) {
                     configComponent._x_dataStack[0].showMessage(`${data.message}`, false);
-                } else {
-                    // Fallback to console log
-                    console.log(`Service restart: ${data.message}`);
                 }
+            };
+            
+            try {
+                this.restartState = 'restarting';
+                await restartFunction();
+                this.restartState = 'restarted';
+                
+                // Reset to idle state after 5 seconds
+                setTimeout(() => {
+                    this.restartState = 'idle';
+                }, 5000);
                 
             } catch (error) {
+                this.restartState = 'idle';
                 console.error('Failed to restart service:', error);
                 
                 // Show error message if there's a way to display it
@@ -3525,6 +3879,56 @@ function shellViewer() {
             if (terminalElement) {
                 terminalElement.style.display = 'none';
                 terminalElement.innerHTML = '';
+            }
+        }
+    };
+}
+
+// Save state management mixin
+function saveStateMixin() {
+    return {
+        saveState: 'idle', // 'idle', 'saving', 'saved'
+        saveRestartState: 'idle', // 'idle', 'saving', 'restarting', 'saved'
+        
+        setSaveState(state) {
+            this.saveState = state;
+            if (state === 'saved') {
+                setTimeout(() => {
+                    this.saveState = 'idle';
+                }, 5000);
+            }
+        },
+        
+        setSaveRestartState(state) {
+            this.saveRestartState = state;
+            if (state === 'saved') {
+                setTimeout(() => {
+                    this.saveRestartState = 'idle';
+                }, 5000);
+            }
+        },
+        
+        async handleSaveConfig(configSaveFunction) {
+            try {
+                this.setSaveState('saving');
+                await configSaveFunction();
+                this.setSaveState('saved');
+            } catch (error) {
+                this.setSaveState('idle');
+                throw error;
+            }
+        },
+        
+        async handleSaveAndRestartConfig(configSaveFunction, restartFunction) {
+            try {
+                this.setSaveRestartState('saving');
+                await configSaveFunction();
+                this.setSaveRestartState('restarting');
+                await restartFunction();
+                this.setSaveRestartState('saved');
+            } catch (error) {
+                this.setSaveRestartState('idle');
+                throw error;
             }
         }
     };
