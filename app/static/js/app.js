@@ -1447,7 +1447,8 @@ function soundscapepipeConfig() {
             soundfile_limit: 5,
             soundfile_format: "flac",
             maximize_confidence: false,
-            groups: {}
+            groups: {},
+            disk_reserve_mb: 512
         },
         configLoaded: false,
         serviceStatus: {
@@ -1469,6 +1470,7 @@ function soundscapepipeConfig() {
         speciesData: {},
         loadingSpecies: false,
         actionLoading: false,
+        diskInfo: [],
 
         async init() {
             // Small delay to prevent simultaneous API calls during page load
@@ -1476,6 +1478,9 @@ function soundscapepipeConfig() {
             
             // Load model files first to ensure dropdown options are available
             await this.loadModelFiles();
+            
+            // Load disk info early for slider configuration
+            await this.loadDiskInfo();
             
             // Then load config and other data
             await this.loadConfig();
@@ -1677,7 +1682,8 @@ function soundscapepipeConfig() {
                         soundfile_limit: data.soundfile_limit || 5,
                         soundfile_format: data.soundfile_format || "flac",
                         maximize_confidence: data.maximize_confidence || false,
-                        groups: data.groups || {}
+                        groups: data.groups || {},
+                        disk_reserve_mb: Math.min(data.disk_reserve_mb || 512, this.getDataDiskSize())
                     };
                     
                     // Initialize group ratios and recording lengths with global values if not set
@@ -2491,6 +2497,57 @@ function soundscapepipeConfig() {
             } finally {
                 this.loadingSpecies = false;
             }
+        },
+
+        async loadDiskInfo() {
+            try {
+                const response = await fetch('/api/system-status');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.diskInfo = data.disk || [];
+                } else {
+                    console.error('Failed to load disk info');
+                    this.diskInfo = [];
+                }
+            } catch (error) {
+                console.error('Error loading disk info:', error);
+                this.diskInfo = [];
+            }
+        },
+
+        getDataDiskSize() {
+            if (!this.diskInfo || !Array.isArray(this.diskInfo) || this.diskInfo.length === 0) {
+                return 2048; // Default fallback of 2GB in MB
+            }
+            
+            // Find the disk that contains /data, prioritizing exact matches
+            let dataDisk = this.diskInfo.find(disk => disk.mountpoint === '/data');
+            
+            // Fallback to root filesystem if /data not found
+            if (!dataDisk) {
+                dataDisk = this.diskInfo.find(disk => disk.mountpoint === '/');
+            }
+            
+            // Fallback to any disk that might contain /data
+            if (!dataDisk) {
+                dataDisk = this.diskInfo.find(disk => 
+                    disk.mountpoint && disk.mountpoint.includes('/data')
+                );
+            }
+            
+            // Use the first available disk as last resort
+            if (!dataDisk && this.diskInfo.length > 0) {
+                dataDisk = this.diskInfo[0];
+            }
+            
+            if (dataDisk && dataDisk.total && dataDisk.total > 0) {
+                // Convert from bytes to megabytes and round down
+                const sizeInMB = Math.floor(dataDisk.total / (1024 * 1024));
+                // Ensure we have at least 1GB available for the slider
+                return Math.max(sizeInMB, 1024);
+            }
+            
+            return 2048; // Default fallback of 2GB in MB
         },
 
         async loadYoloBatLabels() {

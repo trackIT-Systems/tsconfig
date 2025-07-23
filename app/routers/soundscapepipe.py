@@ -95,6 +95,9 @@ class SoundscapepipeConfigUpdate(BaseModel):
     
     # Groups section - now properly typed
     groups: Optional[Dict[str, SpeciesGroup]] = None
+    
+    # Optional arguments section
+    disk_reserve_mb: Optional[int] = Field(None, ge=512)
 
 
 # Create the router using the base class

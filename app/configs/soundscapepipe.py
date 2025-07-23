@@ -335,4 +335,14 @@ class SoundscapepipeConfig(BaseConfig):
                     except (ValueError, TypeError):
                         errors.append(f"Group '{group_name}' ratio must be a valid number")
 
+        # Validate disk reserve
+        disk_reserve_mb = config.get("disk_reserve_mb")
+        if disk_reserve_mb is not None:
+            try:
+                reserve_val = int(disk_reserve_mb)
+                if reserve_val < 512:
+                    errors.append("Disk reserve must be at least 512 MB")
+            except (ValueError, TypeError):
+                errors.append("Disk reserve must be a valid integer")
+
         return errors 

@@ -1372,6 +1372,25 @@
                                             <div class="form-text">HTTP audio stream port for real-time audio streaming</div>
                                         </div>
                                     </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Disk Reserve: <span x-text="config.disk_reserve_mb"></span> MB
+                                                <span x-show="!diskInfo || diskInfo.length === 0" class="text-muted small"> (loading disk size...)</span>
+                                                <span x-show="diskInfo && diskInfo.length > 0" class="text-muted small"> 
+                                                    (max: <span x-text="Math.round(getDataDiskSize() / 1024)"></span> GB)
+                                                </span>
+                                            </label>
+                                            <input type="range" 
+                                                   class="form-range" 
+                                                   x-model.number="config.disk_reserve_mb"
+                                                   min="512"
+                                                   :max="(diskInfo && diskInfo.length > 0) ? getDataDiskSize() : 2048"
+                                                   step="1"
+                                                   :key="`disk-range-${(diskInfo && diskInfo.length > 0) ? getDataDiskSize() : 2048}`">
+                                            <div class="form-text">Minimum free space to preserve for detections and logging</div>
+                                        </div>
+                                    </div>
                                 </div>
                         </div>
 
