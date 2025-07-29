@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="h-100">
+<html lang="en" class="h-100" x-data="configManager()" x-init="init()">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{{ title }}{% endblock %}</title>
+    <title x-text="`tsconfig | ${hostname}`">tsconfig | Loading...</title>
     
     <!-- Common CSS -->
     <link href="{{ url_for('static', path='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
@@ -21,7 +21,7 @@
     
     {% block extra_head %}{% endblock %}
 </head>
-<body class="d-flex flex-column h-100" x-data="configManager()" x-init="init()">
+<body class="d-flex flex-column h-100">
     {% include 'partials/navbar.html' %}
     
     <main>

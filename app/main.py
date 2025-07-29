@@ -39,8 +39,7 @@ templates = Jinja2Templates(directory="app/templates")
 @app.get("/")
 async def home(request: Request):
     """Render the main configuration page with status integration."""
-    hostname = socket.gethostname()
-    return templates.TemplateResponse("index.html", {"request": request, "title": hostname, "version": __version__})
+    return templates.TemplateResponse("index.html", {"request": request, "version": __version__})
 
 
 @app.get("/api/system-status")

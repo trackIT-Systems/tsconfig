@@ -114,6 +114,7 @@ function configManager() {
         expertMode: false,  // Add expert mode state
         availableServices: [],  // List of services with config files available
         servicesLoaded: false,  // Track if services have been loaded
+        hostname: 'Loading...',  // Dynamic hostname loaded via AJAX
 
         // URL parameter utilities
         getUrlParams() {
@@ -135,8 +136,11 @@ function configManager() {
         },
 
         async init() {
-            // Load available services first
-            await this.loadAvailableServices();
+            // Load available services and hostname first
+            await Promise.all([
+                this.loadAvailableServices(),
+                this.loadHostname()
+            ]);
             
             // Read expert mode from URL parameter
             const urlParams = this.getUrlParams();
@@ -237,6 +241,11 @@ function configManager() {
                 this.error = event.detail.error;
                 this.warning = false;
             });
+            
+            // Set up periodic hostname refresh (every 30 seconds)
+            setInterval(() => {
+                this.loadHostname();
+            }, 30000);
         },
 
         showMessage(message, isError) {
@@ -261,6 +270,22 @@ function configManager() {
                 console.error('Error loading available services:', error);
                 this.availableServices = [];
                 this.servicesLoaded = true;
+            }
+        },
+
+        async loadHostname() {
+            try {
+                const response = await fetch('/api/system-status');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.hostname = data.hostname || 'Unknown';
+                } else {
+                    console.error('Failed to load hostname from system status');
+                    this.hostname = 'Unknown';
+                }
+            } catch (error) {
+                console.error('Error loading hostname:', error);
+                this.hostname = 'Unknown';
             }
         },
 
