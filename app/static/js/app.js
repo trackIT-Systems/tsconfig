@@ -2411,7 +2411,7 @@ function soundscapepipeConfig() {
 
             // Define preferred model patterns
             const preferredPatterns = {
-                'yolobat': 'yolobat11_2025.6.2',
+                'yolobat': 'yolobat11_2025.3.2',
                 'birdedge': 'MarBird_EFL0_GER.onnx'
             };
 
