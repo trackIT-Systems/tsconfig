@@ -72,25 +72,8 @@ async def get_system_status():
         memory = psutil.virtual_memory()._asdict()
         swap = psutil.swap_memory()._asdict()
 
-        # Disk information
-        disk_usage = []
-        for partition in psutil.disk_partitions():
-            try:
-                usage = psutil.disk_usage(partition.mountpoint)
-                disk_usage.append(
-                    {
-                        "device": partition.device,
-                        "mountpoint": partition.mountpoint,
-                        "fstype": partition.fstype,
-                        "total": usage.total,
-                        "used": usage.used,
-                        "free": usage.free,
-                        "percent": (usage.used / usage.total * 100) if usage.total > 0 else 0,
-                    }
-                )
-            except (PermissionError, OSError):
-                # Skip inaccessible partitions
-                continue
+        # Disk information - consolidate devices with multiple mountpoints
+        disk_usage = _get_consolidated_disk_usage()
 
         # Network information
         try:
@@ -187,6 +170,56 @@ def _get_hardware_info():
         pass
     
     return hardware_info
+
+
+def _get_consolidated_disk_usage():
+    """Get disk usage information with consolidated mountpoints per device."""
+    import collections
+    
+    # Group partitions by device
+    device_groups = collections.defaultdict(list)
+    
+    for partition in psutil.disk_partitions():
+        try:
+            # Test if we can access this partition
+            psutil.disk_usage(partition.mountpoint)
+            device_groups[partition.device].append(partition)
+        except (PermissionError, OSError):
+            # Skip inaccessible partitions
+            continue
+    
+    disk_usage = []
+    
+    for device, partitions in device_groups.items():
+        # Use the first partition to get disk usage stats
+        # (all mountpoints for the same device will have same stats)
+        primary_partition = partitions[0]
+        
+        try:
+            usage = psutil.disk_usage(primary_partition.mountpoint)
+            
+            # Collect all mountpoints and fstypes for this device
+            mountpoints = [p.mountpoint for p in partitions]
+            fstypes = list(set(p.fstype for p in partitions))  # Unique fstypes
+            primary_fstype = fstypes[0] if fstypes else primary_partition.fstype
+            
+            disk_info = {
+                "device": device,
+                "mountpoints": mountpoints,  # List of all mountpoints
+                "mountpoint": mountpoints[0],  # Primary mountpoint for compatibility
+                "fstype": primary_fstype,
+                "total": usage.total,
+                "used": usage.used,
+                "free": usage.free,
+                "percent": (usage.used / usage.total * 100) if usage.total > 0 else 0,
+            }
+            disk_usage.append(disk_info)
+            
+        except (PermissionError, OSError):
+            # Skip if we can't get usage stats
+            continue
+    
+    return disk_usage
 
 
 @app.get("/api/available-services")

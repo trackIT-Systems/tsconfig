@@ -3474,6 +3474,38 @@ function statusPage() {
             } finally {
                 this.rebootProtectionLoading = false;
             }
+        },
+
+        // Function to get filtered disks based on expert mode
+        getFilteredDisks(expertMode) {
+            if (expertMode) {
+                // Expert mode: show all disks
+                return this.systemInfo?.disk || [];
+            } else {
+                // Non-expert mode: show only devices with /data mountpoint
+                return (this.systemInfo?.disk || []).filter(disk => {
+                    const mountpoints = disk.mountpoints || [disk.mountpoint];
+                    return mountpoints.includes('/data');
+                });
+            }
+        },
+
+        // Function to format mountpoints with links for /mnt paths
+        formatMountpointsWithLinks(mountpoints) {
+            if (!mountpoints || mountpoints.length === 0) return '';
+            
+            const formattedMountpoints = mountpoints.map(mp => {
+                if (mp.startsWith('/mnt/')) {
+                    // Extract the path after /mnt/ and create a link that opens in new tab
+                    const pathAfterMnt = mp.substring(5); // Remove '/mnt/' prefix
+                    if (pathAfterMnt) {
+                        return `<a href="/data/files/${pathAfterMnt}/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
+                    }
+                }
+                return mp;
+            });
+            
+            return formattedMountpoints.join(', ');
         }
     }
 }

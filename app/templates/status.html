@@ -429,13 +429,16 @@
                             </div>
 
                             <!-- Disk Usage -->
-                            <div class="row mb-4" x-show="systemInfo?.disk?.length > 0">
+                            <div class="row mb-4" x-show="getFilteredDisks(expertMode).length > 0">
                                 <div class="col-12">
                                     <h6 class="text-muted mb-3"><i class="fas fa-hdd me-2"></i>Disk Usage</h6>
-                                    <template x-for="(disk, diskIndex) in (systemInfo?.disk || []).slice(0, 4)" :key="`${disk.device}-${disk.mountpoint}-${diskIndex}`">
+                                    <template x-for="(disk, diskIndex) in expertMode ? getFilteredDisks(expertMode) : getFilteredDisks(expertMode).slice(0, 1)" :key="`${disk.device}-${disk.mountpoint}-${diskIndex}`">
                                         <div class="mb-3">
                                             <div class="d-flex justify-content-between">
-                                                <span x-text="`${disk.device} (${disk.mountpoint})`" class="small"></span>
+                                                <span class="small">
+                                                    <span x-text="disk.device"></span> 
+                                                    (<span x-html="formatMountpointsWithLinks(disk.mountpoints || [disk.mountpoint])"></span>)
+                                                </span>
                                                 <span x-text="`${disk.percent.toFixed(1)}%`" class="small"></span>
                                             </div>
                                             <div class="progress" style="height: 8px;">
