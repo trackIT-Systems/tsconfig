@@ -1,6 +1,6 @@
 [project]
 name = "tsconfig"
-version = "2025.7.1"
+version = "2025.8.1"
 description = "Web-based configuration manager for sensor station schedules"
 authors = [
     {name = "Jonas Höchst", email = "hoechst@trackit.systems"}

@@ -193,5 +193,5 @@ For support and documentation:
 
 ---
 
-**Version**: 2025.7.1  
+**Version**: 2025.8.1  
 **Compatibility**: tsOS, Raspberry Pi OS, Linux systems with systemd 
