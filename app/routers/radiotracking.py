@@ -72,21 +72,3 @@ async def validate_radiotracking(config: RadioTrackingConfigUpdate):
             return config_dict
     
     return radiotracking_router.validate_config_helper(config_dict)
-
-@router.post("/download")
-async def download_radiotracking(config: RadioTrackingConfigUpdate):
-    # Convert to the special format expected by radiotracking
-    config_dict = {
-        "optional arguments": config.optional_arguments.model_dump(),
-        "rtl-sdr": config.rtl_sdr.model_dump(),
-        "analysis": config.analysis.model_dump(),
-        "matching": config.matching.model_dump(),
-        "publish": config.publish.model_dump(),
-        "dashboard": config.dashboard.model_dump(),
-    }
-    
-    class TempConfig:
-        def model_dump(self):
-            return config_dict
-    
-    return radiotracking_router.download_config_helper(config_dict)

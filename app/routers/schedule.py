@@ -30,8 +30,3 @@ async def update_schedule(config: ScheduleConfigUpdate):
 async def validate_schedule(config: ScheduleConfigUpdate):
     config_dict = config.model_dump()
     return schedule_router.validate_config_helper(config_dict)
-
-@router.post("/download")
-async def download_schedule(config: ScheduleConfigUpdate):
-    config_dict = config.model_dump()
-    return schedule_router.download_config_helper(config_dict)

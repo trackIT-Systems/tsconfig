@@ -1,11 +1,11 @@
 """tsOS Configuration Manager."""
 
 import datetime
+import json
 import platform
 import socket
-import time
 import subprocess
-import json
+import time
 from pathlib import Path
 
 import psutil
@@ -15,12 +15,77 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import __version__
-from app.routers import radiotracking, schedule, soundscapepipe, systemd, shell
-from app.configs.schedule import ScheduleConfig
 from app.configs.radiotracking import RadioTrackingConfig
+from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd
 
-app = FastAPI(title="tsOS Configuration")
+# OpenAPI tags metadata for better API documentation organization
+tags_metadata = [
+    {
+        "name": "system",
+        "description": "System monitoring and status information including CPU, memory, disk, and network metrics.",
+    },
+    {
+        "name": "schedule",
+        "description": "Schedule configuration management with astronomical event support (sunrise, sunset, etc.).",
+    },
+    {
+        "name": "radiotracking",
+        "description": "Radio tracking configuration for RTL-SDR based radio tracking systems.",
+    },
+    {
+        "name": "soundscapepipe",
+        "description": "Soundscapepipe configuration for audio recording and analysis.",
+    },
+    {
+        "name": "systemd",
+        "description": "Systemd service management including status monitoring, control, and log streaming.",
+    },
+    {
+        "name": "shell",
+        "description": "Interactive shell access for system administration.",
+    },
+]
+
+app = FastAPI(
+    title="tsOS Configuration Manager",
+    description="""
+## tsOS Configuration Manager API
+
+A comprehensive REST API for managing and monitoring trackIT Systems sensor stations.
+
+### Features
+
+* **System Monitoring** - Real-time system status, CPU, memory, disk, network, and temperature monitoring
+* **Schedule Management** - Configure operation schedules with astronomical event support
+* **Radio Tracking** - Configure RTL-SDR based radio tracking systems
+* **Soundscapepipe** - Audio recording and analysis configuration
+* **Service Control** - Manage systemd services (start, stop, restart, logs)
+* **System Control** - Reboot system and manage system time settings
+
+### API Documentation
+
+* **Swagger UI** - Interactive API documentation at `/docs`
+* **ReDoc** - Alternative documentation at `/redoc`
+* **OpenAPI Schema** - Raw OpenAPI specification at `/openapi.json`
+
+### Getting Started
+
+Use the interactive Swagger UI at `/docs` to explore and test all available endpoints.
+Each endpoint includes detailed request/response schemas and the ability to try requests directly.
+    """,
+    version=__version__,
+    openapi_tags=tags_metadata,
+    contact={
+        "name": "trackIT Systems",
+        "url": "https://trackit.systems",
+        "email": "info@trackit.systems",
+    },
+    license_info={
+        "name": "© 2025 trackIT Systems. All rights reserved.",
+    },
+)
 
 # Include routers
 app.include_router(schedule.router)
@@ -36,13 +101,34 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
-@app.get("/")
+@app.get(
+    "/",
+    include_in_schema=False,
+    summary="Web Interface Home Page",
+)
 async def home(request: Request):
     """Render the main configuration page with status integration."""
     return templates.TemplateResponse("index.html", {"request": request, "version": __version__})
 
 
-@app.get("/api/system-status")
+@app.get(
+    "/api/system-status",
+    tags=["system"],
+    summary="Get system status and monitoring information",
+    description="""
+Get comprehensive system status information including:
+- Operating system details and hardware information
+- CPU usage, load averages, and processor information
+- Memory (RAM) and swap usage statistics
+- Disk usage for all mounted filesystems
+- Network connections and I/O statistics
+- Temperature sensors (when available)
+- System uptime and current time
+
+This endpoint is used by the Status page for real-time monitoring.
+    """,
+    response_description="Detailed system status and monitoring information",
+)
 async def get_system_status():
     """Get current system status information."""
     try:
@@ -59,7 +145,7 @@ async def get_system_status():
         cpu_percent = psutil.cpu_percent(interval=0.1)
         cpu_count = psutil.cpu_count()
         cpu_count_logical = psutil.cpu_count(logical=True)
-        
+
         # Get load averages (available on Unix-like systems)
         load_avg = None
         try:
@@ -151,34 +237,34 @@ def _get_hardware_info():
         "serial_short": None,
         "revision": None,
     }
-    
+
     try:
-        with open('/proc/cpuinfo', 'r') as f:
+        with open("/proc/cpuinfo", "r") as f:
             for line in f:
                 line = line.strip()
-                if line.startswith('Model'):
-                    hardware_info["model"] = line.split(':', 1)[1].strip()
-                elif line.startswith('Serial'):
-                    serial = line.split(':', 1)[1].strip()
+                if line.startswith("Model"):
+                    hardware_info["model"] = line.split(":", 1)[1].strip()
+                elif line.startswith("Serial"):
+                    serial = line.split(":", 1)[1].strip()
                     hardware_info["serial"] = serial
                     # Get last 8 digits of serial
                     hardware_info["serial_short"] = serial[-8:] if len(serial) >= 8 else serial
-                elif line.startswith('Revision'):
-                    hardware_info["revision"] = line.split(':', 1)[1].strip()
+                elif line.startswith("Revision"):
+                    hardware_info["revision"] = line.split(":", 1)[1].strip()
     except (FileNotFoundError, PermissionError, OSError):
         # /proc/cpuinfo not available or not accessible
         pass
-    
+
     return hardware_info
 
 
 def _get_consolidated_disk_usage():
     """Get disk usage information with consolidated mountpoints per device."""
     import collections
-    
+
     # Group partitions by device
     device_groups = collections.defaultdict(list)
-    
+
     for partition in psutil.disk_partitions():
         try:
             # Test if we can access this partition
@@ -187,22 +273,22 @@ def _get_consolidated_disk_usage():
         except (PermissionError, OSError):
             # Skip inaccessible partitions
             continue
-    
+
     disk_usage = []
-    
+
     for device, partitions in device_groups.items():
         # Use the first partition to get disk usage stats
         # (all mountpoints for the same device will have same stats)
         primary_partition = partitions[0]
-        
+
         try:
             usage = psutil.disk_usage(primary_partition.mountpoint)
-            
+
             # Collect all mountpoints and fstypes for this device
             mountpoints = [p.mountpoint for p in partitions]
             fstypes = list(set(p.fstype for p in partitions))  # Unique fstypes
             primary_fstype = fstypes[0] if fstypes else primary_partition.fstype
-            
+
             disk_info = {
                 "device": device,
                 "mountpoints": mountpoints,  # List of all mountpoints
@@ -214,19 +300,33 @@ def _get_consolidated_disk_usage():
                 "percent": (usage.used / usage.total * 100) if usage.total > 0 else 0,
             }
             disk_usage.append(disk_info)
-            
+
         except (PermissionError, OSError):
             # Skip if we can't get usage stats
             continue
-    
+
     return disk_usage
 
 
-@app.get("/api/available-services")
+@app.get(
+    "/api/available-services",
+    tags=["system"],
+    summary="Get list of available configuration services",
+    description="""
+Returns a list of services that have configuration files available in the system.
+This determines which configuration tabs are displayed in the web interface.
+
+Available services may include:
+- `schedule` - Schedule configuration
+- `radiotracking` - Radio tracking configuration
+- `soundscapepipe` - Audio recording configuration
+    """,
+    response_description="List of available configuration services",
+)
 async def get_available_services():
     """Get list of services that have configuration files available."""
     available_services = []
-    
+
     # Check schedule configuration
     try:
         schedule_config = ScheduleConfig()
@@ -234,7 +334,7 @@ async def get_available_services():
             available_services.append("schedule")
     except Exception:
         pass
-    
+
     # Check radiotracking configuration
     try:
         radiotracking_config = RadioTrackingConfig()
@@ -242,7 +342,7 @@ async def get_available_services():
             available_services.append("radiotracking")
     except Exception:
         pass
-    
+
     # Check soundscapepipe configuration
     try:
         soundscapepipe_config = SoundscapepipeConfig()
@@ -250,10 +350,28 @@ async def get_available_services():
             available_services.append("soundscapepipe")
     except Exception:
         pass
-    
+
     return {"available_services": available_services}
 
-@app.get("/api/timedatectl-status")
+
+@app.get(
+    "/api/timedatectl-status",
+    tags=["system"],
+    summary="Get system time and date status",
+    description="""
+Get system time and date configuration using the `timedatectl` command.
+
+Returns information about:
+- Current local time and UTC time
+- Time zone configuration
+- NTP synchronization status
+- RTC (Real-Time Clock) time
+
+This endpoint checks if `timedatectl` is available and returns structured
+status information parsed from its output.
+    """,
+    response_description="System time and date status information",
+)
 async def get_timedatectl_status():
     """Get system time and date status using timedatectl."""
     try:
@@ -263,34 +381,24 @@ async def get_timedatectl_status():
             "error": None,
             "timestamp": datetime.datetime.now().isoformat(),
         }
-        
+
         # Check if timedatectl command is available
         try:
-            test_result = subprocess.run(
-                ["timedatectl", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            test_result = subprocess.run(["timedatectl", "--version"], capture_output=True, text=True, timeout=5)
             timedatectl_status["available"] = test_result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             timedatectl_status["available"] = False
             timedatectl_status["error"] = "timedatectl command not found"
             return JSONResponse(content=timedatectl_status)
-        
+
         if not timedatectl_status["available"]:
             timedatectl_status["error"] = "timedatectl command not available"
             return JSONResponse(content=timedatectl_status)
-        
+
         # Get timedatectl status
         try:
-            status_result = subprocess.run(
-                ["timedatectl", "status"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
+            status_result = subprocess.run(["timedatectl", "status"], capture_output=True, text=True, timeout=10)
+
             if status_result.returncode == 0:
                 timedatectl_status["status"] = _parse_timedatectl_status(status_result.stdout)
             else:
@@ -299,9 +407,9 @@ async def get_timedatectl_status():
             timedatectl_status["error"] = "timedatectl status command timed out"
         except Exception as e:
             timedatectl_status["error"] = f"Error executing timedatectl status: {str(e)}"
-        
+
         return JSONResponse(content=timedatectl_status)
-        
+
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Failed to get timedatectl status: {str(e)}"})
 
@@ -309,26 +417,25 @@ async def get_timedatectl_status():
 def _parse_timedatectl_status(status_output):
     """Parse timedatectl status output into structured data."""
     timedatectl_info = {}
-    
-    for line in status_output.strip().split('\n'):
+
+    for line in status_output.strip().split("\n"):
         line = line.strip()
-        if line and ':' in line:
-            key, value = line.split(':', 1)
+        if line and ":" in line:
+            key, value = line.split(":", 1)
             key = key.strip()
             value = value.strip()
-            
+
             # Convert to snake_case and parse specific fields
-            key_snake = key.lower().replace(' ', '_').replace('-', '_')
-            
+            key_snake = key.lower().replace(" ", "_").replace("-", "_")
+
             # Parse boolean values
-            if value.lower() in ['yes', 'no']:
-                timedatectl_info[key_snake] = value.lower() == 'yes'
+            if value.lower() in ["yes", "no"]:
+                timedatectl_info[key_snake] = value.lower() == "yes"
             else:
                 # Try to parse as integer
                 try:
                     timedatectl_info[key_snake] = int(value)
                 except ValueError:
                     timedatectl_info[key_snake] = value
-    
-    return timedatectl_info
 
+    return timedatectl_info

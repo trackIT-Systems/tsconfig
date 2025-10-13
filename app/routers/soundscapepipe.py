@@ -115,11 +115,6 @@ async def validate_soundscapepipe(config: SoundscapepipeConfigUpdate):
     config_dict = config.model_dump()
     return soundscapepipe_router.validate_config_helper(config_dict)
 
-@router.post("/download")
-async def download_soundscapepipe(config: SoundscapepipeConfigUpdate):
-    config_dict = config.model_dump()
-    return soundscapepipe_router.download_config_helper(config_dict)
-
 # Keep the special endpoints that are unique to soundscapepipe
 @router.get("/audio-devices")
 async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
