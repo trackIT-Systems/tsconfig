@@ -18,7 +18,7 @@ from app.config_loader import config_loader
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
-from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd
+from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd, upload
 
 # Get base URL from environment variable (default to "/" for root)
 BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
@@ -42,6 +42,10 @@ tags_metadata = [
     {
         "name": "soundscapepipe",
         "description": "Soundscapepipe configuration for audio recording and analysis.",
+    },
+    {
+        "name": "upload",
+        "description": "Configuration file upload with validation.",
     },
     {
         "name": "systemd",
@@ -97,6 +101,7 @@ Each endpoint includes detailed request/response schemas and the ability to try 
 app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
+app.include_router(upload.router)
 
 # Only include system-specific routers in tracker mode (default mode)
 # These are disabled in server mode since they require direct hardware access
