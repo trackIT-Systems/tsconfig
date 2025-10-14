@@ -141,133 +141,161 @@ async def validate_soundscapepipe(
 
 
 # Keep the special endpoints that are unique to soundscapepipe
+def _load_audio_devices_config() -> Dict[str, Any]:
+    """Load audio devices configuration from YAML file."""
+    config_file = Path(__file__).parent.parent / "configs" / "audio_devices.yml"
+    try:
+        with open(config_file, "r") as f:
+            return yaml.safe_load(f) or {"input": [], "output": []}
+    except FileNotFoundError:
+        return {"input": [], "output": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load audio devices config: {str(e)}")
+
+
+def _match_device_name(config_name: str, actual_name: str) -> bool:
+    """Check if a configured device name matches an actual device name.
+
+    Matches if the config name appears at the start of the actual device name.
+    This allows matching "trackIT Analog Frontend" with "trackIT Analog Frontend: Audio (hw:2,0)"
+    """
+    return actual_name.startswith(config_name)
+
+
 @router.get("/audio-devices")
 async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
     """Get available audio input and output devices.
 
     Args:
         refresh: Whether to force refresh the device list (default: True)
+
+    In tracker mode (default): Returns devices from config file that are present on the system.
+    In server mode: Returns all devices from config file without validation.
     """
-    # In server mode, return static device list from config file
+    # Load configuration file
+    devices_config = _load_audio_devices_config()
+
+    # In server mode, return config as-is without hardware validation
     if config_loader.is_server_mode():
-        try:
-            static_devices_file = Path(__file__).parent.parent / "configs" / "audio_devices_static.yml"
-            with open(static_devices_file, "r") as f:
-                devices_data = yaml.safe_load(f)
+        input_devices = []
+        output_devices = []
+        default_input = None
+        default_output = None
 
-            return {
-                "input": devices_data.get("input", []),
-                "output": devices_data.get("output", []),
-                "default_input": devices_data.get("default_input"),
-                "default_output": devices_data.get("default_output"),
-                "refresh_attempted": False,
-                "total_devices": len(devices_data.get("input", [])) + len(devices_data.get("output", [])),
-                "filtered_devices": 0,
-                "input_device_count": len(devices_data.get("input", [])),
-                "output_device_count": len(devices_data.get("output", [])),
-                "server_mode": True,
-            }
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to load static audio devices: {str(e)}")
+        # Process input devices
+        for idx, device in enumerate(devices_config.get("input", [])):
+            device_with_index = device.copy()
+            device_with_index["index"] = idx
+            if device.get("is_default", False):
+                default_input = idx
+            input_devices.append(device_with_index)
 
+        # Process output devices
+        for idx, device in enumerate(devices_config.get("output", [])):
+            device_with_index = device.copy()
+            device_with_index["index"] = idx
+            if device.get("is_default", False):
+                default_output = idx
+            output_devices.append(device_with_index)
+
+        return {
+            "input": input_devices,
+            "output": output_devices,
+            "default_input": default_input,
+            "default_output": default_output,
+            "refresh_attempted": False,
+            "total_devices": len(input_devices) + len(output_devices),
+            "filtered_devices": 0,
+            "input_device_count": len(input_devices),
+            "output_device_count": len(output_devices),
+            "server_mode": True,
+        }
+
+    # Tracker mode: Validate config against actual hardware
     try:
         # Force sounddevice to reinitialize and refresh device list if requested
-        # This is necessary because sounddevice caches device info from module import
         if refresh:
             try:
-                # Try multiple methods to force device list refresh
                 if hasattr(sd, "_terminate") and hasattr(sd, "_initialize"):
-                    # Method 1: Use private sounddevice methods (most reliable)
                     sd._terminate()
                     sd._initialize()
-                elif hasattr(sd, "_get_stream_parameters"):
-                    # Method 2: Try to trigger internal refresh via parameter query
-                    try:
-                        sd._get_stream_parameters(None, None, None, None, None, None)
-                    except:
-                        pass
-
-                # Method 3: Clear any cached default devices to force re-detection
                 if hasattr(sd.default, "_device"):
                     try:
-                        # Reset default device cache
                         sd.default._device = None
                     except:
                         pass
-
-                # Method 4: Force ALSA to refresh device list (Linux-specific)
                 try:
-                    # Run alsactl to force ALSA to scan for new devices
                     subprocess.run(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
                 except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-                    # If alsactl is not available or fails, continue
                     pass
-
             except Exception as e:
-                # If refresh fails, log it but continue with existing device list
                 print(f"Warning: Could not refresh audio device list: {e}")
-                pass
 
-        # Query all available devices (should now include newly connected devices)
-        devices = sd.query_devices()
+        # Query all available devices from hardware
+        hardware_devices = sd.query_devices()
 
-        # Get default devices
-        default_input = sd.default.device[0] if sd.default.device[0] is not None else None
-        default_output = sd.default.device[1] if sd.default.device[1] is not None else None
+        # Get default devices from hardware
+        hw_default_input = sd.default.device[0] if sd.default.device[0] is not None else None
+        hw_default_output = sd.default.device[1] if sd.default.device[1] is not None else None
 
-        # Separate input and output devices
+        # Filter configured devices to only include those present on hardware
         input_devices = []
         output_devices = []
-        filtered_count = 0
+        default_input = None
+        default_output = None
+        config_filtered = 0
 
-        for i, device in enumerate(devices):
-            # Skip system default/virtual devices
-            if is_system_default_device(device["name"]):
-                filtered_count += 1
-                continue
+        # Process input devices from config
+        for config_device in devices_config.get("input", []):
+            config_name = config_device.get("name", "")
 
-            # Skip devices with unrealistically high channel counts (virtual devices)
-            if device["max_input_channels"] > 32 or device["max_output_channels"] > 32:
-                filtered_count += 1
-                continue
+            # Find matching hardware device by name only
+            matched_hw_index = None
+            for i, hw_dev in enumerate(hardware_devices):
+                if _match_device_name(config_name, hw_dev["name"]):
+                    matched_hw_index = i
+                    break
 
-            # Find maximum supported sample rate
-            max_sample_rate = device["default_samplerate"]
-            common_rates = [8000, 16000, 22050, 44100, 48000, 88200, 96000, 176400, 192000, 384000]
-
-            # Test higher sample rates to find maximum
-            if device["max_input_channels"] > 0:
-                for rate in reversed(common_rates):  # Start from highest
-                    if rate > device["default_samplerate"]:
-                        try:
-                            sd.check_input_settings(device=i, samplerate=rate)
-                            max_sample_rate = rate
-                            break
-                        except:
-                            continue
-
-            device_info = {
-                "index": i,
-                "name": device["name"],
-                "max_input_channels": device["max_input_channels"],
-                "max_output_channels": device["max_output_channels"],
-                "default_sample_rate": max_sample_rate,
-                "hostapi": device["hostapi"],
-                "is_default": False,
-            }
-
-            # Add to input devices if it has input channels
-            if device["max_input_channels"] > 0:
-                if i == default_input:
-                    device_info["is_default"] = True
+            if matched_hw_index is not None:
+                # Device exists on hardware, add it with actual hardware index
+                device_info = {
+                    "index": matched_hw_index,
+                    "name": config_name,  # Use config name for consistency
+                    "max_input_channels": config_device.get("max_input_channels"),
+                    "default_sample_rate": config_device.get("default_sample_rate"),
+                    "is_default": matched_hw_index == hw_default_input or config_device.get("is_default", False),
+                }
+                if device_info["is_default"]:
+                    default_input = matched_hw_index
                 input_devices.append(device_info)
+            else:
+                config_filtered += 1
 
-            # Add to output devices if it has output channels
-            if device["max_output_channels"] > 0:
-                device_info_output = device_info.copy()
-                if i == default_output:
-                    device_info_output["is_default"] = True
-                output_devices.append(device_info_output)
+        # Process output devices from config
+        for config_device in devices_config.get("output", []):
+            config_name = config_device.get("name", "")
+
+            # Find matching hardware device by name only
+            matched_hw_index = None
+            for i, hw_dev in enumerate(hardware_devices):
+                if _match_device_name(config_name, hw_dev["name"]):
+                    matched_hw_index = i
+                    break
+
+            if matched_hw_index is not None:
+                # Device exists on hardware, add it with actual hardware index
+                device_info = {
+                    "index": matched_hw_index,
+                    "name": config_name,  # Use config name for consistency
+                    "max_output_channels": config_device.get("max_output_channels"),
+                    "default_sample_rate": config_device.get("default_sample_rate"),
+                    "is_default": matched_hw_index == hw_default_output or config_device.get("is_default", False),
+                }
+                if device_info["is_default"]:
+                    default_output = matched_hw_index
+                output_devices.append(device_info)
+            else:
+                config_filtered += 1
 
         return {
             "input": input_devices,
@@ -275,12 +303,13 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
             "default_input": default_input,
             "default_output": default_output,
             "refresh_attempted": refresh,
-            "total_devices": len(devices),
-            "filtered_devices": filtered_count,
+            "total_devices": len(input_devices) + len(output_devices),
+            "filtered_devices": config_filtered,
             "input_device_count": len(input_devices),
             "output_device_count": len(output_devices),
+            "server_mode": False,
+            "config_validated": True,
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to query audio devices: {str(e)}")
 

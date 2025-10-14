@@ -50,11 +50,18 @@ class ConfigLoader:
         self._config_cache = None
 
     def is_server_mode(self) -> bool:
-        """Check if server mode is enabled via environment variable."""
+        """Check if server mode is enabled via environment variable.
+
+        By default, runs in tracker mode (for sensor stations).
+        Set TSCONFIG_SERVER_MODE=true to enable server mode (for remote configuration).
+        """
         return os.environ.get("TSCONFIG_SERVER_MODE", "").lower() in ("true", "1", "yes")
 
     def get_config_root(self) -> Optional[Path]:
-        """Get the config root directory for server mode."""
+        """Get the config root directory for server mode.
+
+        Returns None in tracker mode (default).
+        """
         if not self.is_server_mode():
             return None
 
@@ -64,7 +71,10 @@ class ConfigLoader:
         return None
 
     def list_config_groups(self) -> List[str]:
-        """List available config groups in server mode."""
+        """List available config groups in server mode.
+
+        Returns empty list in tracker mode (default).
+        """
         if not self.is_server_mode():
             return []
 
@@ -88,7 +98,10 @@ class ConfigLoader:
         return sorted(config_groups)
 
     def get_config_group_dir(self, config_group: str) -> Optional[Path]:
-        """Get the config directory for a specific config group."""
+        """Get the config directory for a specific config group.
+
+        Returns None in tracker mode (default).
+        """
         if not self.is_server_mode():
             return None
 

@@ -248,7 +248,7 @@ export function scheduleConfig() {
                     this.updateMarkerFromInputs();
                 }
                 
-                // Load service status only if not in server mode
+                // Load service status only in tracker mode (default mode)
                 if (!this.serverMode) {
                     await this.loadServiceStatus();
                 }

@@ -1,12 +1,27 @@
-# Static Audio Devices Configuration
+# Audio Devices Configuration
 
 ## Purpose
 
-When `tsconfig` runs in **server mode**, it cannot query actual hardware for available audio devices. Instead, it uses a static list of devices defined in `audio_devices_static.yml`.
+This configuration file defines the audio devices that should be available in the Soundscapepipe UI. It is used in both operational modes:
+
+### Tracker Mode (default)
+
+Runs directly on sensor station hardware with full access to audio devices and system resources.
+
+- **Config validation**: The configuration file is validated against actual hardware
+- **Only present devices shown**: Only devices from the config that are physically connected are displayed
+- **Live updates**: Configuration can be updated while the service is running
+
+### Server Mode
+
+Runs remotely to manage multiple sensor station configurations without hardware access.
+
+- **No validation**: All devices from the configuration are shown without checking hardware
+- **Static list**: Used when actual device detection is not possible
 
 ## Configuration File
 
-**File**: `audio_devices_static.yml`
+**File**: `audio_devices.yml`
 
 This file defines the audio input and output devices that will be shown in the Soundscapepipe configuration UI when running in server mode.
 
@@ -14,35 +29,26 @@ This file defines the audio input and output devices that will be shown in the S
 
 ```yaml
 input:
-  - index: 0                              # Unique device index
-    name: "Device Name: Audio (hw:2,0)"  # Display name (can include hardware ID)
+  - name: "Device Name: Audio (hw:2,0)"  # Display name (can include hardware ID)
     max_input_channels: 2                 # Number of input channels
-    max_output_channels: 0                # Number of output channels (0 for input-only)
     default_sample_rate: 384000           # Maximum supported sample rate
-    hostapi: 0                            # Host API index (typically 0)
     is_default: true                      # Whether this is the default input device
 
 output:
-  - index: 10                             # Unique device index
-    name: "Output Device Name"            # Display name
-    max_input_channels: 0                 # Number of input channels (0 for output-only)
+  - name: "Output Device Name"            # Display name
     max_output_channels: 2                # Number of output channels
     default_sample_rate: 48000            # Maximum supported sample rate
-    hostapi: 0                            # Host API index
     is_default: true                      # Whether this is the default output device
-
-default_input: 0    # Index of default input device
-default_output: 10  # Index of default output device
 ```
 
 ## Customization
 
 To customize the device list for your deployment:
 
-1. **Identify your hardware**: On a real device, run tsconfig in normal mode (not server mode) to see the actual detected devices
-2. **Copy device information**: Note the device names, sample rates, and channel counts
-3. **Edit the YAML file**: Update `audio_devices_static.yml` with your specific devices
-4. **Restart tsconfig**: The new device list will be loaded on the next server mode startup
+1. **Identify your hardware**: On a real device with devices connected, query the system to see available devices
+2. **Copy device information**: Note the device names (before the colon), sample rates, and channel counts
+3. **Edit the YAML file**: Update `audio_devices.yml` with your specific devices
+4. **Automatic reload**: The configuration is read fresh on every request - changes take effect immediately (no restart required)
 
 ## Common Device Types
 
@@ -63,10 +69,27 @@ Built-in audio output:
 
 ## Notes
 
-- **Device names** should match the `input_device_match` and `output_device_match` fields in soundscapepipe configuration
-- The device name before the colon (e.g., "trackIT Analog Frontend") is what gets stored in the config
-- **Index values** should be unique across all devices
-- **Default devices** are pre-selected when creating new configurations
-- In server mode, users can still manually type device names if they're not in the list
+### Device Naming
+
+- **Device names** should match the beginning of the actual hardware device name
+- Example: Config name "trackIT Analog Frontend" matches "trackIT Analog Frontend: Audio (hw:2,0)"
+- The config name (before the colon) is what gets stored in soundscapepipe configuration
+
+### Device Matching
+
+- **Tracker mode**: Only devices present on the hardware are shown (config is validated)
+- **Server mode**: All configured devices are shown (no validation)
+- **Indices**: Device indices are assigned dynamically based on actual hardware indices
+
+### Default Devices
+
+- Marked with `is_default: true` in the configuration
+- Pre-selected when creating new configurations
+- In tracker mode, system default device overrides config default
+
+### Manual Device Entry
+
+- Users can always manually type device names if they're not in the list
+- Useful for devices not yet added to the configuration
 
 

@@ -3,41 +3,28 @@
 # when tsconfig runs in server mode (where actual hardware cannot be queried)
 
 input:
-  - index: 0
-    name: "trackIT Analog Frontend"
+  - name: "trackIT Analog Frontend"
     max_input_channels: 2
-    max_output_channels: 0
     default_sample_rate: 384000
-    hostapi: 0
     is_default: true
   
-  - index: 1
-    name: "USB AUDIO DEVICE"
-    max_input_channels: 2
-    max_output_channels: 0
-    default_sample_rate: 48000
-    hostapi: 0
+  - name: "384kHz AudioMoth USB Microphone"
+    max_input_channels: 1
+    default_sample_rate: 384000
     is_default: false
   
+  - name: "USB AUDIO DEVICE"
+    max_input_channels: 2
+    default_sample_rate: 48000
+    is_default: false
 
 output:
-  - index: 10
-    name: "bcm2835 Headphones"
-    max_input_channels: 0
+  - name: "bcm2835 Headphones"
     max_output_channels: 2
     default_sample_rate: 48000
-    hostapi: 0
     is_default: true
   
-  - index: 11
-    name: "USB AUDIO DEVICE"
-    max_input_channels: 0
+  - name: "USB AUDIO DEVICE"
     max_output_channels: 2
     default_sample_rate: 48000
-    hostapi: 0
     is_default: false
-
-default_input: 0
-default_output: 10
-
-

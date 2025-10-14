@@ -93,7 +93,8 @@ app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
 
-# Only include system-specific routers if not in server mode
+# Only include system-specific routers in tracker mode (default mode)
+# These are disabled in server mode since they require direct hardware access
 if not config_loader.is_server_mode():
     app.include_router(systemd.router)
     app.include_router(shell.router)
@@ -123,9 +124,9 @@ async def home(request: Request):
 Get server mode status and available config groups.
 
 Returns:
-- `enabled`: Whether server mode is active
-- `config_groups`: List of available config groups (empty if not in server mode)
-- `config_root`: Root directory for config groups (null if not in server mode)
+- `enabled`: Whether server mode is active (default is tracker mode)
+- `config_groups`: List of available config groups (empty in tracker mode)
+- `config_root`: Root directory for config groups (null in tracker mode)
     """,
     response_description="Server mode configuration information",
 )

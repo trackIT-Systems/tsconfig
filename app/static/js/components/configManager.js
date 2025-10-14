@@ -51,7 +51,7 @@ export function configManager() {
 
             // Set initial active config based on URL hash
             // In server mode, hash format is: config_group/tab_name
-            // In normal mode, hash format is: tab_name
+            // In tracker mode (default), hash format is: tab_name
             const hash = window.location.hash.slice(1);
             let tabName = hash;
             
