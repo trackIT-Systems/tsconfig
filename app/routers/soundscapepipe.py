@@ -6,7 +6,16 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import sounddevice as sd
+# Try to import sounddevice for hardware audio device detection
+# This is optional and only needed for tracker mode with hardware validation
+try:
+    import sounddevice as sd
+
+    SOUNDDEVICE_AVAILABLE = True
+except ImportError:
+    SOUNDDEVICE_AVAILABLE = False
+    sd = None
+
 import yaml
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -175,8 +184,8 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
     # Load configuration file
     devices_config = _load_audio_devices_config()
 
-    # In server mode, return config as-is without hardware validation
-    if config_loader.is_server_mode():
+    # In server mode or when sounddevice is not available, return config as-is without hardware validation
+    if config_loader.is_server_mode() or not SOUNDDEVICE_AVAILABLE:
         input_devices = []
         output_devices = []
         default_input = None
@@ -208,7 +217,8 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
             "filtered_devices": 0,
             "input_device_count": len(input_devices),
             "output_device_count": len(output_devices),
-            "server_mode": True,
+            "server_mode": config_loader.is_server_mode(),
+            "sounddevice_available": SOUNDDEVICE_AVAILABLE,
         }
 
     # Tracker mode: Validate config against actual hardware

@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+.eggs
+*.egg
+
+# Virtual environments
+venv
+env
+ENV
+.venv
+
+# PDM
+.pdm.toml
+.pdm-python
+__pypackages__
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# Documentation
+*.md
+!README.md
+
+# Logs
+*.log
+
+# Local development
+.env
+.env.local
+
+# Groups directory content (will be mounted as volume)
+groups/*
+!groups/.gitkeep
