@@ -35,6 +35,11 @@ export function statusPage() {
         timedatectlError: null,
 
         async initStatus() {
+            // Don't initialize in server mode
+            if (window.serverModeManager?.isEnabled()) {
+                return;
+            }
+            
             // Load reboot protection status
             await this.loadRebootProtectionStatus();
             // Load system configuration first to get refresh interval

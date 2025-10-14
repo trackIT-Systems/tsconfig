@@ -27,6 +27,11 @@ export const systemConfigManager = {
     },
     
     async fetchSystemConfig() {
+        // Don't fetch system config in server mode
+        if (window.serverModeManager?.isEnabled()) {
+            return { services: [] };
+        }
+        
         const response = await fetch('/api/systemd/config/system');
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);

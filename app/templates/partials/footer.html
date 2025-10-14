@@ -7,8 +7,37 @@
             </div>
             <div class="col-sm py-2">
             </div>
+            
+            <!-- Config Group Selector (Always Visible) -->
             <div class="col-sm py-2">
+                <template x-if="configGroups.length > 1">
+                    <div class="d-flex align-items-center justify-content-center">
+                        <label class="text-muted me-2 mb-0 small">
+                            <i class="fas fa-folder me-1"></i>
+                            Config Group:
+                        </label>
+                        <select class="form-select form-select-sm border-secondary" 
+                                style="width: auto; min-width: 180px; max-width: 250px;"
+                                :value="currentConfigGroup"
+                                @change="currentConfigGroup = $event.target.value; window.serverModeManager.setCurrentConfigGroup($event.target.value, activeConfig)">
+                            <template x-for="group in configGroups" :key="group">
+                                <option :value="group" 
+                                        x-text="group"
+                                        :selected="group === currentConfigGroup"></option>
+                            </template>
+                        </select>
+                    </div>
+                </template>
+                <template x-if="configGroups.length === 1">
+                    <div class="text-center">
+                        <span class="badge bg-secondary">
+                            <i class="fas fa-folder me-1"></i>
+                            <span x-text="currentConfigGroup"></span>
+                        </span>
+                    </div>
+                </template>
             </div>
+            
             <div class="col-sm py-2 text-end">
                 <a href="https://trackit.systems" target="_blank"><i class="fa fa-globe lead" title="Website"></i></a>
                 <a href="mailto:info@trackit.systems" alt="send mail"><i class="fa fa-envelope lead" title="E-Mail"></i></a>

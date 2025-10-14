@@ -55,6 +55,11 @@ export const serviceManager = {
     
     // Actual API fetch
     async fetchServices() {
+        // Don't fetch services in server mode
+        if (window.serverModeManager?.isEnabled()) {
+            return [];
+        }
+        
         const response = await fetch('/api/systemd/services');
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);

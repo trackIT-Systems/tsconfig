@@ -1,0 +1,43 @@
+# Static audio device list for server mode
+# This file defines available audio devices that will be shown in the UI
+# when tsconfig runs in server mode (where actual hardware cannot be queried)
+
+input:
+  - index: 0
+    name: "trackIT Analog Frontend"
+    max_input_channels: 2
+    max_output_channels: 0
+    default_sample_rate: 384000
+    hostapi: 0
+    is_default: true
+  
+  - index: 1
+    name: "USB AUDIO DEVICE"
+    max_input_channels: 2
+    max_output_channels: 0
+    default_sample_rate: 48000
+    hostapi: 0
+    is_default: false
+  
+
+output:
+  - index: 10
+    name: "bcm2835 Headphones"
+    max_input_channels: 0
+    max_output_channels: 2
+    default_sample_rate: 48000
+    hostapi: 0
+    is_default: true
+  
+  - index: 11
+    name: "USB AUDIO DEVICE"
+    max_input_channels: 0
+    max_output_channels: 2
+    default_sample_rate: 48000
+    hostapi: 0
+    is_default: false
+
+default_input: 0
+default_output: 10
+
+

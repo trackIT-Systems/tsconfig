@@ -5,41 +5,51 @@
             <div class="card" x-data="scheduleConfig()" x-init="init()" x-destroy="cleanup()">
                 <div class="card-header d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
-                    <!-- Enable/Disable Toggle -->
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" 
-                               type="checkbox" 
-                               id="enableSwitch-wittypid"
-                               :checked="serviceStatus.enabled"
-                               @change="toggleEnable('wittypid', serviceStatus.enabled)"
-                               :disabled="actionLoading || serviceStatus.status === 'not-found'">
-                        <label class="form-check-label" for="enableSwitch-wittypid" style="display: none;">
-                        </label>
-                    </div>
-                    
-                    <h5 class="card-title mb-0 me-2">wittypid</h5>
-                    <!-- Service Status Indicator -->
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge d-flex align-items-center gap-1" 
-                                :class="{
-                                    'bg-success': serviceStatus.active && serviceStatus.status === 'active',
-                                    'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
-                                    'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
-                                    'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
-                                }">
-                            <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
-                            <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
-                        </span>
-                        <small class="text-muted">
-                            <i class="fas fa-clock me-1"></i>
-                            <span x-text="serviceStatus.uptime"></span>
-                        </small>
-                    </div>
+                    <!-- Service status elements - hidden in server mode -->
+                    <template x-if="!serverMode">
+                        <div class="d-flex align-items-center">
+                            <!-- Enable/Disable Toggle -->
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="enableSwitch-wittypid"
+                                       :checked="serviceStatus.enabled"
+                                       @change="toggleEnable('wittypid', serviceStatus.enabled)"
+                                       :disabled="actionLoading || serviceStatus.status === 'not-found'">
+                                <label class="form-check-label" for="enableSwitch-wittypid" style="display: none;">
+                                </label>
+                            </div>
+                            
+                            <h5 class="card-title mb-0 me-2">wittypid</h5>
+                            <!-- Service Status Indicator -->
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge d-flex align-items-center gap-1" 
+                                        :class="{
+                                            'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                            'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                            'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                            'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                        }">
+                                    <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                                    <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
+                                </span>
+                                <small class="text-muted">
+                                    <i class="fas fa-clock me-1"></i>
+                                    <span x-text="serviceStatus.uptime"></span>
+                                </small>
+                            </div>
+                        </div>
+                    </template>
+                    <!-- Server mode: Simple title -->
+                    <template x-if="serverMode">
+                        <h5 class="card-title mb-0">Schedule Configuration</h5>
+                    </template>
                 </div>
                 <button type="button" 
                         class="btn btn-outline-info btn-sm" 
                         @click="streamLogs('wittypid')"
-                        title="View wittypid service logs">
+                        title="View wittypid service logs"
+                        x-show="!serverMode">
                     <i class="fas fa-file-alt me-1"></i>
                     Logs
                 </button>
@@ -287,7 +297,8 @@
                                         'btn-outline-success': saveRestartState === 'saved'
                                     }"
                                     @click="saveAndRestartService()"
-                                    :disabled="saveRestartState === 'saving' || saveRestartState === 'restarting'">
+                                    :disabled="saveRestartState === 'saving' || saveRestartState === 'restarting'"
+                                    x-show="!serverMode">
                                 <template x-if="saveRestartState === 'idle'">
                                     <div class="d-flex align-items-center">
                                         <i class="fas fa-save me-1"></i>

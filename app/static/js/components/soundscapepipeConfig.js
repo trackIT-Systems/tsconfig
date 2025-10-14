@@ -5,6 +5,12 @@ import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
 export function soundscapepipeConfig() {
     return {
         ...saveStateMixin(),
+        
+        // Server mode helper
+        get serverMode() {
+            return window.serverModeManager?.isEnabled() || false;
+        },
+        
         config: {
             stream_port: 5001,
             lat: 50.85318,
@@ -80,7 +86,9 @@ export function soundscapepipeConfig() {
             
             // Then load config and other data
             await this.loadConfig();
-            this.loadServiceStatus();
+            if (!this.serverMode) {
+                this.loadServiceStatus();
+            }
             this.loadAudioDevices();
             this.loadLureFiles();
             this.loadSpeciesData();
@@ -96,6 +104,11 @@ export function soundscapepipeConfig() {
                     this.loadServiceStatus();
                 }
             }, 30000);
+            
+            // Listen for config group changes in server mode
+            window.addEventListener('config-group-changed', async () => {
+                await this.loadConfig();
+            });
         },
 
         cleanup() {
@@ -163,7 +176,9 @@ export function soundscapepipeConfig() {
 
         async loadConfig() {
             try {
-                const response = await fetch('/api/soundscapepipe');
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe') || '/api/soundscapepipe';
+                const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
                     // Handle backward compatibility for detectors - add enabled flags if missing
@@ -448,7 +463,9 @@ export function soundscapepipeConfig() {
 
 
 
-                const response = await fetch('/api/soundscapepipe', {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe') || '/api/soundscapepipe';
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -958,6 +975,12 @@ export function soundscapepipeConfig() {
         },
 
         async loadDiskInfo() {
+            // Don't load disk info in server mode
+            if (this.serverMode) {
+                this.diskInfo = [];
+                return;
+            }
+            
             try {
                 const response = await fetch('/api/system-status');
                 if (response.ok) {

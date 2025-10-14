@@ -27,6 +27,11 @@ export function scheduleConfig() {
         refreshInterval: null, // For periodic service status refresh
         actionLoading: false,
 
+        // Server mode helper
+        get serverMode() {
+            return window.serverModeManager?.isEnabled() || false;
+        },
+
         async init() {
             // Small delay to prevent simultaneous API calls during page load
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -34,6 +39,11 @@ export function scheduleConfig() {
             // Load configuration and set up periodic refresh
             await this.loadConfig();
             await this.setupPeriodicRefresh();
+            
+            // Listen for config group changes in server mode
+            window.addEventListener('config-group-changed', async () => {
+                await this.loadConfig();
+            });
         },
 
         async setupPeriodicRefresh() {
@@ -191,7 +201,9 @@ export function scheduleConfig() {
 
         async loadConfig() {
             try {
-                const response = await fetch('/api/schedule');
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/schedule') || '/api/schedule';
+                const response = await fetch(url);
                 if (response.status === 404) {
                     // Set default configuration for schedule
                     this.config = {
@@ -236,8 +248,10 @@ export function scheduleConfig() {
                     this.updateMarkerFromInputs();
                 }
                 
-                // Load service status
-                await this.loadServiceStatus();
+                // Load service status only if not in server mode
+                if (!this.serverMode) {
+                    await this.loadServiceStatus();
+                }
             } catch (error) {
                 this.showMessage(error.message, true);
             }
@@ -330,7 +344,9 @@ export function scheduleConfig() {
 
         async saveConfig() {
             const configSaveFunction = async () => {
-                const response = await fetch('/api/schedule', {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/schedule') || '/api/schedule';
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -360,7 +376,9 @@ export function scheduleConfig() {
 
         async saveAndRestartService() {
             const configSaveFunction = async () => {
-                const response = await fetch('/api/schedule', {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/schedule') || '/api/schedule';
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'

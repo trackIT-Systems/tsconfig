@@ -3,6 +3,7 @@
 // Import managers (shared singletons)
 import { systemConfigManager } from './managers/systemConfigManager.js';
 import { serviceManager } from './managers/serviceManager.js';
+import { serverModeManager } from './managers/serverModeManager.js';
 
 // Import utilities
 import { getSystemRefreshInterval } from './utils/systemUtils.js';
@@ -32,6 +33,7 @@ window.shellViewer = shellViewer;
 // Expose managers globally (they may be accessed from components)
 window.systemConfigManager = systemConfigManager;
 window.serviceManager = serviceManager;
+window.serverModeManager = serverModeManager;
 
 // Expose utility functions that may be called from templates
 window.getSystemRefreshInterval = getSystemRefreshInterval;

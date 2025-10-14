@@ -8,6 +8,10 @@ export function configManager() {
         availableServices: [],  // List of services with config files available
         servicesLoaded: false,  // Track if services have been loaded
         hostname: 'Loading...',  // Dynamic hostname loaded via AJAX
+        serverMode: false,  // Server mode state
+        configGroups: [],  // Available config groups in server mode
+        currentConfigGroup: null,  // Current config group in server mode
+        initialized: false,  // Track if initialization is complete
 
         // URL parameter utilities
         getUrlParams() {
@@ -29,7 +33,13 @@ export function configManager() {
         },
 
         async init() {
-            // Load available services and hostname first
+            // Initialize server mode manager first
+            await window.serverModeManager.initialize();
+            this.serverMode = window.serverModeManager.isEnabled();
+            this.configGroups = window.serverModeManager.getConfigGroups();
+            this.currentConfigGroup = window.serverModeManager.getCurrentConfigGroup();
+            
+            // Load available services and hostname
             await Promise.all([
                 this.loadAvailableServices(),
                 this.loadHostname()
@@ -40,17 +50,42 @@ export function configManager() {
             this.expertMode = urlParams.get('expert') === 'true';
 
             // Set initial active config based on URL hash
+            // In server mode, hash format is: config_group/tab_name
+            // In normal mode, hash format is: tab_name
             const hash = window.location.hash.slice(1);
-            if (hash === 'radiotracking' && this.isServiceAvailable('radiotracking')) {
+            let tabName = hash;
+            
+            if (this.serverMode) {
+                // Extract tab name from hash (config_group/tab_name)
+                const parts = hash.split('/');
+                if (parts.length >= 2) {
+                    tabName = parts[1];
+                } else {
+                    tabName = ''; // Will use default
+                }
+            }
+            
+            if (tabName === 'radiotracking' && this.isServiceAvailable('radiotracking')) {
                 this.activeConfig = 'radiotracking';
-            } else if (hash === 'schedule' && this.isServiceAvailable('schedule')) {
+            } else if (tabName === 'schedule' && this.isServiceAvailable('schedule')) {
                 this.activeConfig = 'schedule';
-            } else if (hash === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe')) {
+            } else if (tabName === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe')) {
                 this.activeConfig = 'soundscapepipe';
-            } else if (hash === 'status') {
+            } else if (tabName === 'status' && !this.serverMode) {
                 this.activeConfig = 'status';
             } else {
-                this.activeConfig = 'status';  // Default to status
+                // Default to first available service in server mode, status otherwise
+                if (this.serverMode) {
+                    if (this.isServiceAvailable('schedule')) {
+                        this.activeConfig = 'schedule';
+                    } else if (this.isServiceAvailable('radiotracking')) {
+                        this.activeConfig = 'radiotracking';
+                    } else if (this.isServiceAvailable('soundscapepipe')) {
+                        this.activeConfig = 'soundscapepipe';
+                    }
+                } else {
+                    this.activeConfig = 'status';
+                }
             }
 
             // Watch for expert mode changes and update URL
@@ -60,10 +95,23 @@ export function configManager() {
                     this.updateUrlParams({ expert: value || null });
                 }
             });
+            
+            // Watch for currentConfigGroup changes and update serverModeManager
+            this.$watch('currentConfigGroup', (value, oldValue) => {
+                // Keep serverModeManager in sync (but avoid infinite loops)
+                if (this.serverMode && value && value !== oldValue && oldValue !== undefined) {
+                    window.serverModeManager.currentConfigGroup = value;
+                }
+            });
 
             // Update URL hash when active config changes
             this.$watch('activeConfig', (value) => {
-                window.location.hash = value;
+                // In server mode, preserve config group in hash
+                if (this.serverMode && this.currentConfigGroup) {
+                    window.location.hash = `${encodeURIComponent(this.currentConfigGroup)}/${value}`;
+                } else {
+                    window.location.hash = value;
+                }
                 
                 // Ensure map is properly initialized when switching to schedule tab
                 if (value === 'schedule') {
@@ -139,6 +187,39 @@ export function configManager() {
             setInterval(() => {
                 this.loadHostname();
             }, 30000);
+            
+            // Listen for hash changes (browser back/forward or manual URL change)
+            window.addEventListener('hashchange', () => {
+                const hash = window.location.hash.slice(1);
+                let tabName = hash;
+                
+                if (this.serverMode) {
+                    // Extract tab name from hash (config_group/tab_name)
+                    const parts = hash.split('/');
+                    if (parts.length >= 2) {
+                        const configGroup = decodeURIComponent(parts[0]);
+                        tabName = parts[1];
+                        
+                        // Update current config group if changed
+                        if (configGroup !== this.currentConfigGroup) {
+                            this.currentConfigGroup = configGroup;
+                            window.serverModeManager.currentConfigGroup = configGroup;
+                            // Reload services and hostname for new config group
+                            this.loadAvailableServices();
+                            this.loadHostname();
+                        }
+                    }
+                }
+                
+                // Update activeConfig if the tab changed
+                const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
+                if (knownTabs.includes(tabName) && tabName !== this.activeConfig) {
+                    this.activeConfig = tabName;
+                }
+            });
+            
+            // Mark initialization as complete
+            this.initialized = true;
         },
 
         showMessage(message, isError) {
@@ -149,7 +230,13 @@ export function configManager() {
 
         async loadAvailableServices() {
             try {
-                const response = await fetch('/api/available-services');
+                // Build URL with config_group parameter if in server mode
+                let url = '/api/available-services';
+                if (this.serverMode && this.currentConfigGroup) {
+                    url += `?config_group=${encodeURIComponent(this.currentConfigGroup)}`;
+                }
+                
+                const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
                     this.availableServices = data.available_services || [];
@@ -167,6 +254,12 @@ export function configManager() {
         },
 
         async loadHostname() {
+            // In server mode, display config group name instead of hostname
+            if (this.serverMode) {
+                this.hostname = this.currentConfigGroup || 'Server Mode';
+                return;
+            }
+            
             try {
                 const response = await fetch('/api/system-status');
                 if (response.ok) {

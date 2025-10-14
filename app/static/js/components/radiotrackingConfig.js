@@ -5,6 +5,12 @@ import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 export function radiotrackingConfig() {
     return {
         ...saveStateMixin(),
+        
+        // Server mode helper
+        get serverMode() {
+            return window.serverModeManager?.isEnabled() || false;
+        },
+        
         config: {
             "rtl-sdr": {
                 device: [],
@@ -121,6 +127,11 @@ export function radiotrackingConfig() {
             // Load configuration and set up periodic refresh
             await this.loadConfig();
             await this.setupPeriodicRefresh();
+            
+            // Listen for config group changes in server mode
+            window.addEventListener('config-group-changed', async () => {
+                await this.loadConfig();
+            });
         },
 
         async setupPeriodicRefresh() {
@@ -212,7 +223,9 @@ export function radiotrackingConfig() {
             try {
                 this.isLoading = true;
                 this.configLoaded = false;
-                const response = await fetch('/api/radiotracking');
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/radiotracking') || '/api/radiotracking';
+                const response = await fetch(url);
                 if (response.status === 404) {
                     this.dispatchMessage("No radio tracking configuration found. Please create a configuration file first.", true);
                     this.isLoading = false;
@@ -227,8 +240,10 @@ export function radiotrackingConfig() {
                 this.configLoaded = true;
                 this.deviceCount = this.config["rtl-sdr"].device.length;
                 
-                // Load service status
-                await this.loadServiceStatus();
+                // Load service status only if not in server mode
+                if (!this.serverMode) {
+                    await this.loadServiceStatus();
+                }
             } catch (error) {
                 this.dispatchMessage(error.message, true);
             } finally {
@@ -361,7 +376,9 @@ export function radiotrackingConfig() {
                     }
                 };
 
-                const response = await fetch('/api/radiotracking', {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/radiotracking') || '/api/radiotracking';
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -445,7 +462,9 @@ export function radiotrackingConfig() {
                     }
                 };
 
-                const response = await fetch('/api/radiotracking', {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/radiotracking') || '/api/radiotracking';
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'

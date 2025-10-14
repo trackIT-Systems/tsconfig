@@ -2,8 +2,8 @@
 
 {% block content %}
 <div>
-    <!-- Status Section -->
-    <template x-if="activeConfig === 'status'">
+    <!-- Status Section - hidden in server mode, only render after initialization -->
+    <template x-if="initialized && activeConfig === 'status' && !serverMode">
         <div>
             {% include 'status.html' %}
         </div>

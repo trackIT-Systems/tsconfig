@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import __version__
+from app.config_loader import config_loader
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -91,8 +92,11 @@ Each endpoint includes detailed request/response schemas and the ability to try 
 app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
-app.include_router(systemd.router)
-app.include_router(shell.router)
+
+# Only include system-specific routers if not in server mode
+if not config_loader.is_server_mode():
+    app.include_router(systemd.router)
+    app.include_router(shell.router)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -109,6 +113,32 @@ templates = Jinja2Templates(directory="app/templates")
 async def home(request: Request):
     """Render the main configuration page with status integration."""
     return templates.TemplateResponse("index.html", {"request": request, "version": __version__})
+
+
+@app.get(
+    "/api/server-mode",
+    tags=["system"],
+    summary="Get server mode configuration",
+    description="""
+Get server mode status and available config groups.
+
+Returns:
+- `enabled`: Whether server mode is active
+- `config_groups`: List of available config groups (empty if not in server mode)
+- `config_root`: Root directory for config groups (null if not in server mode)
+    """,
+    response_description="Server mode configuration information",
+)
+async def get_server_mode():
+    """Get server mode configuration."""
+    is_server_mode = config_loader.is_server_mode()
+    return {
+        "enabled": is_server_mode,
+        "config_groups": config_loader.list_config_groups() if is_server_mode else [],
+        "config_root": str(config_loader.get_config_root())
+        if is_server_mode and config_loader.get_config_root()
+        else None,
+    }
 
 
 @app.get(
@@ -131,6 +161,10 @@ This endpoint is used by the Status page for real-time monitoring.
 )
 async def get_system_status():
     """Get current system status information."""
+    # Disable system status in server mode
+    if config_loader.is_server_mode():
+        return JSONResponse(status_code=503, content={"error": "System status is not available in server mode"})
+
     try:
         # Get freedesktop OS release info
         os_release_info = _get_freedesktop_os_release()
@@ -320,16 +354,25 @@ Available services may include:
 - `schedule` - Schedule configuration
 - `radiotracking` - Radio tracking configuration
 - `soundscapepipe` - Audio recording configuration
+
+In server mode, you can optionally pass a config_group parameter to check services for a specific group.
     """,
     response_description="List of available configuration services",
 )
-async def get_available_services():
+async def get_available_services(config_group: str = None):
     """Get list of services that have configuration files available."""
     available_services = []
 
+    # Determine config directory
+    config_dir = None
+    if config_group:
+        config_dir = config_loader.get_config_group_dir(config_group)
+        if not config_dir:
+            return JSONResponse(status_code=404, content={"error": f"Config group '{config_group}' not found"})
+
     # Check schedule configuration
     try:
-        schedule_config = ScheduleConfig()
+        schedule_config = ScheduleConfig(config_dir) if config_dir else ScheduleConfig()
         if schedule_config.config_file.exists():
             available_services.append("schedule")
     except Exception:
@@ -337,7 +380,7 @@ async def get_available_services():
 
     # Check radiotracking configuration
     try:
-        radiotracking_config = RadioTrackingConfig()
+        radiotracking_config = RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
         if radiotracking_config.config_file.exists():
             available_services.append("radiotracking")
     except Exception:
@@ -345,7 +388,7 @@ async def get_available_services():
 
     # Check soundscapepipe configuration
     try:
-        soundscapepipe_config = SoundscapepipeConfig()
+        soundscapepipe_config = SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
         if soundscapepipe_config.config_file.exists():
             available_services.append("soundscapepipe")
     except Exception:
