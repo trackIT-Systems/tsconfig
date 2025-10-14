@@ -295,37 +295,6 @@ async def service_action(action: ServiceAction):
         raise HTTPException(status_code=500, detail=f"Error performing action: {str(e)}")
 
 
-@router.get("/config")
-async def get_service_config():
-    """Get the current service configuration."""
-    config = get_services_config()
-    return config
-
-
-@router.post("/config")
-async def update_service_config(config: ServicesConfigFile):
-    """Update the service configuration."""
-    try:
-        # Ensure configs directory exists
-        CONFIG_PATH.parent.mkdir(exist_ok=True)
-
-        # Write services to YAML config file
-        config_dict = config.dict()
-        with open(CONFIG_PATH, "w") as f:
-            f.write("# Systemd services configuration\n")
-            f.write("# Set expert: true for services that should only be visible in expert mode\n\n")
-            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
-
-        return {
-            "success": True,
-            "message": f"Updated service configuration with {len(config.services)} services",
-            "config": config_dict,
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating configuration: {str(e)}")
-
-
 @router.post("/reboot")
 async def reboot_system():
     """Initiate system reboot."""
@@ -347,20 +316,6 @@ async def reboot_system():
         raise HTTPException(status_code=500, detail=f"Unexpected error during reboot: {str(e)}")
 
 
-@router.get("/config/locations")
-async def get_config_locations():
-    """Get the current configuration file locations."""
-    try:
-        config_dir = config_loader.get_config_dir()
-        return {
-            "config_dir": str(config_dir),
-            "radiotracking_ini": str(config_dir / "radiotracking.ini"),
-            "schedule_yml": str(config_dir / "schedule.yml"),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get configuration locations: {str(e)}")
-
-
 @router.get("/config/system")
 async def get_system_config():
     """Get the current system configuration."""
@@ -369,108 +324,6 @@ async def get_system_config():
         return {"status_refresh_interval": refresh_interval}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get system configuration: {str(e)}")
-
-
-class ConfigLocationsUpdate(BaseModel):
-    """Configuration locations update model."""
-
-    config_dir: str
-
-
-class SystemConfigUpdate(BaseModel):
-    """System configuration update model."""
-
-    status_refresh_interval: int = Field(..., ge=1, le=3600, description="Refresh interval in seconds (1-3600)")
-
-
-@router.put("/config/locations")
-async def update_config_locations(locations: ConfigLocationsUpdate):
-    """Update the configuration file locations."""
-    try:
-        # Load current config
-        current_config = config_loader.load_config()
-
-        # Update file_locations section
-        if "file_locations" not in current_config:
-            current_config["file_locations"] = {}
-
-        current_config["file_locations"]["config_dir"] = locations.config_dir
-
-        # Save updated config
-        with open(config_loader.config_path, "w") as f:
-            yaml.safe_dump(current_config, f, default_flow_style=False)
-
-        # Force reload of config
-        config_loader.reload_config()
-
-        # Trigger reload of all dependent configuration modules
-        await reload_all_configs()
-
-        return {
-            "message": "Configuration locations updated successfully",
-            "config_dir": locations.config_dir,
-            "radiotracking_ini": f"{locations.config_dir}/radiotracking.ini",
-            "schedule_yml": f"{locations.config_dir}/schedule.yml",
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update configuration locations: {str(e)}")
-
-
-@router.put("/config/system")
-async def update_system_config(system_config: SystemConfigUpdate):
-    """Update the system configuration."""
-    try:
-        # Load current config
-        current_config = config_loader.load_config()
-
-        # Update system section
-        if "system" not in current_config:
-            current_config["system"] = {}
-
-        current_config["system"]["status_refresh_interval"] = system_config.status_refresh_interval
-
-        # Save updated config
-        with open(config_loader.config_path, "w") as f:
-            yaml.safe_dump(current_config, f, default_flow_style=False)
-
-        # Force reload of config
-        config_loader.reload_config()
-
-        return {
-            "message": "System configuration updated successfully",
-            "status_refresh_interval": system_config.status_refresh_interval,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update system configuration: {str(e)}")
-
-
-async def reload_all_configs():
-    """Reload all configuration modules to use updated paths."""
-    try:
-        # Import here to avoid circular imports
-        from app.routers.radiotracking import reload_radiotracking_config
-        from app.routers.schedule import reload_schedule_config
-
-        # Reload all configs
-        reload_radiotracking_config()
-        reload_schedule_config()
-
-    except ImportError:
-        # Some modules might not be available, that's okay
-        pass
-    except Exception as e:
-        # Log the error but don't fail the entire operation
-        print(f"Warning: Failed to reload some configurations: {str(e)}")
-
-
-@router.post("/config/reload-all")
-async def reload_all_configurations():
-    """Reload all configuration modules with current file locations."""
-    try:
-        await reload_all_configs()
-        return {"message": "All configurations reloaded successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reload configurations: {str(e)}")
 
 
 @router.get("/logs/{service_name}")

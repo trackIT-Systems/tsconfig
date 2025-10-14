@@ -51,10 +51,6 @@ tags_metadata = [
         "name": "systemd",
         "description": "Systemd service management including status monitoring, control, and log streaming.",
     },
-    {
-        "name": "shell",
-        "description": "Interactive shell access for system administration.",
-    },
 ]
 
 app = FastAPI(

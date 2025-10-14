@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/shell", tags=["shell"])
+router = APIRouter(prefix="/api/shell", include_in_schema=False)
 
 
 def get_user_shell() -> str:
@@ -274,34 +274,3 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 pty_process.terminate()
             del active_sessions[session_id]
             logger.info(f"Shell session {session_id} cleaned up")
-
-
-@router.get("/sessions")
-async def get_active_sessions() -> Dict[str, Any]:
-    """Get list of active shell sessions."""
-    # Clean up dead sessions
-    dead_sessions = []
-    for session_id, pty_process in active_sessions.items():
-        if not pty_process.is_alive():
-            dead_sessions.append(session_id)
-
-    for session_id in dead_sessions:
-        logger.info(f"Removing dead session: {session_id}")
-        del active_sessions[session_id]
-
-    return {
-        "active_sessions": list(active_sessions.keys()),
-        "total_count": len(active_sessions),
-        "cleaned_dead_sessions": len(dead_sessions),
-    }
-
-
-@router.delete("/sessions/{session_id}")
-async def terminate_session(session_id: str) -> Dict[str, str]:
-    """Terminate a specific shell session."""
-    if session_id in active_sessions:
-        active_sessions[session_id].terminate()
-        del active_sessions[session_id]
-        return {"message": f"Session {session_id} terminated"}
-    else:
-        raise HTTPException(status_code=404, detail="Session not found")
