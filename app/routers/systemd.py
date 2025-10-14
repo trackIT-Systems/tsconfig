@@ -16,9 +16,7 @@ from app.config_loader import config_loader
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
 # Empty default services configuration - no services loaded by default
-DEFAULT_SERVICES_CONFIG = {
-    "services": []
-}
+DEFAULT_SERVICES_CONFIG = {"services": []}
 
 # Configuration file path
 CONFIG_PATH = Path("configs/tsconfig.yml")
@@ -26,17 +24,20 @@ CONFIG_PATH = Path("configs/tsconfig.yml")
 
 class ServiceConfig(BaseModel):
     """Service configuration model."""
+
     name: str
     expert: bool = False
 
 
 class ServicesConfigFile(BaseModel):
     """Services configuration file model."""
+
     services: List[ServiceConfig]
 
 
 class ServiceInfo(BaseModel):
     """Service information model."""
+
     name: str
     description: str
     active: bool
@@ -48,6 +49,7 @@ class ServiceInfo(BaseModel):
 
 class ServiceAction(BaseModel):
     """Service action model."""
+
     service: str
     action: str
 
@@ -76,15 +78,15 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
     """Calculate how long the service has been in its current state."""
     try:
         # Determine which timestamp to use based on current state
-        if active_state == 'active':
-            timestamp_str = properties.get('ActiveEnterTimestamp', '')
+        if active_state == "active":
+            timestamp_str = properties.get("ActiveEnterTimestamp", "")
         else:
             # For inactive states, try InactiveEnterTimestamp first, then StateChangeTimestamp
-            timestamp_str = properties.get('InactiveEnterTimestamp', '') or properties.get('StateChangeTimestamp', '')
-        
-        if not timestamp_str or timestamp_str == '0' or timestamp_str == 'n/a':
+            timestamp_str = properties.get("InactiveEnterTimestamp", "") or properties.get("StateChangeTimestamp", "")
+
+        if not timestamp_str or timestamp_str == "0" or timestamp_str == "n/a":
             return None
-        
+
         # Parse systemd timestamp format
         try:
             # Systemd timestamps are typically in format like "Mon 2023-12-04 10:30:15 UTC" or Unix timestamp
@@ -94,12 +96,12 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
             else:
                 # Try to parse various timestamp formats
                 timestamp_formats = [
-                    '%a %Y-%m-%d %H:%M:%S %Z',  # "Tue 2024-11-19 14:39:37 CET"
-                    '%Y-%m-%d %H:%M:%S %Z',     # "2024-11-19 14:39:37 CET"
-                    '%Y-%m-%d %H:%M:%S',        # "2024-11-19 14:39:37"
-                    '%a %b %d %H:%M:%S %Y',     # "Tue Nov 19 14:39:37 2024"
+                    "%a %Y-%m-%d %H:%M:%S %Z",  # "Tue 2024-11-19 14:39:37 CET"
+                    "%Y-%m-%d %H:%M:%S %Z",  # "2024-11-19 14:39:37 CET"
+                    "%Y-%m-%d %H:%M:%S",  # "2024-11-19 14:39:37"
+                    "%a %b %d %H:%M:%S %Y",  # "Tue Nov 19 14:39:37 2024"
                 ]
-                
+
                 for fmt in timestamp_formats:
                     try:
                         timestamp = datetime.strptime(timestamp_str, fmt)
@@ -111,27 +113,27 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
                     return None
         except (ValueError, OSError):
             return None
-        
+
         # Calculate duration
         now = datetime.now()
         if timestamp.tzinfo is None:
             # Use local time for comparison since systemd timestamps are typically local
             timestamp = timestamp.replace(tzinfo=None)
             now = datetime.now()
-        
+
         duration = now - timestamp
-        
+
         # Format duration
         total_seconds = int(duration.total_seconds())
         if total_seconds < 0:
             # Handle negative durations (future timestamps) - might indicate clock issues
             total_seconds = abs(total_seconds)  # Show absolute time for debugging
-        
+
         days = total_seconds // 86400
         hours = (total_seconds % 86400) // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
-        
+
         if days > 0:
             return f"{days}d {hours}h {minutes}m"
         elif hours > 0:
@@ -140,7 +142,7 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
             return f"{minutes}m {seconds}s"
         else:
             return f"{seconds}s"
-    
+
     except Exception:
         return None
 
@@ -150,12 +152,18 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
     try:
         # Get service status including timestamps
         result = subprocess.run(
-            ["systemctl", "show", service_config.name, "--no-pager", "--property=ActiveState,UnitFileState,Description,ActiveEnterTimestamp,InactiveEnterTimestamp,StateChangeTimestamp"],
+            [
+                "systemctl",
+                "show",
+                service_config.name,
+                "--no-pager",
+                "--property=ActiveState,UnitFileState,Description,ActiveEnterTimestamp,InactiveEnterTimestamp,StateChangeTimestamp",
+            ],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
-        
+
         if result.returncode != 0:
             # Service doesn't exist or error occurred - mark as expert
             return ServiceInfo(
@@ -165,27 +173,23 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
                 enabled=False,
                 status="not-found",
                 uptime=None,
-                expert=True  # Force expert mode for unavailable services
+                expert=True,  # Force expert mode for unavailable services
             )
-        
+
         # Parse output
         properties = {}
-        for line in result.stdout.strip().split('\n'):
-            if '=' in line:
-                key, value = line.split('=', 1)
+        for line in result.stdout.strip().split("\n"):
+            if "=" in line:
+                key, value = line.split("=", 1)
                 properties[key] = value
-        
-        active_state = properties.get('ActiveState', 'unknown')
-        unit_file_state = properties.get('UnitFileState', 'unknown')
-        description = properties.get('Description', 'No description available')
-        
+
+        active_state = properties.get("ActiveState", "unknown")
+        unit_file_state = properties.get("UnitFileState", "unknown")
+        description = properties.get("Description", "No description available")
+
         # Check if service is not found (empty UnitFileState and inactive + generic description)
-        service_not_found = (
-            unit_file_state == '' and 
-            active_state == 'inactive' and 
-            description.endswith('.service')
-        )
-        
+        service_not_found = unit_file_state == "" and active_state == "inactive" and description.endswith(".service")
+
         if service_not_found:
             return ServiceInfo(
                 name=service_config.name,
@@ -194,22 +198,22 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
                 enabled=False,
                 status="not-found",
                 uptime=None,
-                expert=True  # Force expert mode for unavailable services
+                expert=True,  # Force expert mode for unavailable services
             )
-        
+
         # Calculate uptime/downtime
         uptime = calculate_service_uptime(properties, active_state)
-        
+
         return ServiceInfo(
             name=service_config.name,
             description=description,
-            active=active_state == 'active',
-            enabled=unit_file_state == 'enabled',
+            active=active_state == "active",
+            enabled=unit_file_state == "enabled",
             status=active_state,
             uptime=uptime,
-            expert=service_config.expert
+            expert=service_config.expert,
         )
-    
+
     except subprocess.TimeoutExpired:
         return ServiceInfo(
             name=service_config.name,
@@ -218,7 +222,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             enabled=False,
             status="timeout",
             uptime=None,
-            expert=True  # Force expert mode for services with timeout
+            expert=True,  # Force expert mode for services with timeout
         )
     except Exception as e:
         return ServiceInfo(
@@ -228,7 +232,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             enabled=False,
             status="error",
             uptime=None,
-            expert=True  # Force expert mode for services with errors
+            expert=True,  # Force expert mode for services with errors
         )
 
 
@@ -237,11 +241,11 @@ async def list_services():
     """Get status of all configured systemd services."""
     services = get_configured_services(include_expert=True)
     service_info = []
-    
+
     for service in services:
         info = get_service_info(service)
         service_info.append(info)
-    
+
     return service_info
 
 
@@ -250,13 +254,13 @@ async def service_action(action: ServiceAction):
     """Perform action on a systemd service."""
     if action.action not in ["start", "stop", "restart", "enable", "disable"]:
         raise HTTPException(status_code=400, detail="Invalid action. Must be start, stop, restart, enable, or disable")
-    
+
     # Validate service is in our configured list
     configured_services = get_configured_services(include_expert=True)
     service_names = [service.name for service in configured_services]
     if action.service not in service_names:
         raise HTTPException(status_code=400, detail="Service not in configured list")
-    
+
     try:
         # Build systemctl command based on action
         if action.action in ["enable", "disable"]:
@@ -265,19 +269,16 @@ async def service_action(action: ServiceAction):
         else:
             # Regular start/stop/restart commands
             cmd = ["sudo", "systemctl", action.action, action.service]
-        
+
         # Execute systemctl command
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
         if result.returncode != 0:
             error_msg = result.stderr.strip() if result.stderr else f"Command failed with exit code {result.returncode}"
-            raise HTTPException(status_code=500, detail=f"Failed to {action.action} service {action.service}: {error_msg}")
-        
+            raise HTTPException(
+                status_code=500, detail=f"Failed to {action.action} service {action.service}: {error_msg}"
+            )
+
         # Create appropriate success message
         if action.action == "enable":
             message = f"Successfully enabled and started service {action.service}"
@@ -285,14 +286,9 @@ async def service_action(action: ServiceAction):
             message = f"Successfully disabled and stopped service {action.service}"
         else:
             message = f"Successfully {action.action}ed service {action.service}"
-        
-        return {
-            "success": True,
-            "message": message,
-            "service": action.service,
-            "action": action.action
-        }
-    
+
+        return {"success": True, "message": message, "service": action.service, "action": action.action}
+
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail=f"Timeout while trying to {action.action} service {action.service}")
     except Exception as e:
@@ -312,20 +308,20 @@ async def update_service_config(config: ServicesConfigFile):
     try:
         # Ensure configs directory exists
         CONFIG_PATH.parent.mkdir(exist_ok=True)
-        
+
         # Write services to YAML config file
         config_dict = config.dict()
-        with open(CONFIG_PATH, 'w') as f:
+        with open(CONFIG_PATH, "w") as f:
             f.write("# Systemd services configuration\n")
             f.write("# Set expert: true for services that should only be visible in expert mode\n\n")
             yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
-        
+
         return {
             "success": True,
             "message": f"Updated service configuration with {len(config.services)} services",
-            "config": config_dict
+            "config": config_dict,
         }
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating configuration: {str(e)}")
 
@@ -335,34 +331,20 @@ async def reboot_system():
     """Initiate system reboot."""
     try:
         # Use systemctl to reboot the system
-        result = subprocess.run(
-            ["sudo", "systemctl", "reboot"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
+        result = subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
+
         if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to initiate reboot: {result.stderr}"
-            )
-        
+            raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {result.stderr}")
+
         return {"message": "System reboot initiated"}
-    
+
     except subprocess.TimeoutExpired:
         # Timeout is expected as the system will be rebooting
         return {"message": "System reboot initiated"}
     except subprocess.CalledProcessError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to initiate reboot: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {str(e)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error during reboot: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Unexpected error during reboot: {str(e)}")
 
 
 @router.get("/config/locations")
@@ -373,13 +355,10 @@ async def get_config_locations():
         return {
             "config_dir": str(config_dir),
             "radiotracking_ini": str(config_dir / "radiotracking.ini"),
-            "schedule_yml": str(config_dir / "schedule.yml")
+            "schedule_yml": str(config_dir / "schedule.yml"),
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get configuration locations: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get configuration locations: {str(e)}")
 
 
 @router.get("/config/system")
@@ -387,23 +366,20 @@ async def get_system_config():
     """Get the current system configuration."""
     try:
         refresh_interval = config_loader.get_status_refresh_interval()
-        return {
-            "status_refresh_interval": refresh_interval
-        }
+        return {"status_refresh_interval": refresh_interval}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get system configuration: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get system configuration: {str(e)}")
 
 
 class ConfigLocationsUpdate(BaseModel):
     """Configuration locations update model."""
+
     config_dir: str
 
 
 class SystemConfigUpdate(BaseModel):
     """System configuration update model."""
+
     status_refresh_interval: int = Field(..., ge=1, le=3600, description="Refresh interval in seconds (1-3600)")
 
 
@@ -413,34 +389,31 @@ async def update_config_locations(locations: ConfigLocationsUpdate):
     try:
         # Load current config
         current_config = config_loader.load_config()
-        
+
         # Update file_locations section
-        if 'file_locations' not in current_config:
-            current_config['file_locations'] = {}
-        
-        current_config['file_locations']['config_dir'] = locations.config_dir
-        
+        if "file_locations" not in current_config:
+            current_config["file_locations"] = {}
+
+        current_config["file_locations"]["config_dir"] = locations.config_dir
+
         # Save updated config
-        with open(config_loader.config_path, 'w') as f:
+        with open(config_loader.config_path, "w") as f:
             yaml.safe_dump(current_config, f, default_flow_style=False)
-        
+
         # Force reload of config
         config_loader.reload_config()
-        
+
         # Trigger reload of all dependent configuration modules
         await reload_all_configs()
-        
+
         return {
             "message": "Configuration locations updated successfully",
             "config_dir": locations.config_dir,
             "radiotracking_ini": f"{locations.config_dir}/radiotracking.ini",
-            "schedule_yml": f"{locations.config_dir}/schedule.yml"
+            "schedule_yml": f"{locations.config_dir}/schedule.yml",
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update configuration locations: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to update configuration locations: {str(e)}")
 
 
 @router.put("/config/system")
@@ -449,29 +422,26 @@ async def update_system_config(system_config: SystemConfigUpdate):
     try:
         # Load current config
         current_config = config_loader.load_config()
-        
+
         # Update system section
-        if 'system' not in current_config:
-            current_config['system'] = {}
-        
-        current_config['system']['status_refresh_interval'] = system_config.status_refresh_interval
-        
+        if "system" not in current_config:
+            current_config["system"] = {}
+
+        current_config["system"]["status_refresh_interval"] = system_config.status_refresh_interval
+
         # Save updated config
-        with open(config_loader.config_path, 'w') as f:
+        with open(config_loader.config_path, "w") as f:
             yaml.safe_dump(current_config, f, default_flow_style=False)
-        
+
         # Force reload of config
         config_loader.reload_config()
-        
+
         return {
             "message": "System configuration updated successfully",
-            "status_refresh_interval": system_config.status_refresh_interval
+            "status_refresh_interval": system_config.status_refresh_interval,
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update system configuration: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to update system configuration: {str(e)}")
 
 
 async def reload_all_configs():
@@ -480,12 +450,12 @@ async def reload_all_configs():
         # Import here to avoid circular imports
         from app.routers.radiotracking import reload_radiotracking_config
         from app.routers.schedule import reload_schedule_config
-        
+
         # Reload all configs
         reload_radiotracking_config()
         reload_schedule_config()
-        
-    except ImportError as e:
+
+    except ImportError:
         # Some modules might not be available, that's okay
         pass
     except Exception as e:
@@ -500,10 +470,7 @@ async def reload_all_configurations():
         await reload_all_configs()
         return {"message": "All configurations reloaded successfully"}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to reload configurations: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to reload configurations: {str(e)}")
 
 
 @router.get("/logs/{service_name}")
@@ -514,26 +481,31 @@ async def stream_service_logs(service_name: str):
     service_names = [service.name for service in configured_services]
     if service_name not in service_names:
         raise HTTPException(status_code=400, detail="Service not in configured list")
-    
+
     async def generate_logs():
         """Generate streaming logs using journalctl -fu."""
         try:
             # Start journalctl process with follow and unit flags
             process = await asyncio.create_subprocess_exec(
-                "journalctl", "-fu", service_name, "--no-pager", "-n", "50",
+                "journalctl",
+                "-fu",
+                service_name,
+                "--no-pager",
+                "-n",
+                "50",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT
+                stderr=asyncio.subprocess.STDOUT,
             )
-            
+
             while True:
                 line = await process.stdout.readline()
                 if not line:
                     break
-                
+
                 # Decode and yield the line
-                log_line = line.decode('utf-8', errors='replace').rstrip()
+                log_line = line.decode("utf-8", errors="replace").rstrip()
                 yield f"data: {log_line}\n\n"
-                
+
         except Exception as e:
             yield f"data: Error streaming logs: {str(e)}\n\n"
         finally:
@@ -541,28 +513,26 @@ async def stream_service_logs(service_name: str):
                 try:
                     process.terminate()
                     await process.wait()
-                except:
+                except Exception:
                     pass
-    
+
     return StreamingResponse(
         generate_logs(),
         media_type="text/plain",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Content-Type": "text/event-stream"
-        }
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Content-Type": "text/event-stream"},
     )
 
 
 class RebootProtectionStatus(BaseModel):
     """Reboot protection status model."""
+
     enabled: bool
     services: List[str] = Field(default_factory=list, description="Services with reboot protection")
 
 
 class RebootProtectionToggle(BaseModel):
     """Reboot protection toggle model."""
+
     enabled: bool
 
 
@@ -570,32 +540,29 @@ def get_services_with_reboot_action() -> List[str]:
     """Get list of services that have StartLimitAction=reboot configured."""
     services_to_check = ["radiotracking", "soundscapepipe"]
     services_with_reboot = []
-    
+
     for service in services_to_check:
         try:
             result = subprocess.run(
-                ["systemctl", "cat", f"{service}.service"],
-                capture_output=True,
-                text=True,
-                timeout=10
+                ["systemctl", "cat", f"{service}.service"], capture_output=True, text=True, timeout=10
             )
-            
+
             if result.returncode == 0 and "StartLimitAction=reboot" in result.stdout:
                 services_with_reboot.append(service)
         except Exception:
             continue
-    
+
     return services_with_reboot
 
 
 def is_reboot_protection_enabled() -> bool:
     """Check if reboot protection is currently enabled by checking for override directories."""
     services_to_check = ["radiotracking", "soundscapepipe"]
-    
+
     for service in services_to_check:
         override_dir = Path(f"/etc/systemd/system/{service}.service.d")
         override_file = override_dir / "reboot-protection.conf"
-        
+
         if override_file.exists():
             try:
                 content = override_file.read_text()
@@ -603,7 +570,7 @@ def is_reboot_protection_enabled() -> bool:
                     return True
             except Exception:
                 continue
-    
+
     return False
 
 
@@ -612,34 +579,25 @@ def create_service_override(service_name: str) -> bool:
     try:
         override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
         override_file = override_dir / "reboot-protection.conf"
-        
+
         # Create override directory
-        result = subprocess.run(
-            ["sudo", "mkdir", "-p", str(override_dir)],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
+        result = subprocess.run(["sudo", "mkdir", "-p", str(override_dir)], capture_output=True, text=True, timeout=10)
+
         if result.returncode != 0:
             return False
-        
+
         # Create override file content
         override_content = """[Service]
 StartLimitAction=none
 """
-        
+
         # Write override file
         result = subprocess.run(
-            ["sudo", "tee", str(override_file)],
-            input=override_content,
-            capture_output=True,
-            text=True,
-            timeout=10
+            ["sudo", "tee", str(override_file)], input=override_content, capture_output=True, text=True, timeout=10
         )
-        
+
         return result.returncode == 0
-        
+
     except Exception:
         return False
 
@@ -649,28 +607,23 @@ def remove_service_override(service_name: str) -> bool:
     try:
         override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
         override_file = override_dir / "reboot-protection.conf"
-        
+
         # Remove override file
         if override_file.exists():
-            result = subprocess.run(
-                ["sudo", "rm", str(override_file)],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
+            result = subprocess.run(["sudo", "rm", str(override_file)], capture_output=True, text=True, timeout=10)
+
             if result.returncode != 0:
                 return False
-        
+
         # Remove directory if empty
         try:
             override_dir.rmdir()
         except OSError:
             # Directory not empty, that's fine
             pass
-        
+
         return True
-        
+
     except Exception:
         return False
 
@@ -681,11 +634,8 @@ async def get_reboot_protection_status():
     try:
         enabled = is_reboot_protection_enabled()
         services_with_reboot = get_services_with_reboot_action()
-        
-        return RebootProtectionStatus(
-            enabled=enabled,
-            services=services_with_reboot
-        )
+
+        return RebootProtectionStatus(enabled=enabled, services=services_with_reboot)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get reboot protection status: {str(e)}")
 
@@ -697,7 +647,7 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
         services_to_protect = ["radiotracking", "soundscapepipe"]
         success = True
         errors = []
-        
+
         for service in services_to_protect:
             if toggle.enabled:
                 if not create_service_override(service):
@@ -707,56 +657,43 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
                 if not remove_service_override(service):
                     success = False
                     errors.append(f"Failed to remove override for {service}")
-        
+
         if not success:
             raise HTTPException(status_code=500, detail=f"Some operations failed: {', '.join(errors)}")
-        
+
         # Reload systemd daemon
-        result = subprocess.run(
-            ["sudo", "systemctl", "daemon-reload"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        
+        result = subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, text=True, timeout=30)
+
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail="Failed to reload systemd daemon")
-        
+
         # Restart services to apply changes
         for service in services_to_protect:
             try:
                 # Check if service exists and is active before restarting
                 status_result = subprocess.run(
-                    ["systemctl", "is-active", service],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
+                    ["systemctl", "is-active", service], capture_output=True, text=True, timeout=10
                 )
-                
+
                 if status_result.returncode == 0:  # Service is active
                     restart_result = subprocess.run(
-                        ["sudo", "systemctl", "restart", service],
-                        capture_output=True,
-                        text=True,
-                        timeout=30
+                        ["sudo", "systemctl", "restart", service], capture_output=True, text=True, timeout=30
                     )
-                    
+
                     if restart_result.returncode != 0:
                         errors.append(f"Failed to restart {service}")
             except Exception as e:
                 errors.append(f"Error restarting {service}: {str(e)}")
-        
+
         if errors:
             return {
                 "message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} with warnings",
-                "warnings": errors
+                "warnings": errors,
             }
-        
-        return {
-            "message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} successfully"
-        }
-        
+
+        return {"message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} successfully"}
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to toggle reboot protection: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to toggle reboot protection: {str(e)}")

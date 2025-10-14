@@ -1,6 +1,5 @@
 """Base router for configuration endpoints to eliminate duplication."""
 
-from pathlib import Path
 from typing import Any, Dict, Optional, Type
 
 from fastapi import APIRouter, HTTPException
@@ -52,13 +51,20 @@ class BaseConfigRouter:
             errors = cfg_instance.validate(config_dict)
             if errors:
                 raise HTTPException(
-                    status_code=400, detail={"message": f"Invalid {self.prefix} configuration", "errors": errors}
+                    status_code=400,
+                    detail={
+                        "message": f"Invalid {self.prefix} configuration",
+                        "errors": errors,
+                    },
                 )
 
             # Save the configuration
             try:
                 cfg_instance.save(config_dict)
-                return {"message": f"{self.prefix.title()} configuration updated successfully", "config": config_dict}
+                return {
+                    "message": f"{self.prefix.title()} configuration updated successfully",
+                    "config": config_dict,
+                }
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -78,4 +84,7 @@ class BaseConfigRouter:
 
         if errors:
             return {"valid": False, "errors": errors}
-        return {"valid": True, "message": f"{self.prefix.title()} configuration is valid"}
+        return {
+            "valid": True,
+            "message": f"{self.prefix.title()} configuration is valid",
+        }

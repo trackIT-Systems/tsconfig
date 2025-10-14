@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
-
 
 class BaseConfig(ABC):
     """Base class for all configuration types."""

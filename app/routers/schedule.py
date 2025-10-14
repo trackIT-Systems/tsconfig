@@ -20,11 +20,13 @@ class ScheduleConfigUpdate(BaseModel):
 schedule_router = BaseConfigRouter(ScheduleConfig, "schedule", "schedule")
 router = schedule_router.router
 
+
 # Override methods to use our specific model
 @router.put("")
 async def update_schedule(config: ScheduleConfigUpdate):
     config_dict = config.model_dump()
     return schedule_router.update_config_helper(config_dict)
+
 
 @router.post("/validate")
 async def validate_schedule(config: ScheduleConfigUpdate):

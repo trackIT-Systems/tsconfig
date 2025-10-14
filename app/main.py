@@ -1,13 +1,11 @@
 """tsOS Configuration Manager."""
 
 import datetime
-import json
 import os
 import platform
 import socket
 import subprocess
 import time
-from pathlib import Path
 
 import psutil
 from fastapi import FastAPI, Request
@@ -180,7 +178,10 @@ async def get_system_status():
     """Get current system status information."""
     # Disable system status in server mode
     if config_loader.is_server_mode():
-        return JSONResponse(status_code=503, content={"error": "System status is not available in server mode"})
+        return JSONResponse(
+            status_code=503,
+            content={"error": "System status is not available in server mode"},
+        )
 
     try:
         # Get freedesktop OS release info
@@ -385,7 +386,10 @@ async def get_available_services(config_group: str = None):
     if config_group:
         config_dir = config_loader.get_config_group_dir(config_group)
         if not config_dir:
-            return JSONResponse(status_code=404, content={"error": f"Config group '{config_group}' not found"})
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Config group '{config_group}' not found"},
+            )
 
     # Check schedule configuration
     try:
@@ -471,7 +475,10 @@ async def get_timedatectl_status():
         return JSONResponse(content=timedatectl_status)
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Failed to get timedatectl status: {str(e)}"})
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get timedatectl status: {str(e)}"},
+        )
 
 
 def _parse_timedatectl_status(status_output):

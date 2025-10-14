@@ -91,6 +91,7 @@ class RadioTrackingConfig(BaseConfig):
         if config_dir is None:
             try:
                 from app.config_loader import config_loader
+
                 config_dir = config_loader.get_config_dir()
             except ImportError:
                 # Fallback to default if config_loader is not available
@@ -151,7 +152,7 @@ class RadioTrackingConfig(BaseConfig):
             return "True" if value else "False"
         if isinstance(value, str):
             # Quote string values unless they are paths or special values
-            if value in ['None', 'none'] or value.startswith('/'):
+            if value in ["None", "none"] or value.startswith("/"):
                 return value
             return f"'{value}'"
         return str(value)
@@ -237,4 +238,4 @@ class RadioTrackingConfig(BaseConfig):
         except Exception as e:
             errors.append(f"Invalid dashboard configuration: {str(e)}")
 
-        return errors 
+        return errors

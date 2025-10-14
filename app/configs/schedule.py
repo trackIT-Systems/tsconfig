@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.configs import BaseConfig
 
@@ -25,6 +25,7 @@ class ScheduleConfig(BaseConfig):
         if config_dir is None:
             try:
                 from app.config_loader import config_loader
+
                 config_dir = config_loader.get_config_dir()
             except ImportError:
                 # Fallback to default if config_loader is not available
