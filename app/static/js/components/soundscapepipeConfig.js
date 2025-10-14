@@ -1,6 +1,7 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
+import { apiUrl } from '../utils/apiUtils.js';
 
 export function soundscapepipeConfig() {
     return {
@@ -142,7 +143,7 @@ export function soundscapepipeConfig() {
                 // Determine the action based on current state
                 const action = currentlyEnabled ? 'disable' : 'enable';
                 
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -591,7 +592,7 @@ export function soundscapepipeConfig() {
                 }
 
                 // Save the configuration
-                const saveResponse = await fetch('/api/soundscapepipe', {
+                const saveResponse = await fetch(apiUrl('/api/soundscapepipe'), {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -620,7 +621,7 @@ export function soundscapepipeConfig() {
             
             const restartFunction = async () => {
                 // Then restart the soundscapepipe service
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -784,7 +785,7 @@ export function soundscapepipeConfig() {
         async loadAudioDevices() {
             this.loadingDevices = true;
             try {
-                const response = await fetch('/api/soundscapepipe/audio-devices');
+                const response = await fetch(apiUrl('/api/soundscapepipe/audio-devices'));
                 if (response.ok) {
                     this.audioDevices = await response.json();
                 } else {
@@ -830,7 +831,7 @@ export function soundscapepipeConfig() {
         async loadModelFiles() {
             this.loadingModels = true;
             try {
-                const response = await fetch('/api/soundscapepipe/model-files');
+                const response = await fetch(apiUrl('/api/soundscapepipe/model-files'));
                 if (response.ok) {
                     this.modelFiles = await response.json();
                     // Auto-select default models after loading model files
@@ -938,7 +939,7 @@ export function soundscapepipeConfig() {
         async loadLureFiles() {
             this.loadingLureFiles = true;
             try {
-                const response = await fetch('/api/soundscapepipe/lure-files');
+                const response = await fetch(apiUrl('/api/soundscapepipe/lure-files'));
                 if (response.ok) {
                     this.lureFiles = await response.json();
                 } else {
@@ -956,7 +957,7 @@ export function soundscapepipeConfig() {
         async loadSpeciesData() {
             this.loadingSpecies = true;
             try {
-                const response = await fetch('/api/soundscapepipe/species');
+                const response = await fetch(apiUrl('/api/soundscapepipe/species'));
                 if (response.ok) {
                     this.speciesData = await response.json();
                 } else {
@@ -982,7 +983,7 @@ export function soundscapepipeConfig() {
             }
             
             try {
-                const response = await fetch('/api/system-status');
+                const response = await fetch(apiUrl('/api/system-status'));
                 if (response.ok) {
                     const data = await response.json();
                     this.diskInfo = data.disk || [];
@@ -1041,7 +1042,7 @@ export function soundscapepipeConfig() {
                     return;
                 }
 
-                const response = await fetch(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`);
+                const response = await fetch(apiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`));
                 if (response.ok) {
                     const data = await response.json();
                     // Use enhanced labels if available, otherwise fallback to basic labels

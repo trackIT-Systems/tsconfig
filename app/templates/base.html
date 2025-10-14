@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title x-text="`tsconfig | ${hostname}`">tsconfig | Loading...</title>
     
+    <!-- Base URL for JavaScript -->
+    <script>
+        window.BASE_URL = "{{ base_url or '' }}";
+    </script>
+    
     <!-- Common CSS -->
     <link href="{{ url_for('static', path='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='vendor/leaflet/css/leaflet.css') }}" />

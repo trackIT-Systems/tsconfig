@@ -2,6 +2,7 @@
 
 import datetime
 import json
+import os
 import platform
 import socket
 import subprocess
@@ -20,6 +21,11 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd
+
+# Get base URL from environment variable (default to "/" for root)
+BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
+if not BASE_URL:
+    BASE_URL = ""
 
 # OpenAPI tags metadata for better API documentation organization
 tags_metadata = [
@@ -86,6 +92,7 @@ Each endpoint includes detailed request/response schemas and the ability to try 
     license_info={
         "name": "© 2025 trackIT Systems. All rights reserved.",
     },
+    root_path=BASE_URL,
 )
 
 # Include routers
@@ -106,6 +113,15 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
+# Add base_url to template context for all responses
+@app.middleware("http")
+async def add_base_url_to_context(request: Request, call_next):
+    """Add base_url to request state for use in templates."""
+    request.state.base_url = BASE_URL
+    response = await call_next(request)
+    return response
+
+
 @app.get(
     "/",
     include_in_schema=False,
@@ -113,7 +129,7 @@ templates = Jinja2Templates(directory="app/templates")
 )
 async def home(request: Request):
     """Render the main configuration page with status integration."""
-    return templates.TemplateResponse("index.html", {"request": request, "version": __version__})
+    return templates.TemplateResponse("index.html", {"request": request, "version": __version__, "base_url": BASE_URL})
 
 
 @app.get(

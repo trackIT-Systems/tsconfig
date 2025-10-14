@@ -8,6 +8,7 @@ import { serverModeManager } from './managers/serverModeManager.js';
 // Import utilities
 import { getSystemRefreshInterval } from './utils/systemUtils.js';
 import { parseTimeString, updateTimeString } from './utils/timeUtils.js';
+import { apiUrl, getBaseUrl } from './utils/apiUtils.js';
 
 // Import mixins
 import { saveStateMixin } from './mixins/saveStateMixin.js';
@@ -40,6 +41,8 @@ window.getSystemRefreshInterval = getSystemRefreshInterval;
 window.parseTimeString = parseTimeString;
 window.updateTimeString = updateTimeString;
 window.saveStateMixin = saveStateMixin;
+window.apiUrl = apiUrl;
+window.getBaseUrl = getBaseUrl;
 
 // Signal that modules are ready for Alpine.js
 window.appModulesReady = true;

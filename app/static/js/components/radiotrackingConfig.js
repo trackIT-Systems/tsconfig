@@ -1,6 +1,7 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
+import { apiUrl } from '../utils/apiUtils.js';
 
 export function radiotrackingConfig() {
     return {
@@ -187,7 +188,7 @@ export function radiotrackingConfig() {
                 // Determine the action based on current state
                 const action = currentlyEnabled ? 'disable' : 'enable';
                 
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -491,7 +492,7 @@ export function radiotrackingConfig() {
             
             const restartFunction = async () => {
                 // Then restart the radiotracking service
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

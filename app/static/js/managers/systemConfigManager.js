@@ -1,4 +1,6 @@
 // Shared System Config Manager - prevents duplicate API calls
+import { apiUrl } from '../utils/apiUtils.js';
+
 export const systemConfigManager = {
     config: null,
     fetchPromise: null,
@@ -32,7 +34,7 @@ export const systemConfigManager = {
             return { services: [] };
         }
         
-        const response = await fetch('/api/systemd/config/system');
+        const response = await fetch(apiUrl('/api/systemd/config/system'));
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }

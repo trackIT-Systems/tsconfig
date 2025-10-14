@@ -1,3 +1,5 @@
+import { apiUrl } from '../utils/apiUtils.js';
+
 export function configManager() {
     return {
         activeConfig: 'status',  // Default to status page
@@ -236,7 +238,7 @@ export function configManager() {
                     url += `?config_group=${encodeURIComponent(this.currentConfigGroup)}`;
                 }
                 
-                const response = await fetch(url);
+                const response = await fetch(apiUrl(url));
                 if (response.ok) {
                     const data = await response.json();
                     this.availableServices = data.available_services || [];
@@ -261,7 +263,7 @@ export function configManager() {
             }
             
             try {
-                const response = await fetch('/api/system-status');
+                const response = await fetch(apiUrl('/api/system-status'));
                 if (response.ok) {
                     const data = await response.json();
                     this.hostname = data.hostname || 'Unknown';

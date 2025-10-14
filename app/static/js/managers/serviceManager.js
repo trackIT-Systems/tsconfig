@@ -1,4 +1,6 @@
 // Shared Service Manager - prevents duplicate API calls
+import { apiUrl } from '../utils/apiUtils.js';
+
 export const serviceManager = {
     services: [],
     lastFetch: null,
@@ -60,7 +62,7 @@ export const serviceManager = {
             return [];
         }
         
-        const response = await fetch('/api/systemd/services');
+        const response = await fetch(apiUrl('/api/systemd/services'));
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }

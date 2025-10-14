@@ -1,5 +1,7 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
 
+import { apiUrl } from '../utils/apiUtils.js';
+
 export function logViewer() {
     return {
         ...saveStateMixin(),
@@ -38,7 +40,7 @@ export function logViewer() {
 
             try {
                 // Create event source for server-sent events
-                this.eventSource = new EventSource(`/api/systemd/logs/${encodeURIComponent(serviceName)}`);
+                this.eventSource = new EventSource(apiUrl(`/api/systemd/logs/${encodeURIComponent(serviceName)}`));
                 
                 this.eventSource.onmessage = (event) => {
                     const logLine = event.data;
@@ -99,7 +101,7 @@ export function logViewer() {
             
             const restartFunction = async () => {
                 // Call the systemd API directly
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

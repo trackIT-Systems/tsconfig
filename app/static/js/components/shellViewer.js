@@ -1,3 +1,5 @@
+import { apiUrl } from '../utils/apiUtils.js';
+
 export function shellViewer() {
     return {
         isConnected: false,
@@ -192,7 +194,8 @@ export function shellViewer() {
 
             // Create WebSocket connection
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/api/shell/ws/${this.sessionId}`;
+            const baseUrl = window.BASE_URL || '';
+            const wsUrl = `${protocol}//${window.location.host}${baseUrl}/api/shell/ws/${this.sessionId}`;
             
             this.websocket = new WebSocket(wsUrl);
 

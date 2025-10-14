@@ -2,6 +2,7 @@ import { saveStateMixin } from '../mixins/saveStateMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { systemConfigManager } from '../managers/systemConfigManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
+import { apiUrl } from '../utils/apiUtils.js';
 
 export function statusPage() {
     return {
@@ -70,8 +71,8 @@ export function statusPage() {
                 // Refresh system status, services, and timedatectl in parallel
                 // Force refresh services since this is a manual refresh
                 const [statusResponse, timedatectlResponse] = await Promise.all([
-                    fetch('/api/system-status'),
-                    fetch('/api/timedatectl-status'),
+                    fetch(apiUrl('/api/system-status')),
+                    fetch(apiUrl('/api/timedatectl-status')),
                     serviceManager.getServices(true) // Force refresh
                 ]);
                 
@@ -224,7 +225,7 @@ export function statusPage() {
             }
             
             try {
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -293,7 +294,7 @@ export function statusPage() {
             }
             
             try {
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -358,7 +359,7 @@ export function statusPage() {
                 // Determine the action based on current state
                 const action = currentlyEnabled ? 'disable' : 'enable';
                 
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -433,7 +434,7 @@ export function statusPage() {
             this.rebootLoading = true;
             
             try {
-                const response = await fetch('/api/systemd/reboot', {
+                const response = await fetch(apiUrl('/api/systemd/reboot'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -476,7 +477,7 @@ export function statusPage() {
         // Reboot protection methods
         async loadRebootProtectionStatus() {
             try {
-                const response = await fetch('/api/systemd/reboot-protection');
+                const response = await fetch(apiUrl('/api/systemd/reboot-protection'));
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -493,7 +494,7 @@ export function statusPage() {
             this.rebootProtectionLoading = true;
             
             try {
-                const response = await fetch('/api/systemd/reboot-protection', {
+                const response = await fetch(apiUrl('/api/systemd/reboot-protection'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

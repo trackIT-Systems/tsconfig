@@ -79,6 +79,32 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
 
 The application will be available at `http://localhost:8000`
 
+### Running Behind a Reverse Proxy
+
+If you need to run tsconfig at a subpath (e.g., `http://example.com/tsconfig/`), you can configure the base URL using the `TSCONFIG_BASE_URL` environment variable:
+
+```bash
+# Run at a subpath
+export TSCONFIG_BASE_URL="/tsconfig"
+pdm run uvicorn app.main:app --reload
+
+# Or inline
+TSCONFIG_BASE_URL="/tsconfig" pdm run uvicorn app.main:app --reload
+```
+
+The default value is `/` (root path). When configured, all URLs (API endpoints, static files, and navigation) will respect the base path.
+
+**Nginx reverse proxy example:**
+```nginx
+location /tsconfig/ {
+    proxy_pass http://localhost:8000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
 ## Configuration
 
 ### Service Management Setup

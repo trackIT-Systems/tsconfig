@@ -24,12 +24,13 @@ RUN mkdir -p /app/groups
 # Enable server mode via environment variable
 ENV TSCONFIG_SERVER_MODE=true
 ENV TSCONFIG_CONFIG_ROOT=/app/groups
+ENV TSCONFIG_BASE_URL="/tsconfig"
 ENV TSCONFIG_PORT=8000
 
 # Health check to verify the application is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${TSCONFIG_PORT}/api/server-mode || exit 1
+    CMD curl -f http://localhost:${TSCONFIG_PORT}${TSCONFIG_BASE_URL}/api/server-mode || exit 1
 
 # Run the application
-CMD sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${TSCONFIG_PORT}"
+CMD ["/bin/sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${TSCONFIG_PORT}"]
 

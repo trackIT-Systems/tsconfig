@@ -3,6 +3,8 @@ import { serviceManager } from '../managers/serviceManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
 
+import { apiUrl } from '../utils/apiUtils.js';
+
 export function scheduleConfig() {
     return {
         ...saveStateMixin(),
@@ -284,7 +286,7 @@ export function scheduleConfig() {
                 // Determine the action based on current state
                 const action = currentlyEnabled ? 'disable' : 'enable';
                 
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -405,7 +407,7 @@ export function scheduleConfig() {
             
             const restartFunction = async () => {
                 // Then restart the wittypid service
-                const response = await fetch('/api/systemd/action', {
+                const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

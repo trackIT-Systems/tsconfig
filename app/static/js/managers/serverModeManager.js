@@ -1,4 +1,6 @@
 // Server mode manager - handles server mode state and config groups
+import { apiUrl } from '../utils/apiUtils.js';
+
 export const serverModeManager = {
     enabled: false,
     configGroups: [],
@@ -12,7 +14,7 @@ export const serverModeManager = {
         }
 
         try {
-            const response = await fetch('/api/server-mode');
+            const response = await fetch(apiUrl('/api/server-mode'));
             if (response.ok) {
                 const data = await response.json();
                 this.enabled = data.enabled || false;
@@ -120,12 +122,15 @@ export const serverModeManager = {
     },
 
     // Build API URL with config_group parameter if in server mode
-    buildApiUrl(baseUrl) {
+    buildApiUrl(path) {
+        // First apply the base URL prefix
+        const fullPath = apiUrl(path);
+        
         if (!this.enabled || !this.currentConfigGroup) {
-            return baseUrl;
+            return fullPath;
         }
 
-        const url = new URL(baseUrl, window.location.origin);
+        const url = new URL(fullPath, window.location.origin);
         url.searchParams.set('config_group', this.currentConfigGroup);
         return url.toString();
     }
