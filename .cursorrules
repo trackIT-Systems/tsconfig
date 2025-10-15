@@ -1,0 +1,10 @@
+# Cursor Rules
+
+## Documentation Guidelines
+
+- **DO NOT** proactively create markdown documentation files (CHANGELOG*.md, TROUBLESHOOTING*.md, GUIDE*.md, etc.) for every change or troubleshooting step
+- **DO NOT** create detailed technical documentation files unless explicitly requested by the user
+- **ONLY** document high-level information in the README.md when significant features or changes are made
+- Keep documentation minimal and focused on essential information
+- If the user explicitly asks for documentation, then create it, but do not do so automatically
+
