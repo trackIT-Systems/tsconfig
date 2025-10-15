@@ -1,6 +1,7 @@
 """Configuration loader for tsOS main configuration."""
 
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -74,6 +75,7 @@ class ConfigLoader:
         """List available config groups in server mode.
 
         Returns empty list in tracker mode (default).
+        Config groups must have a 'latest' subdirectory.
         """
         if not self.is_server_mode():
             return []
@@ -82,24 +84,27 @@ class ConfigLoader:
         if not config_root or not config_root.exists():
             return []
 
-        # Return only directories that contain at least one config file
+        # Return only directories that contain a 'latest' subdirectory with config files
         config_groups = []
         for item in config_root.iterdir():
             if item.is_dir():
-                # Check if directory contains any config files
-                has_config = (
-                    (item / "radiotracking.ini").exists()
-                    or (item / "schedule.yml").exists()
-                    or (item / "soundscapepipe.yml").exists()
-                )
-                if has_config:
-                    config_groups.append(item.name)
+                latest_dir = item / "latest"
+                if latest_dir.exists() and latest_dir.is_dir():
+                    # Check if latest directory contains any config files
+                    has_config = (
+                        (latest_dir / "radiotracking.ini").exists()
+                        or (latest_dir / "schedule.yml").exists()
+                        or (latest_dir / "soundscapepipe.yml").exists()
+                    )
+                    if has_config:
+                        config_groups.append(item.name)
 
         return sorted(config_groups)
 
     def get_config_group_dir(self, config_group: str) -> Optional[Path]:
         """Get the config directory for a specific config group.
 
+        Returns the 'latest' subdirectory within the config group.
         Returns None in tracker mode (default).
         """
         if not self.is_server_mode():
@@ -109,11 +114,53 @@ class ConfigLoader:
         if not config_root:
             return None
 
-        group_dir = config_root / config_group
+        group_dir = config_root / config_group / "latest"
         if group_dir.exists() and group_dir.is_dir():
             return group_dir
 
         return None
+
+    def create_versioned_config_dir(self, config_group: str) -> Path:
+        """Create a new timestamped config directory and update the 'latest' symlink.
+
+        Args:
+            config_group: The name of the config group
+
+        Returns:
+            Path to the newly created versioned directory
+
+        Raises:
+            ValueError: If not in server mode or config_root is not set
+            OSError: If directory creation or symlink update fails
+        """
+        if not self.is_server_mode():
+            raise ValueError("Versioned config directories are only available in server mode")
+
+        config_root = self.get_config_root()
+        if not config_root:
+            raise ValueError("TSCONFIG_CONFIG_ROOT environment variable is not set")
+
+        # Create the group directory if it doesn't exist
+        group_root = config_root / config_group
+        group_root.mkdir(parents=True, exist_ok=True)
+
+        # Create timestamped directory (format: YYYYMMDD_HHMMSS)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        versioned_dir = group_root / timestamp
+        versioned_dir.mkdir(parents=True, exist_ok=True)
+
+        # Update the 'latest' symlink
+        latest_symlink = group_root / "latest"
+
+        # Remove existing symlink if it exists
+        if latest_symlink.exists() or latest_symlink.is_symlink():
+            latest_symlink.unlink()
+
+        # Create new symlink pointing to the timestamped directory
+        # Use relative path for the symlink target
+        latest_symlink.symlink_to(timestamp, target_is_directory=True)
+
+        return versioned_dir
 
 
 # Global instance

@@ -21,19 +21,27 @@ export const serverModeManager = {
                 this.configGroups = data.config_groups || [];
                 this.configRoot = data.config_root || null;
 
-                // Try to get current config group from URL hash
-                // URL format in server mode: #config_group_name/tab_name
-                this.currentConfigGroup = this._parseConfigGroupFromHash();
+                // In server mode, get config group from query parameter
+                // URL format: /tsconfig/?config_group=groupname#tab_name
+                this.currentConfigGroup = this._parseConfigGroupFromQuery();
                 
                 if (this.enabled && !this.currentConfigGroup && this.configGroups.length > 0) {
                     // Default to first config group if none specified
-                    this.setCurrentConfigGroup(this.configGroups[0], 'schedule');
+                    // Redirect to proper query parameter URL
+                    const firstGroup = this.configGroups[0];
+                    const currentTab = this._getTabFromHash() || 'schedule';
+                    const baseUrl = window.BASE_URL || '';
+                    window.location.href = `${baseUrl}/?config_group=${encodeURIComponent(firstGroup)}#${currentTab}`;
                 } else if (this.enabled && this.currentConfigGroup) {
                     // Validate that the config group exists
                     if (!this.configGroups.includes(this.currentConfigGroup)) {
                         console.warn(`Config group '${this.currentConfigGroup}' not found`);
                         if (this.configGroups.length > 0) {
-                            this.setCurrentConfigGroup(this.configGroups[0], 'schedule');
+                            // Redirect to valid config group
+                            const firstGroup = this.configGroups[0];
+                            const currentTab = this._getTabFromHash() || 'schedule';
+                            const baseUrl = window.BASE_URL || '';
+                            window.location.href = `${baseUrl}/?config_group=${encodeURIComponent(firstGroup)}#${currentTab}`;
                         }
                     }
                 }
@@ -50,41 +58,27 @@ export const serverModeManager = {
         return this;
     },
 
-    _parseConfigGroupFromHash() {
-        const hash = window.location.hash.slice(1); // Remove '#'
-        if (!hash) return null;
+    _parseConfigGroupFromQuery() {
+        // In server mode, config group is in the query parameter: ?config_group=groupname
+        // Extract it from window.location.search
+        const urlParams = new URLSearchParams(window.location.search);
+        const configGroup = urlParams.get('config_group');
         
-        // Format: config_group_name/tab_name or just config_group_name
-        const parts = hash.split('/');
-        if (parts.length >= 2) {
-            // First part is config group, second is tab
-            return decodeURIComponent(parts[0]);
-        } else if (parts.length === 1 && parts[0]) {
-            // Check if it's a tab name (schedule, radiotracking, soundscapepipe, status)
-            const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
-            if (knownTabs.includes(parts[0])) {
-                // It's just a tab name, no config group
-                return null;
-            } else {
-                // It's a config group name without a tab
-                return decodeURIComponent(parts[0]);
-            }
+        if (configGroup) {
+            return decodeURIComponent(configGroup);
         }
+        
         return null;
     },
 
     _getTabFromHash() {
+        // Hash now only contains tab name: #schedule
         const hash = window.location.hash.slice(1);
         if (!hash) return null;
         
-        const parts = hash.split('/');
-        if (parts.length >= 2) {
-            return parts[1];
-        } else if (parts.length === 1) {
-            const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
-            if (knownTabs.includes(parts[0])) {
-                return parts[0];
-            }
+        const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
+        if (knownTabs.includes(hash)) {
+            return hash;
         }
         return null;
     },
@@ -103,19 +97,14 @@ export const serverModeManager = {
 
     setCurrentConfigGroup(groupName, tab = null) {
         if (this.enabled && this.configGroups.includes(groupName)) {
-            this.currentConfigGroup = groupName;
-            
-            // Update URL hash to include config group and optionally tab
-            // Format: #config_group_name/tab_name
+            // In server mode, navigate to proper query parameter URL
+            // Format: /tsconfig/?config_group=groupname#tab_name
             const currentTab = tab || this._getTabFromHash() || 'schedule';
-            const newHash = `${encodeURIComponent(groupName)}/${currentTab}`;
+            const baseUrl = window.BASE_URL || '';
+            const newUrl = `${baseUrl}/?config_group=${encodeURIComponent(groupName)}#${currentTab}`;
             
-            if (window.location.hash !== `#${newHash}`) {
-                window.location.hash = newHash;
-            }
-            
-            // Trigger event for components to reload
-            window.dispatchEvent(new CustomEvent('config-group-changed'));
+            // Use full page navigation to change config group (updates query parameter)
+            window.location.href = newUrl;
             return true;
         }
         return false;

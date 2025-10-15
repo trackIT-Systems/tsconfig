@@ -52,20 +52,9 @@ export function configManager() {
             this.expertMode = urlParams.get('expert') === 'true';
 
             // Set initial active config based on URL hash
-            // In server mode, hash format is: config_group/tab_name
-            // In tracker mode (default), hash format is: tab_name
+            // Hash format is simply: tab_name (same for both tracker and server mode)
             const hash = window.location.hash.slice(1);
             let tabName = hash;
-            
-            if (this.serverMode) {
-                // Extract tab name from hash (config_group/tab_name)
-                const parts = hash.split('/');
-                if (parts.length >= 2) {
-                    tabName = parts[1];
-                } else {
-                    tabName = ''; // Will use default
-                }
-            }
             
             if (tabName === 'radiotracking' && this.isServiceAvailable('radiotracking')) {
                 this.activeConfig = 'radiotracking';
@@ -98,22 +87,28 @@ export function configManager() {
                 }
             });
             
-            // Watch for currentConfigGroup changes and update serverModeManager
+            // Watch for currentConfigGroup changes and update URL + serverModeManager
             this.$watch('currentConfigGroup', (value, oldValue) => {
                 // Keep serverModeManager in sync (but avoid infinite loops)
                 if (this.serverMode && value && value !== oldValue && oldValue !== undefined) {
                     window.serverModeManager.currentConfigGroup = value;
+                    
+                    // Update URL query parameter to reflect new config group
+                    const urlParams = new URLSearchParams(window.location.search);
+                    urlParams.set('config_group', value);
+                    const newUrl = `${window.location.pathname}?${urlParams.toString()}${window.location.hash}`;
+                    window.history.replaceState({}, '', newUrl);
+                    
+                    // Reload services and hostname for new config group
+                    this.loadAvailableServices();
+                    this.loadHostname();
                 }
             });
 
             // Update URL hash when active config changes
             this.$watch('activeConfig', (value) => {
-                // In server mode, preserve config group in hash
-                if (this.serverMode && this.currentConfigGroup) {
-                    window.location.hash = `${encodeURIComponent(this.currentConfigGroup)}/${value}`;
-                } else {
-                    window.location.hash = value;
-                }
+                // Hash only contains tab name (config group is in query parameter for server mode)
+                window.location.hash = value;
                 
                 // Ensure map is properly initialized when switching to schedule tab
                 if (value === 'schedule') {
@@ -193,30 +188,11 @@ export function configManager() {
             // Listen for hash changes (browser back/forward or manual URL change)
             window.addEventListener('hashchange', () => {
                 const hash = window.location.hash.slice(1);
-                let tabName = hash;
-                
-                if (this.serverMode) {
-                    // Extract tab name from hash (config_group/tab_name)
-                    const parts = hash.split('/');
-                    if (parts.length >= 2) {
-                        const configGroup = decodeURIComponent(parts[0]);
-                        tabName = parts[1];
-                        
-                        // Update current config group if changed
-                        if (configGroup !== this.currentConfigGroup) {
-                            this.currentConfigGroup = configGroup;
-                            window.serverModeManager.currentConfigGroup = configGroup;
-                            // Reload services and hostname for new config group
-                            this.loadAvailableServices();
-                            this.loadHostname();
-                        }
-                    }
-                }
                 
                 // Update activeConfig if the tab changed
                 const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
-                if (knownTabs.includes(tabName) && tabName !== this.activeConfig) {
-                    this.activeConfig = tabName;
+                if (knownTabs.includes(hash) && hash !== this.activeConfig) {
+                    this.activeConfig = hash;
                 }
             });
             
