@@ -32,6 +32,7 @@ async def update_schedule(
     return schedule_router.update_config_helper(config_dict, config_group)
 
 
+
 @router.post("/validate")
 async def validate_schedule(
     config: ScheduleConfigUpdate,

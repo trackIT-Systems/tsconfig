@@ -56,7 +56,11 @@ class BaseConfigRouter:
             errors = cfg_instance.validate(config_dict)
             if errors:
                 raise HTTPException(
-                    status_code=400, detail={"message": f"Invalid {self.prefix} configuration", "errors": errors}
+                    status_code=400,
+                    detail={
+                        "message": f"Invalid {self.prefix} configuration",
+                        "errors": errors,
+                    },
                 )
 
             # Save the configuration
@@ -161,4 +165,7 @@ class BaseConfigRouter:
 
         if errors:
             return {"valid": False, "errors": errors}
-        return {"valid": True, "message": f"{self.prefix.title()} configuration is valid"}
+        return {
+            "valid": True,
+            "message": f"{self.prefix.title()} configuration is valid",
+        }

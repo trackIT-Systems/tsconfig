@@ -17,7 +17,7 @@ except ImportError:
     sd = None
 
 import yaml
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
@@ -119,10 +119,8 @@ class SoundscapepipeConfigUpdate(BaseModel):
 soundscapepipe_router = BaseConfigRouter(SoundscapepipeConfig, "soundscapepipe", "soundscapepipe")
 router = soundscapepipe_router.router
 
+
 # Override get method to support config_group
-from fastapi import Query
-
-
 @router.get("")
 async def get_soundscapepipe(
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
@@ -232,7 +230,7 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
                 if hasattr(sd.default, "_device"):
                     try:
                         sd.default._device = None
-                    except:
+                    except Exception:
                         pass
                 try:
                     subprocess.run(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
@@ -459,7 +457,7 @@ async def get_species() -> Dict[str, Any]:
                 species_data["birdedge"] = species_list
                 break  # Use the first path that works
 
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, IOError):
                 # Continue to next path if this one fails
                 continue
 
@@ -490,7 +488,7 @@ async def get_species() -> Dict[str, Any]:
                 yolobat_species_list.append(species_entry)
 
             species_data["yolobat"] = sorted(yolobat_species_list, key=lambda x: x["scientific"])
-    except (json.JSONDecodeError, IOError) as e:
+    except (json.JSONDecodeError, IOError):
         # If loading fails, keep yolobat empty
         species_data["yolobat"] = []
 
@@ -617,7 +615,7 @@ async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
             "model_path": model_path,
             "metadata_path": metadata_path,
             "total_labels": len(clean_labels),
-            "enhanced_count": len([l for l in enhanced_labels if l["english"] or l["german"]]),
+            "enhanced_count": len([label for label in enhanced_labels if label["english"] or label["german"]]),
         }
 
     except HTTPException:

@@ -1,12 +1,9 @@
 """Radio tracking configuration endpoints."""
 
-import io
-from configparser import ConfigParser
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ValidationError
+from fastapi import Query
+from pydantic import BaseModel
 
 from app.configs.radiotracking import (
     AnalysisEntry,
@@ -38,7 +35,9 @@ router = radiotracking_router.router
 
 # Override get method to support config_group
 @router.get("")
-async def get_radiotracking(config_group: Optional[str] = Query(None, description="Config group name for server mode")):
+async def get_radiotracking(
+    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+):
     return await radiotracking_router.get_config(config_group)
 
 

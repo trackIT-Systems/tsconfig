@@ -4,13 +4,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel
 
 from app.configs import BaseConfig
 
 
 class DetectorEntry(BaseModel):
     """Detector configuration entry."""
+
     detection_threshold: Optional[float] = None
     class_threshold: Optional[float] = None
     model_path: Optional[str] = None
@@ -20,6 +21,7 @@ class DetectorEntry(BaseModel):
 
 class ScheduleTaskEntry(BaseModel):
     """Schedule task configuration entry."""
+
     name: str
     start: str
     stop: str
@@ -27,6 +29,7 @@ class ScheduleTaskEntry(BaseModel):
 
 class LureTaskEntry(BaseModel):
     """Lure task configuration entry."""
+
     species: str
     paths: List[str]
     start: str
@@ -36,6 +39,7 @@ class LureTaskEntry(BaseModel):
 
 class GroupEntry(BaseModel):
     """Group configuration entry."""
+
     ratio: Optional[float] = None
     maximize_confidence: Optional[bool] = None
     species: List[str]
@@ -49,6 +53,7 @@ class SoundscapepipeConfig(BaseConfig):
         if config_dir is None:
             try:
                 from app.config_loader import config_loader
+
                 config_dir = config_loader.get_config_dir()
             except ImportError:
                 # Fallback to default if config_loader is not available
@@ -187,29 +192,41 @@ class SoundscapepipeConfig(BaseConfig):
                                 valid_strategies = ["mix", "all"]
                             else:  # birdedge
                                 valid_strategies = ["mix", "all", "or", "and"]
-                            
+
                             if channel_strategy not in valid_strategies:
                                 # Try to validate as string representation of a channel number
                                 try:
                                     channel_num = int(channel_strategy)
                                     if channel_num < 0:
-                                        errors.append(f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number")
+                                        errors.append(
+                                            f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number"
+                                        )
                                 except (ValueError, TypeError):
                                     if detector_name == "yolobat":
-                                        errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number")
+                                        errors.append(
+                                            f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number"
+                                        )
                                     else:  # birdedge
-                                        errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', 'or', 'and', or a valid channel number")
+                                        errors.append(
+                                            f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', 'or', 'and', or a valid channel number"
+                                        )
                         else:
                             # Try to validate as integer channel number
                             try:
                                 channel_num = int(channel_strategy)
                                 if channel_num < 0:
-                                    errors.append(f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number")
+                                    errors.append(
+                                        f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number"
+                                    )
                             except (ValueError, TypeError):
                                 if detector_name == "yolobat":
-                                    errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number")
+                                    errors.append(
+                                        f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number"
+                                    )
                                 else:  # birdedge
-                                    errors.append(f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', 'or', 'and', or a valid channel number")
+                                    errors.append(
+                                        f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', 'or', 'and', or a valid channel number"
+                                    )
 
                 # Validate detector tasks (applicable to all detectors except schedule)
                 if detector_name != "schedule":
@@ -222,11 +239,13 @@ class SoundscapepipeConfig(BaseConfig):
                                 if not isinstance(task, dict):
                                     errors.append(f"Detector '{detector_name}' task {i} must be a dictionary")
                                     continue
-                                
+
                                 required_fields = ["name", "start", "stop"]
                                 for field in required_fields:
                                     if not task.get(field):
-                                        errors.append(f"Detector '{detector_name}' task {i} must have a '{field}' field")
+                                        errors.append(
+                                            f"Detector '{detector_name}' task {i} must have a '{field}' field"
+                                        )
 
                 # Validate schedule tasks
                 if detector_name == "schedule":
@@ -238,7 +257,7 @@ class SoundscapepipeConfig(BaseConfig):
                             if not isinstance(task, dict):
                                 errors.append(f"Schedule task {i} must be a dictionary")
                                 continue
-                            
+
                             required_fields = ["name", "start", "stop"]
                             for field in required_fields:
                                 if not task.get(field):
@@ -275,17 +294,17 @@ class SoundscapepipeConfig(BaseConfig):
                     if not isinstance(task, dict):
                         errors.append(f"Lure task {i} must be a dictionary")
                         continue
-                    
+
                     required_fields = ["species", "paths", "start", "stop"]
                     for field in required_fields:
                         if not task.get(field):
                             errors.append(f"Lure task {i} must have a '{field}' field")
-                    
+
                     # Validate paths is a list
                     paths = task.get("paths", [])
                     if not isinstance(paths, list):
                         errors.append(f"Lure task {i} paths must be a list")
-                    
+
                     # Validate record is a boolean
                     record = task.get("record", False)
                     if record is not None and not isinstance(record, bool):
@@ -345,4 +364,4 @@ class SoundscapepipeConfig(BaseConfig):
             except (ValueError, TypeError):
                 errors.append("Disk reserve must be a valid integer")
 
-        return errors 
+        return errors

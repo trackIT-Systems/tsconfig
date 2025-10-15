@@ -18,7 +18,7 @@ from app.config_loader import config_loader
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
-from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd
+from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd, upload
 
 # Get base URL from environment variable (default to "/" for root)
 BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
@@ -47,12 +47,12 @@ tags_metadata = [
         "description": "Soundscapepipe configuration for audio recording and analysis.",
     },
     {
-        "name": "systemd",
-        "description": "Systemd service management including status monitoring, control, and log streaming.",
+        "name": "upload",
+        "description": "Configuration file upload with validation.",
     },
     {
-        "name": "shell",
-        "description": "Interactive shell access for system administration.",
+        "name": "systemd",
+        "description": "Systemd service management including status monitoring, control, and log streaming.",
     },
 ]
 
@@ -100,6 +100,7 @@ Each endpoint includes detailed request/response schemas and the ability to try 
 app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
+app.include_router(upload.router)
 
 # Only include system-specific routers in tracker mode (default mode)
 # These are disabled in server mode since they require direct hardware access
@@ -304,7 +305,10 @@ async def get_system_status():
     """Get current system status information."""
     # Disable system status in server mode
     if config_loader.is_server_mode():
-        return JSONResponse(status_code=503, content={"error": "System status is not available in server mode"})
+        return JSONResponse(
+            status_code=503,
+            content={"error": "System status is not available in server mode"},
+        )
 
     try:
         # Get freedesktop OS release info
@@ -509,7 +513,10 @@ async def get_available_services(config_group: str = None):
     if config_group:
         config_dir = config_loader.get_config_group_dir(config_group)
         if not config_dir:
-            return JSONResponse(status_code=404, content={"error": f"Config group '{config_group}' not found"})
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Config group '{config_group}' not found"},
+            )
 
     # Check schedule configuration
     try:
@@ -595,7 +602,10 @@ async def get_timedatectl_status():
         return JSONResponse(content=timedatectl_status)
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Failed to get timedatectl status: {str(e)}"})
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get timedatectl status: {str(e)}"},
+        )
 
 
 def _parse_timedatectl_status(status_output):
