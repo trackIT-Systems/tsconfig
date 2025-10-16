@@ -53,7 +53,7 @@ class DataChunker:
 
     def __init__(self, max_chunk_size: int = MAX_CHARACTERISTIC_LENGTH):
         """Initialize the chunker with a maximum chunk size.
-        
+
         The chunk size accounts for JSON overhead:
         - JSON structure: {"seq": X, "total": Y, "data": "...", "complete": false}
         - Overhead is ~60 bytes, so we use max_chunk_size - 200 to be safe
@@ -155,9 +155,11 @@ class ResponseFormatter:
         return json.dumps({"error": "Pairing required", "code": 403})
 
     @staticmethod
-    def metadata(content_length: int, chunks_expected: int, content_type: str = "application/json", status: str = "ready") -> str:
+    def metadata(
+        content_length: int, chunks_expected: int, content_type: str = "application/json", status: str = "ready"
+    ) -> str:
         """Format a metadata response for read operations.
-        
+
         In the notification-only protocol, read operations return metadata about
         the data that will be sent via notifications.
 
@@ -176,7 +178,7 @@ class ResponseFormatter:
             "chunks_expected": chunks_expected,
             "content_type": content_type,
             "status": status,
-            "hint": "Data will be delivered via notifications"
+            "hint": "Data will be delivered via notifications",
         })
 
 
@@ -198,6 +200,38 @@ class RequestParser:
             return json.loads(json_str)
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
+
+    @staticmethod
+    def is_chunk(data: Dict[str, Any]) -> bool:
+        """Check if parsed data is a chunk in the chunked write protocol.
+
+        Args:
+            data: Parsed dictionary
+
+        Returns:
+            True if data is a chunk (has seq, total, data fields)
+        """
+        required_fields = ["seq", "total", "data"]
+        return all(field in data for field in required_fields)
+
+    @staticmethod
+    def parse_chunked_write(data: bytes) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """Parse data and determine if it's a chunk or direct JSON.
+
+        Args:
+            data: Raw bytes from BLE write
+
+        Returns:
+            Tuple of (is_chunk, parsed_data)
+            - is_chunk: True if this is a chunk, False if direct JSON
+            - parsed_data: The parsed dictionary or None if parsing fails
+        """
+        parsed = RequestParser.parse_json(data)
+        if parsed is None:
+            return False, None
+
+        is_chunk = RequestParser.is_chunk(parsed)
+        return is_chunk, parsed
 
     @staticmethod
     def validate_service_action(data: Dict[str, Any]) -> bool:

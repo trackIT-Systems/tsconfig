@@ -7,7 +7,7 @@ for each tsconfig API endpoint exposed via BLE GATT.
 import asyncio
 import json
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 import dbus
 import dbus.service
@@ -122,11 +122,7 @@ class Characteristic(dbus.service.Object):
 
         # Send notification via D-Bus PropertiesChanged signal
         # This updates the "Value" property of the characteristic
-        self.PropertiesChanged(
-            GATT_CHRC_IFACE,
-            {"Value": dbus.Array(value, signature="y")},
-            []
-        )
+        self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": dbus.Array(value, signature="y")}, [])
 
     def send_chunked_response(self, data: str):
         """Send a chunked response via notifications.
@@ -186,7 +182,7 @@ class ReadOnlyCharacteristic(Characteristic):
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
         """Handle read operation with notification-only protocol.
-        
+
         All data is transferred via notifications. Read operations return only
         metadata about the data (length, chunks, content type, status).
         """
@@ -194,16 +190,12 @@ class ReadOnlyCharacteristic(Characteristic):
             # Check if notifications are enabled
             if not self.notifying:
                 logger.warning(f"Read attempt on {self.uuid} without notifications enabled")
-                error_metadata = formatter.metadata(
-                    content_length=0,
-                    chunks_expected=0,
-                    status="error"
-                )
+                error_metadata = formatter.metadata(content_length=0, chunks_expected=0, status="error")
                 error_dict = json.loads(error_metadata)
                 error_dict["error"] = "Notifications must be enabled to receive data"
                 error_response = json.dumps(error_dict)
                 return dbus.Array(error_response.encode("utf-8"), signature="y")
-            
+
             # Run the async handler in a synchronous context
             # Handle event loop carefully to avoid "Event loop is closed" errors
             try:
@@ -222,34 +214,39 @@ class ReadOnlyCharacteristic(Characteristic):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop_created = True
-            
+
             try:
                 data = loop.run_until_complete(self.read_handler())
                 # Ensure httpx client is closed before closing the loop
-                if hasattr(self.api_client, 'client') and self.api_client.client:
+                if hasattr(self.api_client, "client") and self.api_client.client:
                     loop.run_until_complete(self.api_client.client.aclose())
                     self.api_client.client = None
                 response = formatter.success(data)
                 response_bytes = response.encode("utf-8")
-                
+
                 # Calculate chunks
                 chunks = chunker.chunk_data(response)
-                
+
                 # Schedule data to be sent via notifications AFTER read completes
                 # This prevents the notification from overwriting the read response value
-                logger.info(f"Preparing {len(response_bytes)} bytes in {len(chunks)} notification chunks for {self.uuid}")
+                logger.info(
+                    f"Preparing {len(response_bytes)} bytes in {len(chunks)} notification chunks for {self.uuid}"
+                )
                 from gi.repository import GLib
+
                 GLib.idle_add(lambda: self.send_chunked_response(response) or False)
-                
+
                 # Return metadata about the data
                 metadata_response = formatter.metadata(
                     content_length=len(response_bytes),
                     chunks_expected=len(chunks),
-                    content_type="application/json" if response.strip().startswith('{') or response.strip().startswith('[') else "text/plain",
-                    status="ready"
+                    content_type="application/json"
+                    if response.strip().startswith("{") or response.strip().startswith("[")
+                    else "text/plain",
+                    status="ready",
                 )
                 return dbus.Array(metadata_response.encode("utf-8"), signature="y")
-                    
+
             finally:
                 # Only close the loop if we created it
                 if loop_created:
@@ -257,11 +254,7 @@ class ReadOnlyCharacteristic(Characteristic):
         except Exception as e:
             logger.error(f"Error reading {self.uuid}: {e}")
             # Return error in metadata format to maintain notification-only protocol
-            error_metadata = formatter.metadata(
-                content_length=0,
-                chunks_expected=0,
-                status="error"
-            )
+            error_metadata = formatter.metadata(content_length=0, chunks_expected=0, status="error")
             error_dict = json.loads(error_metadata)
             error_dict["error"] = str(e)
             error_response = json.dumps(error_dict)
@@ -285,10 +278,56 @@ class WriteOnlyCharacteristic(Characteristic):
         """
         super().__init__(bus, index, uuid, ["write", "notify"], service, api_client, require_pairing)
         self.write_handler = write_handler
+        # Chunk accumulator for chunked writes
+        self.write_chunks: Dict[int, str] = {}
+        self.expected_chunks: int = 0
+
+    def _reset_chunks(self):
+        """Reset chunk accumulator state."""
+        self.write_chunks = {}
+        self.expected_chunks = 0
+
+    def _process_write_data(self, request_data: Dict[str, Any]):
+        """Process write data by calling the write handler.
+
+        Args:
+            request_data: Parsed and reassembled request data
+        """
+        # Run the async handler
+        # Handle event loop carefully to avoid "Event loop is closed" errors
+        try:
+            # Try to get existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                # Loop exists but is closed, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop_created = True
+            else:
+                # Use existing loop
+                loop_created = False
+        except RuntimeError:
+            # No event loop exists, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop_created = True
+
+        try:
+            result = loop.run_until_complete(self.write_handler(request_data))
+            # Ensure httpx client is closed before closing the loop
+            if hasattr(self.api_client, "client") and self.api_client.client:
+                loop.run_until_complete(self.api_client.client.aclose())
+                self.api_client.client = None
+            response = formatter.success(result)
+            self.send_chunked_response(response)
+        finally:
+            # Only close the loop if we created it
+            if loop_created:
+                loop.close()
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="aya{sv}")
     def WriteValue(self, value, options):
-        """Handle write operation."""
+        """Handle write operation with support for chunked writes."""
         # Check pairing if required
         if self.require_pairing and not self.check_pairing(options):
             error_response = formatter.pairing_required()
@@ -298,44 +337,52 @@ class WriteOnlyCharacteristic(Characteristic):
         try:
             # Parse the incoming data
             data_bytes = bytes(value)
-            request_data = parser.parse_json(data_bytes)
+            is_chunk, parsed_data = parser.parse_chunked_write(data_bytes)
 
-            if request_data is None:
+            if parsed_data is None:
                 raise ValueError("Invalid JSON data")
 
-            # Run the async handler
-            # Handle event loop carefully to avoid "Event loop is closed" errors
-            try:
-                # Try to get existing event loop
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    # Loop exists but is closed, create a new one
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop_created = True
+            if is_chunk:
+                # Handle chunked write protocol
+                seq = parsed_data["seq"]
+                total = parsed_data["total"]
+                chunk_data = parsed_data["data"]
+                is_complete = parsed_data.get("complete", False)
+
+                # Store chunk
+                self.write_chunks[seq] = chunk_data
+                self.expected_chunks = total
+
+                logger.debug(f"Received chunk {seq + 1}/{total} for {self.uuid}")
+
+                # Check if we have all chunks
+                if is_complete and len(self.write_chunks) == total:
+                    # Reassemble chunks in order
+                    reassembled_data = "".join(self.write_chunks[i] for i in range(total))
+                    logger.info(f"Reassembled {len(reassembled_data)} bytes from {total} chunks for {self.uuid}")
+
+                    # Reset chunk state
+                    self._reset_chunks()
+
+                    # Parse the reassembled data as JSON
+                    request_data = parser.parse_json(reassembled_data.encode("utf-8"))
+                    if request_data is None:
+                        raise ValueError("Invalid JSON data after reassembly")
+
+                    # Process the complete request
+                    self._process_write_data(request_data)
                 else:
-                    # Use existing loop
-                    loop_created = False
-            except RuntimeError:
-                # No event loop exists, create one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop_created = True
-            
-            try:
-                result = loop.run_until_complete(self.write_handler(request_data))
-                # Ensure httpx client is closed before closing the loop
-                if hasattr(self.api_client, 'client') and self.api_client.client:
-                    loop.run_until_complete(self.api_client.client.aclose())
-                    self.api_client.client = None
-                response = formatter.success(result)
-                self.send_chunked_response(response)
-            finally:
-                # Only close the loop if we created it
-                if loop_created:
-                    loop.close()
+                    # Still waiting for more chunks
+                    logger.debug(f"Waiting for more chunks ({len(self.write_chunks)}/{total})")
+            else:
+                # Direct write (not chunked) - backwards compatible
+                logger.debug(f"Processing direct write for {self.uuid}")
+                self._process_write_data(parsed_data)
+
         except Exception as e:
             logger.error(f"Error writing to {self.uuid}: {e}")
+            # Reset chunk state on error
+            self._reset_chunks()
             error_response = formatter.error(str(e))
             self.send_notification(error_response.encode("utf-8"))
 

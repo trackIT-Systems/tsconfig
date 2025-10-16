@@ -9,13 +9,13 @@ Requirements:
 
 Usage:
     python3 test_ble_client.py [--device DEVICE_NAME] [--write] [--timeout SECONDS] [--retries N]
-    
+
 Options:
     --device, -d     Device name or address (auto-detects if not specified)
     --write, -w      Enable write operations (service restart, file upload)
     --timeout, -t    Scan timeout in seconds per attempt (default: 10.0)
     --retries, -r    Number of retry attempts for device discovery (default: 3)
-    
+
 Note:
     Device discovery can sometimes fail due to BLE advertising timing.
     The script now includes automatic retries to improve reliability.
@@ -117,52 +117,62 @@ def format_json(data: str) -> str:
 
 
 async def write_large_data(client: BleakClient, char, data: str, chunk_size: int = 450):
-    """Write large data to a characteristic using chunked writes.
-    
+    """Write large data to a characteristic using chunked write protocol.
+
+    Uses the BLE chunk protocol: {"seq": N, "total": X, "data": "...", "complete": bool}
+
     Args:
         client: Connected BleakClient
         char: Characteristic to write to
         data: Data to write (will be chunked if needed)
-        chunk_size: Size of each chunk in bytes
-        
+        chunk_size: Size of each data chunk (not including JSON overhead)
+
     Returns:
         True if successful, False otherwise
     """
-    data_bytes = data.encode("utf-8")
-    total_size = len(data_bytes)
-    
+    total_size = len(data)
+
     if total_size <= chunk_size:
-        # Small enough for single write
+        # Small enough for single write (no chunking needed)
         print_info(f"Writing {total_size} bytes in single operation...")
         try:
+            data_bytes = data.encode("utf-8")
             await client.write_gatt_char(char, data_bytes)
             return True
         except Exception as e:
             print_error(f"Write failed: {e}")
             return False
-    
-    # Large data - use chunked writes
+
+    # Large data - use chunked write protocol
     num_chunks = (total_size + chunk_size - 1) // chunk_size
-    print_info(f"Writing {total_size} bytes in {num_chunks} chunks...")
-    
+    print_info(f"Writing {total_size} bytes in {num_chunks} chunks using protocol...")
+
     try:
         for i in range(num_chunks):
             start = i * chunk_size
             end = min((i + 1) * chunk_size, total_size)
-            chunk = data_bytes[start:end]
-            
-            print_info(f"  Writing chunk {i+1}/{num_chunks} ({len(chunk)} bytes)...")
-            await client.write_gatt_char(char, chunk)
-            
+            chunk_data = data[start:end]
+
+            # Create chunk in protocol format
+            chunk = {"seq": i, "total": num_chunks, "data": chunk_data, "complete": (i == num_chunks - 1)}
+
+            chunk_json = json.dumps(chunk)
+            chunk_bytes = chunk_json.encode("utf-8")
+
+            print_info(
+                f"  Writing chunk {i + 1}/{num_chunks} ({len(chunk_data)} data bytes, {len(chunk_bytes)} total)..."
+            )
+            await client.write_gatt_char(char, chunk_bytes)
+
             # Small delay between chunks to let server process
             if i < num_chunks - 1:
                 await asyncio.sleep(0.1)
-        
+
         print_success(f"All {num_chunks} chunks written successfully")
         return True
-        
+
     except Exception as e:
-        print_error(f"Chunked write failed on chunk {i+1}: {e}")
+        print_error(f"Chunked write failed on chunk {i + 1}: {e}")
         return False
 
 
@@ -219,10 +229,10 @@ async def scan_for_devices(timeout: float = 5.0) -> list:
 
 def get_device_uuids(device) -> list:
     """Extract UUIDs from a BLE device (cross-platform).
-    
+
     Args:
         device: BLE device
-        
+
     Returns:
         List of UUID strings
     """
@@ -238,10 +248,10 @@ def get_device_uuids(device) -> list:
 
 def is_tsconfig_device(device) -> bool:
     """Check if a device is a tsconfig device.
-    
+
     Args:
         device: BLE device to check
-        
+
     Returns:
         True if tsconfig device, False otherwise
     """
@@ -249,12 +259,12 @@ def is_tsconfig_device(device) -> bool:
     uuids = get_device_uuids(device)
     if any(SYSTEM_SERVICE_UUID.lower() in str(u).lower() for u in uuids):
         return True
-    
+
     # Fallback: check by device name pattern
     if device.name:
         name_lower = device.name.lower()
         return any(pattern in name_lower for pattern in ["tsos", "tsconfig", "trackit"])
-    
+
     return False
 
 
@@ -263,14 +273,14 @@ async def _scan_tsconfig_single(timeout: float, attempt: int, retries: int) -> l
     print_info(f"Scanning for tsconfig devices (attempt {attempt}/{retries}, {timeout}s)")
     devices = await BleakScanner.discover(timeout=timeout)
     print_info(f"Found {len(devices)} total BLE devices")
-    
+
     tsconfig_devices = [d for d in devices if is_tsconfig_device(d)]
-    
+
     if tsconfig_devices:
         print_success(f"Found {len(tsconfig_devices)} tsconfig device(s)")
     else:
         print_warning("No tsconfig devices found")
-    
+
     return tsconfig_devices
 
 
@@ -278,12 +288,12 @@ async def _find_device_single(name: str, timeout: float, attempt: int, retries: 
     """Single attempt to find a device by name."""
     print_info(f"Searching for '{name}' (attempt {attempt}/{retries}, {timeout}s)")
     device = await BleakScanner.find_device_by_name(name, timeout=timeout)
-    
+
     if device:
         print_success("Found device")
     else:
         print_warning("Device not found")
-    
+
     return device
 
 
@@ -301,22 +311,22 @@ async def find_device_by_service(service_uuid: str, timeout: float = 10.0) -> Op
     """Find a BLE device by service UUID."""
     print_info(f"Searching for device with service {service_uuid}...")
     devices = await BleakScanner.discover(timeout=timeout)
-    
+
     for device in devices:
         uuids = get_device_uuids(device)
         if service_uuid.lower() in [u.lower() for u in uuids]:
             return device
-    
+
     return None
 
 
 def find_characteristic(client: BleakClient, uuid: str):
     """Find a characteristic by UUID.
-    
+
     Args:
         client: Connected BleakClient
         uuid: Characteristic UUID to find
-        
+
     Returns:
         Characteristic if found, None otherwise
     """
@@ -329,13 +339,13 @@ def find_characteristic(client: BleakClient, uuid: str):
 
 async def read_with_notifications(client: BleakClient, uuid: str, name: str, timeout: float = 5.0) -> Optional[str]:
     """Read a characteristic using notifications with automatic cleanup.
-    
+
     Args:
         client: Connected BleakClient
         uuid: Characteristic UUID
         name: Human-readable name for display
         timeout: Timeout in seconds for waiting for data
-        
+
     Returns:
         String value if successful, None otherwise
     """
@@ -343,35 +353,35 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
     if not char:
         print_error(f"Characteristic {uuid} not found")
         return None
-    
+
     print_info(f"Reading {name}...")
     reader = ChunkedReader()
-    
+
     try:
         # Enable notifications and read metadata
         await client.start_notify(char, reader.handle_notification)
         await asyncio.sleep(0.5)
-        
+
         data = await client.read_gatt_char(char)
         metadata = json.loads(data.decode("utf-8"))
-        
+
         # Handle error response
         if metadata.get("status") == "error":
             print_error(f"  {metadata.get('error', 'Unknown error')}")
             return None
-        
+
         # Display metadata if present
         if metadata.get("metadata"):
             info = f"  {metadata.get('content_length', 0)} bytes, {metadata.get('chunks_expected', 0)} chunks"
             print_success(info)
             print_info("  Waiting for notification data...")
-            
+
             # Wait for chunks
             for _ in range(int(timeout * 10)):
                 await asyncio.sleep(0.1)
                 if reader.complete_data:
                     break
-            
+
             if reader.complete_data:
                 print_success(f"{name} received ({len(reader.complete_data)} bytes)")
                 return reader.complete_data
@@ -381,7 +391,7 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
         else:
             # Direct response
             return data.decode("utf-8")
-            
+
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON response: {e}")
         return None
@@ -395,10 +405,11 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
             pass
 
 
-async def write_with_notifications(client: BleakClient, uuid: str, name: str, data: dict, 
-                                   chunk_size: int = 450, timeout: float = 2.0) -> Optional[str]:
+async def write_with_notifications(
+    client: BleakClient, uuid: str, name: str, data: dict, chunk_size: int = 450, timeout: float = 2.0
+) -> Optional[str]:
     """Write data to a characteristic and wait for response via notifications.
-    
+
     Args:
         client: Connected BleakClient
         uuid: Characteristic UUID
@@ -406,7 +417,7 @@ async def write_with_notifications(client: BleakClient, uuid: str, name: str, da
         data: Dictionary to write (will be JSON encoded)
         chunk_size: Size of chunks for large data
         timeout: Timeout in seconds for waiting for response
-        
+
     Returns:
         Response data if successful, None otherwise
     """
@@ -414,33 +425,33 @@ async def write_with_notifications(client: BleakClient, uuid: str, name: str, da
     if not char:
         print_error(f"Characteristic {uuid} not found")
         return None
-    
+
     print_info(f"Writing to {name}...")
     reader = ChunkedReader()
-    
+
     try:
         # Enable notifications
         await client.start_notify(char, reader.handle_notification)
         await asyncio.sleep(0.5)
-        
+
         # Write data (with chunking if needed)
         json_data = json.dumps(data)
         success = await write_large_data(client, char, json_data, chunk_size)
-        
+
         if not success:
             return None
-        
+
         print_success(f"{name} sent successfully")
         print_info("Waiting for response...")
         await asyncio.sleep(timeout)
-        
+
         if reader.complete_data:
             print_success("Response received:")
             return reader.complete_data
         else:
             print_info("No response received")
             return None
-            
+
     except Exception as e:
         print_error(f"Failed to write {name}: {e}")
         return None
@@ -453,7 +464,7 @@ async def write_with_notifications(client: BleakClient, uuid: str, name: str, da
 
 async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, return_single: bool = False, **kwargs):
     """Generic retry wrapper for scan operations.
-    
+
     Args:
         scan_func: Async function to retry
         *args: Positional arguments for scan_func
@@ -461,7 +472,7 @@ async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, ret
         delay: Delay between retries in seconds
         return_single: If True, return None on failure; if False, return empty list
         **kwargs: Keyword arguments for scan_func
-        
+
     Returns:
         Result from scan_func, or None/empty list if all retries fail
     """
@@ -469,26 +480,26 @@ async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, ret
         if attempt > 1:
             print_warning(f"Retry attempt {attempt}/{retries}...")
             await asyncio.sleep(delay)
-        
+
         result = await scan_func(*args, attempt=attempt, retries=retries, **kwargs)
         if result:
             return result
-    
+
     return None if return_single else []
 
 
 async def test_system_service(client: BleakClient):
     """Test System Service characteristics."""
     print_header("Testing System Service (0x1000)")
-    
+
     # Define characteristics to test
     chars = [
         (SYSTEM_STATUS_UUID, "System Status"),
         (SERVER_MODE_INFO_UUID, "Server Mode Info"),
         (TIMEDATECTL_STATUS_UUID, "Timedatectl Status"),
-        (AVAILABLE_SERVICES_UUID, "Available Services")
+        (AVAILABLE_SERVICES_UUID, "Available Services"),
     ]
-    
+
     # Read and display each characteristic
     for uuid, name in chars:
         data = await read_with_notifications(client, uuid, name)
@@ -523,10 +534,10 @@ async def test_systemd_service(client: BleakClient):
     # Show available write characteristics
     write_chars = [
         (SYSTEMD_SERVICE_ACTION_UUID, "Service Action", '{"service": "servicename", "action": "restart"}'),
-        (SYSTEMD_REBOOT_UUID, "System Reboot", '{}'),
-        (SYSTEMD_SERVICE_LOGS_UUID, "Service Logs", '{"service": "servicename", "lines": 50}')
+        (SYSTEMD_REBOOT_UUID, "System Reboot", "{}"),
+        (SYSTEMD_SERVICE_LOGS_UUID, "Service Logs", '{"service": "servicename", "lines": 50}'),
     ]
-    
+
     for uuid, name, example in write_chars:
         print_info(f"\n{name} characteristic: {uuid}")
         print_info(f"Example: {example}")
@@ -536,9 +547,9 @@ async def test_chunked_reads(client: BleakClient):
     """Test notification-only read protocol with chunked data."""
     print_header("Testing Notification-Only Protocol")
     print_info("Demonstrates: metadata read → data via notifications → chunk reassembly")
-    
+
     data = await read_with_notifications(client, SYSTEMD_SERVICES_LIST_UUID, "Systemd Services List")
-    
+
     if data:
         print_success(f"Protocol test successful - {len(data)} bytes received")
         try:
@@ -566,28 +577,26 @@ async def test_write_operations(client: BleakClient, enabled: bool = False):
         return
 
     action_data = {"service": "chrony", "action": "restart"}
-    response = await write_with_notifications(
-        client, SYSTEMD_SERVICE_ACTION_UUID, "Service Action", action_data
-    )
-    
+    response = await write_with_notifications(client, SYSTEMD_SERVICE_ACTION_UUID, "Service Action", action_data)
+
     if response:
         print(format_json(response))
 
 
 async def upload_file(filepath: str) -> Optional[bytes]:
     """Load and encode a file for upload.
-    
+
     Args:
         filepath: Path to file to load
-        
+
     Returns:
         Base64-encoded bytes, or None if error
     """
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             content = f.read()
         print_success(f"Loaded {filepath} ({len(content)} bytes)")
-        return base64.b64encode(content.encode('utf-8')).decode('ascii')
+        return base64.b64encode(content.encode("utf-8")).decode("ascii")
     except FileNotFoundError:
         print_error(f"File {filepath} not found")
         return None
@@ -609,51 +618,45 @@ async def test_upload_service(client: BleakClient, enabled: bool = False):
     content_b64 = await upload_file("configs/schedule.yml")
     if not content_b64:
         return
-    
+
     # Prepare upload request
-    upload_data = {
-        "filename": "schedule.yml",
-        "content": content_b64,
-        "restart_service": False
-    }
-    
+    upload_data = {"filename": "schedule.yml", "content": content_b64, "restart_service": False}
+
     # Send upload
-    response = await write_with_notifications(
-        client, UPLOAD_CONFIG_UUID, "Config Upload", upload_data
-    )
-    
+    response = await write_with_notifications(client, UPLOAD_CONFIG_UUID, "Config Upload", upload_data)
+
     if response:
         print(format_json(response))
 
 
 async def create_zip_upload(file_paths: list) -> Optional[str]:
     """Create a zip file from multiple files and return base64-encoded content.
-    
+
     Args:
         file_paths: List of file paths to include in zip
-        
+
     Returns:
         Base64-encoded zip data, or None if error
     """
     zip_buffer = io.BytesIO()
     try:
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for file_path in file_paths:
                 try:
-                    with open(file_path, 'r') as f:
+                    with open(file_path, "r") as f:
                         content = f.read()
-                    arcname = file_path.split('/')[-1]
+                    arcname = file_path.split("/")[-1]
                     zip_file.writestr(arcname, content)
                     print_success(f"Added {arcname} ({len(content)} bytes)")
                 except FileNotFoundError:
                     print_warning(f"File {file_path} not found, skipping")
                 except Exception as e:
                     print_error(f"Failed to read {file_path}: {e}")
-        
+
         zip_data = zip_buffer.getvalue()
         print_success(f"Created zip file ({len(zip_data)} bytes)")
-        return base64.b64encode(zip_data).decode('ascii')
-        
+        return base64.b64encode(zip_data).decode("ascii")
+
     except Exception as e:
         print_error(f"Failed to create zip file: {e}")
         return None
@@ -669,28 +672,17 @@ async def test_zip_upload(client: BleakClient, enabled: bool = False):
         return
 
     # Create zip
-    config_files = [
-        "configs/radiotracking.ini",
-        "configs/soundscapepipe.yml",
-        "configs/schedule.yml"
-    ]
+    config_files = ["configs/radiotracking.ini", "configs/soundscapepipe.yml", "configs/schedule.yml"]
     content_b64 = await create_zip_upload(config_files)
     if not content_b64:
         return
-    
+
     # Prepare upload request
-    upload_data = {
-        "filename": "configs.zip",
-        "content": content_b64,
-        "restart_services": False,
-        "pedantic": False
-    }
-    
+    upload_data = {"filename": "configs.zip", "content": content_b64, "restart_services": False, "pedantic": False}
+
     # Send upload
-    response = await write_with_notifications(
-        client, UPLOAD_ZIP_UUID, "Zip Upload", upload_data
-    )
-    
+    response = await write_with_notifications(client, UPLOAD_ZIP_UUID, "Zip Upload", upload_data)
+
     if response:
         print(format_json(response))
 
@@ -750,11 +742,11 @@ async def main():
         default=3,
         help="Number of retry attempts for device discovery (default: 3)",
     )
-    
+
     args = parser.parse_args()
-    
+
     print_header("tsOS Configuration Manager - BLE GATT Client Test")
-    
+
     if args.write:
         print_warning("Write operations ENABLED")
     else:
@@ -768,15 +760,15 @@ async def main():
     else:
         # Scan for tsconfig devices
         devices = await scan_for_tsconfig_devices(timeout=args.timeout, retries=args.retries)
-        
+
         if not devices:
             print_error("No tsconfig devices found")
             print_info("Try: --device DEVICE_NAME")
             return
-        
+
         device = devices[0]
         device_name = device.name or device.address
-        
+
         if len(devices) == 1:
             print_success(f"Auto-selected: {device_name}")
         else:
@@ -791,7 +783,7 @@ async def main():
             "2. Check advertising: sudo bluetoothctl scan on",
             "3. Restart service: sudo systemctl restart tsconfig-ble",
             "4. Try: --timeout 15 --retries 5",
-            "5. Check logs: sudo journalctl -u tsconfig-ble -n 50"
+            "5. Check logs: sudo journalctl -u tsconfig-ble -n 50",
         ]
         print_info("\nTroubleshooting:")
         for step in troubleshooting:
@@ -827,7 +819,7 @@ async def main():
             "1. Verify BLE gateway: sudo systemctl status tsconfig-ble",
             "2. Check Bluetooth enabled on both devices",
             "3. Try pairing first if write operations needed",
-            "4. Check logs: sudo journalctl -u tsconfig-ble -f"
+            "4. Check logs: sudo journalctl -u tsconfig-ble -f",
         ]
         print_info("\nTroubleshooting:")
         for step in troubleshooting:
