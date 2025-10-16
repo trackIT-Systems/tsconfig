@@ -278,7 +278,7 @@ class TsConfigApiClient:
             if config_group:
                 data["config_group"] = config_group
 
-            response = await self.client.post("/api/upload/zip", files=files, data=data)
+            response = await self.client.post("/api/upload/config-zip", files=files, data=data)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:
