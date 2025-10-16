@@ -44,10 +44,11 @@ class BaseConfigRouter:
 
     def update_config_helper(self, config_dict: Dict[str, Any], config_group: Optional[str] = None) -> Dict[str, Any]:
         """Helper method to update configuration with a dictionary."""
-        import logging
         import traceback
 
-        logger = logging.getLogger(__name__)
+        from app.logging_config import get_logger
+
+        logger = get_logger(__name__)
 
         try:
             cfg_instance = self.get_config_instance(config_group)
@@ -78,12 +79,12 @@ class BaseConfigRouter:
                     old_latest_dir = config_loader.get_config_group_dir(config_group)
                     if old_latest_dir and old_latest_dir.is_symlink():
                         old_latest_dir = old_latest_dir.resolve()
-                    logger.info(f"Previous version directory: {old_latest_dir}")
+                    logger.debug(f"Previous version directory: {old_latest_dir}")
 
                     # Create new versioned directory and update 'latest' symlink
                     try:
                         versioned_dir = config_loader.create_versioned_config_dir(config_group)
-                        logger.info(f"Created versioned directory: {versioned_dir}")
+                        logger.debug(f"Created versioned directory: {versioned_dir}")
                     except Exception as e:
                         logger.error(f"Failed to create versioned directory: {e}")
                         logger.error(traceback.format_exc())
@@ -93,23 +94,23 @@ class BaseConfigRouter:
                     if old_latest_dir and old_latest_dir.exists():
                         import shutil
 
-                        config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml"]
+                        config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml", "authorized_keys"]
                         for config_file in config_files:
                             old_file = old_latest_dir / config_file
                             if old_file.exists():
                                 try:
                                     new_file = versioned_dir / config_file
                                     shutil.copy2(old_file, new_file)
-                                    logger.info(f"Copied {config_file} from previous version")
+                                    logger.debug(f"Copied {config_file} from previous version")
                                 except Exception as e:
                                     logger.warning(f"Failed to copy {config_file}: {e}")
                     else:
-                        logger.info("No previous version found, starting fresh")
+                        logger.debug("No previous version found, starting fresh")
 
                     # Create a new config instance pointing to the versioned directory
                     try:
                         versioned_cfg_instance = self.config_class(versioned_dir)
-                        logger.info("Created config instance for versioned directory")
+                        logger.debug("Created config instance for versioned directory")
                     except Exception as e:
                         logger.error(f"Failed to create config instance: {e}")
                         logger.error(traceback.format_exc())
@@ -118,14 +119,14 @@ class BaseConfigRouter:
                     # Save to the versioned directory
                     try:
                         versioned_cfg_instance.save(config_dict)
-                        logger.info("Saved config to versioned directory")
+                        logger.debug("Saved config to versioned directory")
                     except Exception as e:
                         logger.error(f"Failed to save config: {e}")
                         logger.error(traceback.format_exc())
                         raise
                 else:
                     # In tracker mode, save directly
-                    logger.info("Tracker mode, saving directly")
+                    logger.debug("Tracker mode, saving directly")
                     cfg_instance.save(config_dict)
 
                 return {"message": f"{self.prefix.title()} configuration updated successfully", "config": config_dict}

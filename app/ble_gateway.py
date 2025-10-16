@@ -16,19 +16,10 @@ The BLE device name will automatically use the system hostname.
 """
 
 import argparse
-import logging
 import sys
 
 from app.bluetooth.gatt_server import BleGattServer
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-
-logger = logging.getLogger(__name__)
+from app.logging_config import setup_logging, get_logger
 
 
 def parse_arguments():
@@ -94,19 +85,18 @@ def main():
     """Main entry point for the BLE gateway."""
     args = parse_arguments()
 
-    # Set logging level
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
+    # Set up logging
+    setup_logging(verbose=args.verbose)
+    logger = get_logger(__name__)
 
     # Log configuration
-    logger.info("=" * 60)
-    logger.info("tsOS Configuration Manager - BLE GATT Gateway")
-    logger.info("=" * 60)
-    logger.info(f"API URL: {args.api_url}")
-    logger.info(f"Pairing required: {not args.no_pairing}")
-    logger.info(f"Discoverable: {not args.no_discoverable}")
-    logger.info("=" * 60)
+    logger.debug("=" * 60)
+    logger.debug("tsOS Configuration Manager - BLE GATT Gateway")
+    logger.debug("=" * 60)
+    logger.debug(f"API URL: {args.api_url}")
+    logger.debug(f"Pairing required: {not args.no_pairing}")
+    logger.debug(f"Discoverable: {not args.no_discoverable}")
+    logger.debug("=" * 60)
 
     # Check for dependencies
     try:
@@ -119,21 +109,32 @@ def main():
         logger.error(f"Missing: {e}")
         sys.exit(1)
 
-    # Verify API is reachable
-    logger.info(f"Verifying API connectivity to {args.api_url}...")
-    try:
-        import httpx
+    # Verify API is reachable with retry logic
+    logger.debug(f"Verifying API connectivity to {args.api_url}...")
+    max_retries = 10  # 10 seconds with 1-second intervals
+    retry_interval = 1
+    
+    for attempt in range(max_retries):
+        try:
+            import httpx
 
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{args.api_url}/api/server-mode")
-            if response.status_code == 200:
-                logger.info("✓ API is reachable")
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(f"{args.api_url}/api/server-mode")
+                if response.status_code == 200:
+                    logger.info("✓ API is reachable")
+                    break
+                else:
+                    logger.warning(f"API returned status code: {response.status_code}")
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.debug(f"✗ Cannot reach API (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.debug(f"Retrying in {retry_interval} seconds...")
+                import time
+                time.sleep(retry_interval)
             else:
-                logger.warning(f"API returned status code: {response.status_code}")
-    except Exception as e:
-        logger.error(f"✗ Cannot reach API: {e}")
-        logger.error("Please ensure tsconfig is running and accessible")
-        sys.exit(1)
+                logger.error(f"✗ Cannot reach API after {max_retries} attempts: {e}")
+                logger.error("Please ensure tsconfig is running and accessible")
+                sys.exit(1)
 
     # Create and start the BLE GATT server
     try:
@@ -148,7 +149,7 @@ def main():
         server.start()
 
     except KeyboardInterrupt:
-        logger.info("\nShutdown requested by user")
+        logger.info("Shutdown requested by user")
         sys.exit(0)
     except PermissionError:
         logger.error("Permission denied! BLE operations require elevated privileges.")

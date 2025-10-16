@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import pty
 import pwd
@@ -8,8 +7,10 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
+from app.logging_config import get_logger
+
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/shell", include_in_schema=False)
 

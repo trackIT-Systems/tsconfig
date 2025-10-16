@@ -28,8 +28,9 @@ from app.bluetooth.protocol import (
     SYSTEMD_SERVICE_UUID,
     UPLOAD_SERVICE_UUID,
 )
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # BlueZ D-Bus constants
 GATT_SERVICE_IFACE = "org.bluez.GattService1"
@@ -128,7 +129,7 @@ class SystemService(Service):
         char_index += 1
         self.add_characteristic(AvailableServicesCharacteristic(bus, char_index, self, api_client))
 
-        logger.info(f"System Service created with {len(self.characteristics)} characteristics")
+        logger.debug(f"System Service created with {len(self.characteristics)} characteristics")
 
 
 class SystemdService(Service):
@@ -167,7 +168,7 @@ class SystemdService(Service):
         char_index += 1
         self.add_characteristic(SystemdServiceLogsCharacteristic(bus, char_index, self, api_client, require_pairing))
 
-        logger.info(f"Systemd Service created with {len(self.characteristics)} characteristics")
+        logger.debug(f"Systemd Service created with {len(self.characteristics)} characteristics")
 
 
 class UploadService(Service):
@@ -198,4 +199,4 @@ class UploadService(Service):
         char_index += 1
         self.add_characteristic(UploadZipCharacteristic(bus, char_index, self, api_client, require_pairing))
 
-        logger.info(f"Upload Service created with {len(self.characteristics)} characteristics")
+        logger.debug(f"Upload Service created with {len(self.characteristics)} characteristics")

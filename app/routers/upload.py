@@ -3,14 +3,15 @@
 import subprocess
 import zipfile
 from configparser import ConfigParser
-from io import BytesIO, StringIO
+from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import yaml
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.config_loader import config_loader
+from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -174,11 +175,30 @@ async def upload_config(
             parsed_config = parse_yaml_file(content_str)
             config_instance = SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
 
+        elif filename == "authorized_keys":
+            config_type = "authorized_keys"
+            # For authorized_keys, we need to append to existing keys
+            config_instance = AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
+
+            # Load existing keys
+            existing_config = config_instance.load()
+            existing_keys = existing_config.get("keys", [])
+
+            # Parse new keys from uploaded file
+            new_keys = []
+            for idx, line in enumerate(content_str.strip().split("\n")):
+                parsed = config_instance._parse_key_line(line, len(existing_keys) + idx)
+                if parsed:
+                    new_keys.append(parsed)
+
+            # Combine existing and new keys
+            parsed_config = {"keys": existing_keys + new_keys}
+
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported configuration file: {file.filename}. "
-                "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml",
+                "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys",
             )
 
     except ValueError as e:
@@ -263,6 +283,7 @@ RECOGNIZED_CONFIG_FILES = {
     "radiotracking.ini": "radiotracking",
     "schedule.yml": "schedule",
     "soundscapepipe.yml": "soundscapepipe",
+    "authorized_keys": "authorized_keys",
 }
 
 # Service mapping for restart
@@ -277,11 +298,11 @@ def get_config_instance(config_type: str, config_dir: Optional[Path] = None):
     """Get appropriate config instance for the given type.
 
     Args:
-        config_type: Type of configuration (radiotracking, schedule, soundscapepipe)
+        config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys)
         config_dir: Optional config directory
 
     Returns:
-        Config instance (RadioTrackingConfig, ScheduleConfig, or SoundscapepipeConfig)
+        Config instance (RadioTrackingConfig, ScheduleConfig, SoundscapepipeConfig, or AuthorizedKeysConfig)
     """
     if config_type == "radiotracking":
         return RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
@@ -289,6 +310,8 @@ def get_config_instance(config_type: str, config_dir: Optional[Path] = None):
         return ScheduleConfig(config_dir) if config_dir else ScheduleConfig()
     elif config_type == "soundscapepipe":
         return SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
+    elif config_type == "authorized_keys":
+        return AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
     else:
         raise ValueError(f"Unknown config type: {config_type}")
 
@@ -310,6 +333,16 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
         return parse_ini_file(content)
     elif filename.endswith(".yml") or filename.endswith(".yaml"):
         return parse_yaml_file(content)
+    elif filename == "authorized_keys":
+        # For authorized_keys, parse each line
+        # Note: This returns new keys only, merging happens in the caller
+        keys = []
+        temp_config = AuthorizedKeysConfig()
+        for idx, line in enumerate(content.strip().split("\n")):
+            parsed = temp_config._parse_key_line(line, idx)
+            if parsed:
+                keys.append(parsed)
+        return {"keys": keys}
     else:
         raise ValueError(f"Unsupported file type: {filename}")
 
@@ -432,13 +465,27 @@ async def upload_config_zip(
         config_type = RECOGNIZED_CONFIG_FILES[filename]
 
         try:
-            # Parse the file
-            parsed_config = parse_config_file(filename, content)
-            parsed_configs[filename] = parsed_config
-
             # Get config instance
             config_instance = get_config_instance(config_type, config_dir)
             config_instances[filename] = config_instance
+
+            # Parse the file
+            parsed_config = parse_config_file(filename, content)
+
+            # Special handling for authorized_keys: append to existing keys
+            if filename == "authorized_keys":
+                existing_config = config_instance.load()
+                existing_keys = existing_config.get("keys", [])
+                new_keys = parsed_config.get("keys", [])
+
+                # Re-index new keys
+                for idx, key in enumerate(new_keys):
+                    key["index"] = len(existing_keys) + idx
+
+                # Combine existing and new keys
+                parsed_config = {"keys": existing_keys + new_keys}
+
+            parsed_configs[filename] = parsed_config
 
             # Validate the configuration
             validation_errors = config_instance.validate(parsed_config)

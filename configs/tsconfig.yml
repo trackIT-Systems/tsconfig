@@ -18,6 +18,10 @@ services:
     expert: false 
   - name: soundscapepipe
     expert: false
+  - name: tsconfig
+    expert: true
+  - name: tsconfig-ble
+    expert: true
   - name: chrony
     expert: true
   - name: wg-quick@wireguard

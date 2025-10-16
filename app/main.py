@@ -15,10 +15,16 @@ from fastapi.templating import Jinja2Templates
 
 from app import __version__
 from app.config_loader import config_loader
+from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
-from app.routers import radiotracking, schedule, shell, soundscapepipe, systemd, upload
+from app.logging_config import get_logger, setup_logging
+from app.routers import authorized_keys, radiotracking, schedule, shell, soundscapepipe, systemd, upload
+
+# Set up logging for the main application
+setup_logging()
+logger = get_logger(__name__)
 
 # Get base URL from environment variable (default to "/" for root)
 BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
@@ -45,6 +51,10 @@ tags_metadata = [
     {
         "name": "soundscapepipe",
         "description": "Soundscapepipe configuration for audio recording and analysis.",
+    },
+    {
+        "name": "authorized_keys",
+        "description": "SSH authorized keys management for secure remote access.",
     },
     {
         "name": "upload",
@@ -96,10 +106,16 @@ Each endpoint includes detailed request/response schemas and the ability to try 
     root_path=BASE_URL,
 )
 
+# Log application startup
+logger.info(f"tsOS Configuration Manager v{__version__} starting up")
+logger.debug(f"Base URL: {BASE_URL}")
+logger.debug(f"Server mode: {config_loader.is_server_mode()}")
+
 # Include routers
 app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
+app.include_router(authorized_keys.router)
 app.include_router(upload.router)
 
 # Only include system-specific routers in tracker mode (default mode)
@@ -182,29 +198,12 @@ async def test_group_route(groupname: str):
 )
 async def home_with_group(request: Request, groupname: str):
     """Render the main configuration page for a specific config group (server mode)."""
-    import logging
-
-    logger = logging.getLogger(__name__)
-
-    # Debug logging
-    logger.error(f"Route /{groupname} accessed (after Caddy strips /tsconfig)")
-    logger.error(f"Server mode enabled: {config_loader.is_server_mode()}")
-    logger.error(f"BASE_URL: {BASE_URL}")
-    logger.error(f"Request URL: {request.url}")
-    logger.error(f"Request scope root_path: {request.scope.get('root_path')}")
-
     # Verify the config group exists
     if not config_loader.is_server_mode():
-        logger.warning("Server mode is not enabled")
         return JSONResponse(status_code=404, content={"error": "Server mode is not enabled"})
 
     available_groups = config_loader.list_config_groups()
-    logger.error(f"Available config groups: {available_groups}")
-    logger.error(f"Requested group: '{groupname}'")
-    logger.error(f"Group in list: {groupname in available_groups}")
-
     if groupname not in available_groups:
-        logger.warning(f"Config group '{groupname}' not found in {available_groups}")
         return JSONResponse(
             status_code=404,
             content={
@@ -213,12 +212,6 @@ async def home_with_group(request: Request, groupname: str):
                 "available": available_groups,
             },
         )
-
-    logger.error(f"Rendering template for config group: {groupname}")
-
-    # Test url_for
-    test_static_url = request.url_for("static", path="js/app.js")
-    logger.error(f"url_for('static', path='js/app.js') = {test_static_url}")
 
     return templates.TemplateResponse(
         "index.html", {"request": request, "version": __version__, "base_url": BASE_URL, "config_group": groupname}
@@ -539,6 +532,14 @@ async def get_available_services(config_group: str = None):
         soundscapepipe_config = SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
         if soundscapepipe_config.config_file.exists():
             available_services.append("soundscapepipe")
+    except Exception:
+        pass
+
+    # Check authorized_keys configuration
+    try:
+        authorized_keys_config = AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
+        if authorized_keys_config.config_file.exists():
+            available_services.append("authorized_keys")
     except Exception:
         pass
 

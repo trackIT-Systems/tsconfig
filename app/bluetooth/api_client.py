@@ -6,12 +6,13 @@ to the tsconfig HTTP API endpoints.
 
 import asyncio
 import base64
-import logging
 from typing import Any, Dict, Optional
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class TsConfigApiClient:

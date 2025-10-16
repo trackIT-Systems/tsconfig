@@ -1,336 +1,480 @@
-<!-- Schedule Configuration -->
-<div x-show="activeConfig === 'schedule'" x-cloak>
+<!-- System Settings (Schedule + SSH Keys) -->
+<div x-show="activeConfig === 'schedule'" x-cloak x-data="{ systemTab: 'schedule' }">
     <div class="row">
         <div class="col">
-            <div class="card" x-data="scheduleConfig()" x-init="init()" x-destroy="cleanup()">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center">
-                    <!-- Service status elements - hidden in server mode -->
-                    <template x-if="!serverMode">
-                        <div class="d-flex align-items-center">
-                            <!-- Enable/Disable Toggle -->
-                            <div class="form-check form-switch mb-0">
-                                <input class="form-check-input" 
-                                       type="checkbox" 
-                                       id="enableSwitch-wittypid"
-                                       :checked="serviceStatus.enabled"
-                                       @change="toggleEnable('wittypid', serviceStatus.enabled)"
-                                       :disabled="actionLoading || serviceStatus.status === 'not-found'">
-                                <label class="form-check-label" for="enableSwitch-wittypid" style="display: none;">
-                                </label>
-                            </div>
-                            
-                            <h5 class="card-title mb-0 me-2">wittypid</h5>
-                            <!-- Service Status Indicator -->
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge d-flex align-items-center gap-1" 
-                                        :class="{
-                                            'bg-success': serviceStatus.active && serviceStatus.status === 'active',
-                                            'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
-                                            'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
-                                            'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
-                                        }">
-                                    <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
-                                    <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
-                                </span>
-                                <small class="text-muted">
-                                    <i class="fas fa-clock me-1"></i>
-                                    <span x-text="serviceStatus.uptime"></span>
-                                </small>
-                            </div>
-                        </div>
-                    </template>
-                    <!-- Server mode: Simple title -->
-                    <template x-if="serverMode">
-                        <h5 class="card-title mb-0">Schedule Configuration</h5>
-                    </template>
-                </div>
-                <button type="button" 
-                        class="btn btn-outline-info btn-sm" 
-                        @click="streamLogs('wittypid')"
-                        title="View wittypid service logs"
-                        x-show="!serverMode">
-                    <i class="fas fa-file-alt me-1"></i>
-                    Logs
-                </button>
-            </div>
-            <div class="card-body">
-                        <!-- Schedule Configuration Form -->
-                    <form @submit.prevent="saveConfig">
-                            <!-- General Section -->
-                    <div class="mb-4">
-                        <h6 class="border-bottom pb-2">
-                            <i class="fas fa-cogs me-2"></i>
-                            General
-                        </h6>
-                        
-                        <div class="row">
-                            <!-- Left Column -->
-                            <div class="col-md-4">
-                                <!-- Location -->
-                                <div class="mb-3">
-                                    <h6>Location</h6>
-                                    <div class="form-text mb-2">
-                                        This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and solar noon for scheduling.
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <label class="form-label">Latitude</label>
-                                            <input type="number" 
-                                                    class="form-control" 
-                                                    x-model="config.lat" 
-                                                    @input="updateMarkerFromInputs()"
-                                                    step="0.00000001" 
-                                                    max="90"
-                                                    min="-90"
-                                                    required>
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="form-label">Longitude</label>
-                                            <input type="number" 
-                                                    class="form-control" 
-                                                    x-model="config.lon" 
-                                                    @input="updateMarkerFromInputs()"
-                                                    step="0.00000001" 
-                                                    max="180"
-                                                    min="-180"
-                                                    required>
-                                        </div>
-                                    </div>
-                                </div>
+            <!-- Tab Navigation -->
+            <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'schedule' }"
+                            @click="systemTab = 'schedule'"
+                            type="button">
+                        <i class="fas fa-calendar-alt me-1"></i>
+                        Schedule
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'sshkeys' }"
+                            @click="systemTab = 'sshkeys'"
+                            type="button">
+                        <i class="fas fa-key me-1"></i>
+                        SSH Keys
+                    </button>
+                </li>
+            </ul>
 
-                                <!-- Force On -->
-                                <div class="mb-3">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" 
-                                                type="checkbox" 
-                                                x-model="config.force_on" 
-                                                id="forceOn">
-                                        <label class="form-check-label" for="forceOn">Force On</label>
-                                    </div>
-                                    <div class="form-text">
-                                        When enabled, this disables all scheduling and makes the tracker stay on permanently.
-                                    </div>
-                                </div>
-
-                                <!-- Button Delay -->
-                                <div class="mb-3">
-                                    <label class="form-label">Button Delay (HH:MM)</label>
-                                    <input type="text" 
-                                            class="form-control" 
-                                            x-model="config.button_delay" 
-                                            pattern="[0-9]{2}:[0-9]{2}" 
-                                            required>
-                                    <div class="form-text">
-                                        This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Right Column (Map) -->
-                            <div class="col-md-8">
-                                <div id="map" class="map-container"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Schedule Entries Section -->
-                    <div class="mb-4">
-                        <h6 class="border-bottom pb-2">
-                            <i class="fas fa-calendar-alt me-2"></i>
-                            Schedule Entries
-                        </h6>
-                        <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
-                    <template x-for="(entry, index) in config.schedule" :key="index">
-                            <div class="bg-light rounded-2 p-3 mb-2">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div class="d-flex align-items-center flex-grow-1 me-3">
-                                        <i class="fas fa-clock text-primary me-2"></i>
-                                        <input type="text" 
-                                                class="form-control form-control-sm fw-medium" 
-                                                x-model="entry.name" 
-                                                placeholder="Enter schedule name..." 
-                                                required>
-                                    </div>
-                                    <button type="button" 
-                                            class="btn btn-outline-danger btn-sm" 
-                                            @click="removeSchedule(index)"
-                                            title="Remove schedule">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                                <div class="row g-3">
-                                <div class="col-md-6">
-                                    <div class="d-flex align-items-center gap-2">
-                                                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
-                                                <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
-                                        </label>
-                                        <div class="row g-1 flex-grow-1">
-                                            <div class="col">
-                                                <select class="form-select form-select-sm" 
-                                                        x-model="entry.startReference"
-                                                        @change="updateTimeString(entry, 'start')">
-                                                    <option value="time">Clock Time</option>
-                                                    <option value="sunrise">Sunrise</option>
-                                                    <option value="sunset">Sunset</option>
-                                                    <option value="dawn">Dawn</option>
-                                                    <option value="dusk">Dusk</option>
-                                                    <option value="noon">Solar Noon</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-auto">
-                                                <select class="form-select form-select-sm" 
-                                                        style="width: 70px;"
-                                                        x-model="entry.startSign"
-                                                        @change="updateTimeString(entry, 'start')"
-                                                        :disabled="entry.startReference === 'time'"
-                                                        :value="entry.startReference === 'time' ? '+' : entry.startSign">
-                                                    <option value="+">+</option>
-                                                    <option value="-">-</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-auto">
-                                                <input type="time" 
-                                                        class="form-control form-control-sm" 
-                                                        style="width: 110px;"
-                                                        x-model="entry.startOffset"
-                                                        @change="updateTimeString(entry, 'start')">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex align-items-center gap-2">
-                                                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
-                                                <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
-                                        </label>
-                                        <div class="row g-1 flex-grow-1">
-                                            <div class="col">
-                                                <select class="form-select form-select-sm" 
-                                                        x-model="entry.stopReference"
-                                                        @change="updateTimeString(entry, 'stop')">
-                                                    <option value="time">Clock Time</option>
-                                                    <option value="sunrise">Sunrise</option>
-                                                    <option value="sunset">Sunset</option>
-                                                    <option value="dawn">Dawn</option>
-                                                    <option value="dusk">Dusk</option>
-                                                    <option value="noon">Solar Noon</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-auto">
-                                                <select class="form-select form-select-sm" 
-                                                        style="width: 70px;"
-                                                        x-model="entry.stopSign"
-                                                        @change="updateTimeString(entry, 'stop')"
-                                                        :disabled="entry.stopReference === 'time'"
-                                                        :value="entry.stopReference === 'time' ? '+' : entry.stopSign">
-                                                    <option value="+">+</option>
-                                                    <option value="-">-</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-auto">
-                                                <input type="time" 
-                                                        class="form-control form-control-sm" 
-                                                        style="width: 110px;"
-                                                        x-model="entry.stopOffset"
-                                                        @change="updateTimeString(entry, 'stop')">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            </div>
-                    </template>
-                        
-                        <div class="mt-3">
-                            <button type="button" 
-                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
-                                    @click="addSchedule">
-                                <i class="fas fa-plus me-2"></i>
-                                Add Schedule Entry
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Form Actions -->
-                    <div class="d-flex justify-content-between gap-2">
-                        <div class="d-flex gap-2">
-                            <button type="button" 
-                                    class="btn btn-outline-secondary" 
-                                    @click="refreshConfig()">
-                                Reset
-                            </button>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button type="submit" 
-                                    class="btn"
-                                    :class="{
-                                        'btn-success': saveState === 'idle',
-                                        'btn-primary': saveState === 'saving',
-                                        'btn-outline-success': saveState === 'saved'
-                                    }"
-                                    :disabled="saveState === 'saving'">
-                                <template x-if="saveState === 'idle'">
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- Schedule Tab -->
+                <div x-show="systemTab === 'schedule'">
+                    <div class="card" x-data="scheduleConfig()" x-init="init()" x-destroy="cleanup()">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <!-- Service status elements - hidden in server mode -->
+                                <template x-if="!serverMode">
                                     <div class="d-flex align-items-center">
-                                        <i class="fas fa-save me-1"></i>
-                                        Save
+                                        <!-- Enable/Disable Toggle -->
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="enableSwitch-wittypid"
+                                                   :checked="serviceStatus.enabled"
+                                                   @change="toggleEnable('wittypid', serviceStatus.enabled)"
+                                                   :disabled="actionLoading || serviceStatus.status === 'not-found'">
+                                            <label class="form-check-label" for="enableSwitch-wittypid" style="display: none;">
+                                            </label>
+                                        </div>
+                                        
+                                        <h5 class="card-title mb-0 me-2">wittypid</h5>
+                                        <!-- Service Status Indicator -->
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge d-flex align-items-center gap-1" 
+                                                    :class="{
+                                                        'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                        'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                        'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                        'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                    }">
+                                                <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                                                <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
+                                            </span>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span x-text="serviceStatus.uptime"></span>
+                                            </small>
+                                        </div>
                                     </div>
                                 </template>
-                                <template x-if="saveState === 'saving'">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-spinner fa-spin me-1"></i>
-                                        Saving...
-                                    </div>
+                                <!-- Server mode: Simple title -->
+                                <template x-if="serverMode">
+                                    <h5 class="card-title mb-0">Schedule Configuration</h5>
                                 </template>
-                                <template x-if="saveState === 'saved'">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-check me-1"></i>
-                                        Saved!
-                                    </div>
-                                </template>
-                            </button>
+                            </div>
                             <button type="button" 
-                                    class="btn"
-                                    :class="{
-                                        'btn-warning': saveRestartState === 'idle',
-                                        'btn-primary': saveRestartState === 'saving' || saveRestartState === 'restarting',
-                                        'btn-outline-success': saveRestartState === 'saved'
-                                    }"
-                                    @click="saveAndRestartService()"
-                                    :disabled="saveRestartState === 'saving' || saveRestartState === 'restarting'"
+                                    class="btn btn-outline-info btn-sm" 
+                                    @click="streamLogs('wittypid')"
+                                    title="View wittypid service logs"
                                     x-show="!serverMode">
-                                <template x-if="saveRestartState === 'idle'">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-save me-1"></i>
-                                        <i class="fas fa-redo me-1"></i>
-                                        Save & Restart
-                                    </div>
-                                </template>
-                                <template x-if="saveRestartState === 'saving'">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-spinner fa-spin me-1"></i>
-                                        Saving...
-                                    </div>
-                                </template>
-                                <template x-if="saveRestartState === 'restarting'">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-spinner fa-spin me-1"></i>
-                                        Restarting...
-                                    </div>
-                                </template>
-                                <template x-if="saveRestartState === 'saved'">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-check me-1"></i>
-                                        Saved & Restarted!
-                                    </div>
-                                </template>
+                                <i class="fas fa-file-alt me-1"></i>
+                                Logs
                             </button>
                         </div>
+                        <div class="card-body">
+                            <!-- Schedule Configuration Form -->
+                            <form @submit.prevent="saveConfig">
+                                <!-- General Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-cogs me-2"></i>
+                                        General
+                                    </h6>
+                                    
+                                    <div class="row">
+                                        <!-- Left Column -->
+                                        <div class="col-md-4">
+                                            <!-- Location -->
+                                            <div class="mb-3">
+                                                <h6>Location</h6>
+                                                <div class="form-text mb-2">
+                                                    This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and solar noon for scheduling.
+                                                </div>
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <label class="form-label">Latitude</label>
+                                                        <input type="number" 
+                                                                class="form-control" 
+                                                                x-model="config.lat" 
+                                                                @input="updateMarkerFromInputs()"
+                                                                step="0.00000001" 
+                                                                max="90"
+                                                                min="-90"
+                                                                required>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Longitude</label>
+                                                        <input type="number" 
+                                                                class="form-control" 
+                                                                x-model="config.lon" 
+                                                                @input="updateMarkerFromInputs()"
+                                                                step="0.00000001" 
+                                                                max="180"
+                                                                min="-180"
+                                                                required>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Force On -->
+                                            <div class="mb-3">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" 
+                                                            type="checkbox" 
+                                                            x-model="config.force_on" 
+                                                            id="forceOn">
+                                                    <label class="form-check-label" for="forceOn">Force On</label>
+                                                </div>
+                                                <div class="form-text">
+                                                    When enabled, this disables all scheduling and makes the tracker stay on permanently.
+                                                </div>
+                                            </div>
+
+                                            <!-- Button Delay -->
+                                            <div class="mb-3">
+                                                <label class="form-label">Button Delay (HH:MM)</label>
+                                                <input type="text" 
+                                                        class="form-control" 
+                                                        x-model="config.button_delay" 
+                                                        pattern="[0-9]{2}:[0-9]{2}" 
+                                                        required>
+                                                <div class="form-text">
+                                                    This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Column (Map) -->
+                                        <div class="col-md-8">
+                                            <div id="map" class="map-container"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Schedule Entries Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-calendar-alt me-2"></i>
+                                        Schedule Entries
+                                    </h6>
+                                    <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
+                                    <template x-for="(entry, index) in config.schedule" :key="index">
+                                        <div class="bg-light rounded-2 p-3 mb-2">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                    <i class="fas fa-clock text-primary me-2"></i>
+                                                    <input type="text" 
+                                                            class="form-control form-control-sm fw-medium" 
+                                                            x-model="entry.name" 
+                                                            placeholder="Enter schedule name..." 
+                                                            required>
+                                                </div>
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger btn-sm" 
+                                                        @click="removeSchedule(index)"
+                                                        title="Remove schedule">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                            <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="entry.startReference"
+                                                                        @change="updateTimeString(entry, 'start')">
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="entry.startSign"
+                                                                        @change="updateTimeString(entry, 'start')"
+                                                                        :disabled="entry.startReference === 'time'"
+                                                                        :value="entry.startReference === 'time' ? '+' : entry.startSign">
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                        class="form-control form-control-sm" 
+                                                                        style="width: 110px;"
+                                                                        x-model="entry.startOffset"
+                                                                        @change="updateTimeString(entry, 'start')">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                            <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="entry.stopReference"
+                                                                        @change="updateTimeString(entry, 'stop')">
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="entry.stopSign"
+                                                                        @change="updateTimeString(entry, 'stop')"
+                                                                        :disabled="entry.stopReference === 'time'"
+                                                                        :value="entry.stopReference === 'time' ? '+' : entry.stopSign">
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                        class="form-control form-control-sm" 
+                                                                        style="width: 110px;"
+                                                                        x-model="entry.stopOffset"
+                                                                        @change="updateTimeString(entry, 'stop')">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    
+                                    <div class="mt-3">
+                                        <button type="button" 
+                                                class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                @click="addSchedule">
+                                            <i class="fas fa-plus me-2"></i>
+                                            Add Schedule Entry
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Form Actions -->
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div class="d-flex gap-2">
+                                        <button type="button" 
+                                                class="btn btn-outline-secondary" 
+                                                @click="refreshConfig()">
+                                            Reset
+                                        </button>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="submit" 
+                                                class="btn"
+                                                :class="{
+                                                    'btn-success': saveState === 'idle',
+                                                    'btn-primary': saveState === 'saving',
+                                                    'btn-outline-success': saveState === 'saved'
+                                                }"
+                                                :disabled="saveState === 'saving'">
+                                            <template x-if="saveState === 'idle'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-save me-1"></i>
+                                                    Save
+                                                </div>
+                                            </template>
+                                            <template x-if="saveState === 'saving'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Saving...
+                                                </div>
+                                            </template>
+                                            <template x-if="saveState === 'saved'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-check me-1"></i>
+                                                    Saved!
+                                                </div>
+                                            </template>
+                                        </button>
+                                        <button type="button" 
+                                                class="btn"
+                                                :class="{
+                                                    'btn-warning': saveRestartState === 'idle',
+                                                    'btn-primary': saveRestartState === 'saving' || saveRestartState === 'restarting',
+                                                    'btn-outline-success': saveRestartState === 'saved'
+                                                }"
+                                                @click="saveAndRestartService()"
+                                                :disabled="saveRestartState === 'saving' || saveRestartState === 'restarting'"
+                                                x-show="!serverMode">
+                                            <template x-if="saveRestartState === 'idle'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-save me-1"></i>
+                                                    <i class="fas fa-redo me-1"></i>
+                                                    Save & Restart
+                                                </div>
+                                            </template>
+                                            <template x-if="saveRestartState === 'saving'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Saving...
+                                                </div>
+                                            </template>
+                                            <template x-if="saveRestartState === 'restarting'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Restarting...
+                                                </div>
+                                            </template>
+                                            <template x-if="saveRestartState === 'saved'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-check me-1"></i>
+                                                    Saved & Restarted!
+                                                </div>
+                                            </template>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </form>
+                </div>
+
+                <!-- SSH Keys Tab -->
+                <div x-show="systemTab === 'sshkeys'">
+                    <div class="card" x-data="sshKeysConfig()" x-init="init()">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-key me-2"></i>
+                                SSH Authorized Keys
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Info Alert -->
+                            <div class="alert alert-info mb-4">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Manage SSH public keys for secure remote access.
+                            </div>
+
+                            <!-- Existing Keys List -->
+                            <div class="mb-4">
+                                <h6 class="border-bottom pb-2">
+                                    <i class="fas fa-list me-2"></i>
+                                    Authorized Keys (<span x-text="keys.length"></span>)
+                                </h6>
+                                
+                                <template x-if="keys.length === 0">
+                                    <div class="text-muted text-center py-4">
+                                        <i class="fas fa-key fa-3x mb-3 opacity-25"></i>
+                                        <p>No SSH keys configured yet. Add one below to enable SSH access.</p>
+                                    </div>
+                                </template>
+
+                                <template x-if="keys.length > 0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 100px;">Type</th>
+                                                    <th>Key Preview / Comment</th>
+                                                    <th style="width: 100px;" class="text-end">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="(key, index) in keys" :key="index">
+                                                    <tr>
+                                                        <td>
+                                                            <span class="badge bg-secondary" x-text="key.key_type"></span>
+                                                        </td>
+                                                        <td>
+                                                            <div class="d-flex flex-column">
+                                                                <code class="small text-truncate" style="max-width: 500px;" x-text="key.key_data ? key.key_data.substring(0, 40) + '...' : ''"></code>
+                                                                <small class="text-muted" x-show="key.comment" x-text="key.comment"></small>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-danger btn-sm" 
+                                                                    @click="removeKey(index)"
+                                                                    title="Remove this key">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Add New Key Form -->
+                            <div class="mb-4">
+                                <h6 class="border-bottom pb-2">
+                                    <i class="fas fa-plus me-2"></i>
+                                    Add New SSH Key
+                                </h6>
+                                <form @submit.prevent="addKey">
+                                    <div class="mb-3">
+                                        <label class="form-label">SSH Public Key</label>
+                                        <textarea class="form-control font-monospace small" 
+                                                  x-model="newKey"
+                                                  rows="4" 
+                                                  placeholder="Paste your SSH public key here (e.g., ssh-rsa AAAAB3NzaC1yc2EA... user@hostname)"
+                                                  required></textarea>
+                                        <div class="form-text">
+                                            Paste the entire contents of your SSH public key file.
+                                        </div>
+                                    </div>
+                                    <button type="submit" 
+                                            class="btn btn-success"
+                                            :disabled="!newKey.trim() || loading">
+                                        <template x-if="!loading">
+                                            <span>
+                                                <i class="fas fa-plus me-1"></i>
+                                                <i class="fas fa-save me-1"></i>
+                                                Add & Save Key
+                                            </span>
+                                        </template>
+                                        <template x-if="loading">
+                                            <span>
+                                                <i class="fas fa-spinner fa-spin me-1"></i>
+                                                Saving...
+                                            </span>
+                                        </template>
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Messages -->
+                            <div x-show="message" 
+                                 class="alert" 
+                                 :class="{ 'alert-success': messageType === 'success', 'alert-danger': messageType === 'error' }"
+                                 x-transition>
+                                <span x-text="message"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
         </div>
     </div>
 </div>
-
