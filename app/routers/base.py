@@ -94,7 +94,7 @@ class BaseConfigRouter:
                     if old_latest_dir and old_latest_dir.exists():
                         import shutil
 
-                        config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml"]
+                        config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml", "authorized_keys"]
                         for config_file in config_files:
                             old_file = old_latest_dir / config_file
                             if old_file.exists():

@@ -16,6 +16,7 @@ import { saveStateMixin } from './mixins/saveStateMixin.js';
 // Import components
 import { configManager } from './components/configManager.js';
 import { scheduleConfig } from './components/scheduleConfig.js';
+import { sshKeysConfig } from './components/sshKeysConfig.js';
 import { radiotrackingConfig } from './components/radiotrackingConfig.js';
 import { soundscapepipeConfig } from './components/soundscapepipeConfig.js';
 import { statusPage } from './components/statusPage.js';
@@ -25,6 +26,7 @@ import { shellViewer } from './components/shellViewer.js';
 // Expose components globally for Alpine.js x-data directives
 window.configManager = configManager;
 window.scheduleConfig = scheduleConfig;
+window.sshKeysConfig = sshKeysConfig;
 window.radiotrackingConfig = radiotrackingConfig;
 window.soundscapepipeConfig = soundscapepipeConfig;
 window.statusPage = statusPage;
