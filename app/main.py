@@ -25,6 +25,9 @@ BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
 if not BASE_URL:
     BASE_URL = ""
 
+# In server mode, we use query parameter routing: /tsconfig/?config_group={groupname}
+# In tracker mode, we use the BASE_URL directly without config_group parameter
+
 # OpenAPI tags metadata for better API documentation organization
 tags_metadata = [
     {
@@ -105,7 +108,7 @@ if not config_loader.is_server_mode():
     app.include_router(systemd.router)
     app.include_router(shell.router)
 
-# Mount static files
+# Mount static files (must be after all route definitions to avoid conflicts)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Templates
@@ -126,9 +129,100 @@ async def add_base_url_to_context(request: Request, call_next):
     include_in_schema=False,
     summary="Web Interface Home Page",
 )
-async def home(request: Request):
-    """Render the main configuration page with status integration."""
-    return templates.TemplateResponse("index.html", {"request": request, "version": __version__, "base_url": BASE_URL})
+async def home(request: Request, config_group: str = None):
+    """Render the main configuration page with status integration.
+
+    In server mode, accepts optional config_group query parameter to display
+    configuration for a specific group.
+    """
+    # In server mode, validate config_group if provided
+    if config_loader.is_server_mode() and config_group:
+        available_groups = config_loader.list_config_groups()
+        if config_group not in available_groups:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": f"Config group '{config_group}' not found",
+                    "requested": config_group,
+                    "available": available_groups,
+                },
+            )
+
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "version": __version__,
+            "base_url": BASE_URL,
+            "config_group": config_group,
+        },
+    )
+
+
+@app.get(
+    "/{groupname}/test",
+    tags=["system"],
+    summary="Test endpoint for config group routing",
+)
+async def test_group_route(groupname: str):
+    """Test endpoint to verify path-based routing is working."""
+    return {
+        "message": "Route is working!",
+        "groupname": groupname,
+        "server_mode": config_loader.is_server_mode(),
+        "available_groups": config_loader.list_config_groups(),
+        "group_exists": groupname in config_loader.list_config_groups(),
+    }
+
+
+@app.get(
+    "/{groupname}",
+    include_in_schema=False,
+    summary="Web Interface for Specific Config Group",
+)
+async def home_with_group(request: Request, groupname: str):
+    """Render the main configuration page for a specific config group (server mode)."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Debug logging
+    logger.error(f"Route /{groupname} accessed (after Caddy strips /tsconfig)")
+    logger.error(f"Server mode enabled: {config_loader.is_server_mode()}")
+    logger.error(f"BASE_URL: {BASE_URL}")
+    logger.error(f"Request URL: {request.url}")
+    logger.error(f"Request scope root_path: {request.scope.get('root_path')}")
+
+    # Verify the config group exists
+    if not config_loader.is_server_mode():
+        logger.warning("Server mode is not enabled")
+        return JSONResponse(status_code=404, content={"error": "Server mode is not enabled"})
+
+    available_groups = config_loader.list_config_groups()
+    logger.error(f"Available config groups: {available_groups}")
+    logger.error(f"Requested group: '{groupname}'")
+    logger.error(f"Group in list: {groupname in available_groups}")
+
+    if groupname not in available_groups:
+        logger.warning(f"Config group '{groupname}' not found in {available_groups}")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": f"Config group '{groupname}' not found",
+                "requested": groupname,
+                "available": available_groups,
+            },
+        )
+
+    logger.error(f"Rendering template for config group: {groupname}")
+
+    # Test url_for
+    test_static_url = request.url_for("static", path="js/app.js")
+    logger.error(f"url_for('static', path='js/app.js') = {test_static_url}")
+
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "version": __version__, "base_url": BASE_URL, "config_group": groupname}
+    )
 
 
 @app.get(
@@ -148,12 +242,44 @@ Returns:
 async def get_server_mode():
     """Get server mode configuration."""
     is_server_mode = config_loader.is_server_mode()
+    config_root = config_loader.get_config_root()
+
+    # Add debug information
+    debug_info = {}
+    if is_server_mode and config_root:
+        debug_info["config_root_exists"] = config_root.exists()
+        debug_info["config_root_is_dir"] = config_root.is_dir()
+        if config_root.exists() and config_root.is_dir():
+            # List all subdirectories
+            try:
+                all_dirs = [item.name for item in config_root.iterdir() if item.is_dir()]
+                debug_info["all_subdirectories"] = sorted(all_dirs)
+
+                # Check each directory for latest subdirectory and config files
+                dir_details = {}
+                for item in config_root.iterdir():
+                    if item.is_dir():
+                        latest_dir = item / "latest"
+                        dir_details[item.name] = {
+                            "has_latest": latest_dir.exists() and latest_dir.is_dir(),
+                            "config_files": [],
+                        }
+                        if latest_dir.exists() and latest_dir.is_dir():
+                            if (latest_dir / "radiotracking.ini").exists():
+                                dir_details[item.name]["config_files"].append("radiotracking.ini")
+                            if (latest_dir / "schedule.yml").exists():
+                                dir_details[item.name]["config_files"].append("schedule.yml")
+                            if (latest_dir / "soundscapepipe.yml").exists():
+                                dir_details[item.name]["config_files"].append("soundscapepipe.yml")
+                debug_info["directory_details"] = dir_details
+            except Exception as e:
+                debug_info["error"] = str(e)
+
     return {
         "enabled": is_server_mode,
         "config_groups": config_loader.list_config_groups() if is_server_mode else [],
-        "config_root": str(config_loader.get_config_root())
-        if is_server_mode and config_loader.get_config_root()
-        else None,
+        "config_root": str(config_root) if is_server_mode and config_root else None,
+        "debug": debug_info if is_server_mode else None,
     }
 
 

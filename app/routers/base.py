@@ -44,6 +44,11 @@ class BaseConfigRouter:
 
     def update_config_helper(self, config_dict: Dict[str, Any], config_group: Optional[str] = None) -> Dict[str, Any]:
         """Helper method to update configuration with a dictionary."""
+        import logging
+        import traceback
+
+        logger = logging.getLogger(__name__)
+
         try:
             cfg_instance = self.get_config_instance(config_group)
 
@@ -60,20 +65,96 @@ class BaseConfigRouter:
 
             # Save the configuration
             try:
-                cfg_instance.save(config_dict)
-                return {
-                    "message": f"{self.prefix.title()} configuration updated successfully",
-                    "config": config_dict,
-                }
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
+                # Check if we're in server mode
+                if config_loader.is_server_mode():
+                    # In server mode, we MUST have a config_group
+                    if not config_group:
+                        raise ValueError("Config group is required in server mode")
 
+                    logger.info(f"Server mode detected, creating versioned directory for group: {config_group}")
+
+                    # Get the previous latest directory before creating new one
+                    # Resolve the symlink to get the actual directory path
+                    old_latest_dir = config_loader.get_config_group_dir(config_group)
+                    if old_latest_dir and old_latest_dir.is_symlink():
+                        old_latest_dir = old_latest_dir.resolve()
+                    logger.info(f"Previous version directory: {old_latest_dir}")
+
+                    # Create new versioned directory and update 'latest' symlink
+                    try:
+                        versioned_dir = config_loader.create_versioned_config_dir(config_group)
+                        logger.info(f"Created versioned directory: {versioned_dir}")
+                    except Exception as e:
+                        logger.error(f"Failed to create versioned directory: {e}")
+                        logger.error(traceback.format_exc())
+                        raise
+
+                    # Copy all config files from previous version to new version
+                    if old_latest_dir and old_latest_dir.exists():
+                        import shutil
+
+                        config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml"]
+                        for config_file in config_files:
+                            old_file = old_latest_dir / config_file
+                            if old_file.exists():
+                                try:
+                                    new_file = versioned_dir / config_file
+                                    shutil.copy2(old_file, new_file)
+                                    logger.info(f"Copied {config_file} from previous version")
+                                except Exception as e:
+                                    logger.warning(f"Failed to copy {config_file}: {e}")
+                    else:
+                        logger.info("No previous version found, starting fresh")
+
+                    # Create a new config instance pointing to the versioned directory
+                    try:
+                        versioned_cfg_instance = self.config_class(versioned_dir)
+                        logger.info("Created config instance for versioned directory")
+                    except Exception as e:
+                        logger.error(f"Failed to create config instance: {e}")
+                        logger.error(traceback.format_exc())
+                        raise
+
+                    # Save to the versioned directory
+                    try:
+                        versioned_cfg_instance.save(config_dict)
+                        logger.info("Saved config to versioned directory")
+                    except Exception as e:
+                        logger.error(f"Failed to save config: {e}")
+                        logger.error(traceback.format_exc())
+                        raise
+                else:
+                    # In tracker mode, save directly
+                    logger.info("Tracker mode, saving directly")
+                    cfg_instance.save(config_dict)
+
+                return {"message": f"{self.prefix.title()} configuration updated successfully", "config": config_dict}
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error saving configuration: {e}")
+                logger.error(traceback.format_exc())
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "message": f"Failed to save {self.prefix} configuration",
+                        "error": str(e),
+                        "type": type(e).__name__,
+                        "traceback": traceback.format_exc(),
+                    },
+                )
+
+        except HTTPException:
+            raise
         except Exception as e:
             # Handle other errors
+            logger.error(f"Unexpected error in update_config_helper: {e}")
+            logger.error(traceback.format_exc())
             error_detail: Dict[str, Any] = {
                 "message": f"Failed to update {self.prefix} configuration",
                 "error": str(e),
                 "type": type(e).__name__,
+                "traceback": traceback.format_exc(),
             }
             raise HTTPException(status_code=500, detail=error_detail)
 
