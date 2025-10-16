@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
-from app.routers.base import BaseConfigRouter
 
 router = APIRouter(prefix="/api/authorized-keys", tags=["authorized_keys"])
 
@@ -99,7 +98,6 @@ async def add_authorized_key(key_data: SSHKeyAdd, config_group: Optional[str] = 
         if config_loader.is_server_mode() and config_group:
             # Import here to avoid circular dependency
             import shutil
-            from pathlib import Path
 
             # Get the previous latest directory
             old_latest_dir = config_loader.get_config_group_dir(config_group)
@@ -167,7 +165,6 @@ async def remove_authorized_key(key_index: int, config_group: Optional[str] = Qu
         if config_loader.is_server_mode() and config_group:
             # Import here to avoid circular dependency
             import shutil
-            from pathlib import Path
 
             # Get the previous latest directory
             old_latest_dir = config_loader.get_config_group_dir(config_group)
@@ -237,7 +234,6 @@ async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: Optional[
         if config_loader.is_server_mode() and config_group:
             # Import here to avoid circular dependency
             import shutil
-            from pathlib import Path
 
             # Get the previous latest directory
             old_latest_dir = config_loader.get_config_group_dir(config_group)

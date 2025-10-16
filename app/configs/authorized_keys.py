@@ -47,12 +47,24 @@ class AuthorizedKeysConfig(BaseConfig):
         return None
 
     def _ensure_directory_with_permissions(self, file_path: Path) -> None:
-        """Ensure the parent directory exists with proper SSH permissions."""
+        """Ensure the parent directory exists with proper SSH permissions.
+
+        Note:
+            Permission setting is best-effort and will not fail the operation.
+        """
         parent_dir = file_path.parent
         if not parent_dir.exists():
-            parent_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-            # Explicitly set permissions in case umask interfered
-            os.chmod(parent_dir, 0o700)
+            try:
+                parent_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+                # Explicitly set permissions in case umask interfered (best-effort)
+                try:
+                    os.chmod(parent_dir, 0o700)
+                except (OSError, PermissionError):
+                    # Ignore permission errors
+                    pass
+            except (OSError, PermissionError) as e:
+                # If we can't create the directory, that's a real error
+                raise OSError(f"Cannot create directory {parent_dir}: {str(e)}")
 
     def _set_file_permissions(self, file_path: Path) -> None:
         """Set proper SSH permissions on the file."""
@@ -168,6 +180,11 @@ class AuthorizedKeysConfig(BaseConfig):
 
         Args:
             config: Dictionary with 'keys' list
+
+        Note:
+            Permission setting is best-effort and will not fail the operation.
+            In server mode, permissions are not set as they're not needed for file storage.
+            In tracker mode on FAT filesystems (like /boot/firmware), chmod will be silently ignored.
         """
         keys = config.get("keys", [])
 
@@ -187,7 +204,15 @@ class AuthorizedKeysConfig(BaseConfig):
         with open(primary_file, "w") as f:
             f.write(content)
 
-        self._set_file_permissions(primary_file)
+        # Try to set permissions (best-effort, don't fail)
+        # Skip in server mode as it's not needed for file storage
+        # In tracker mode, ignore failures (e.g., FAT filesystem, non-owned files)
+        if self._is_tracker_mode:
+            try:
+                self._set_file_permissions(primary_file)
+            except (OSError, PermissionError):
+                # Ignore permission errors (e.g., FAT filesystem, file owned by another user)
+                pass
 
         # In tracker mode, also write to secondary file
         if self._is_tracker_mode and self.secondary_config_file:
@@ -197,7 +222,12 @@ class AuthorizedKeysConfig(BaseConfig):
             with open(secondary_file, "w") as f:
                 f.write(content)
 
-            self._set_file_permissions(secondary_file)
+            # Try to set permissions (best-effort, don't fail)
+            try:
+                self._set_file_permissions(secondary_file)
+            except (OSError, PermissionError):
+                # Ignore permission errors
+                pass
 
     def validate(self, config: Dict[str, Any]) -> List[str]:
         """Validate the authorized keys configuration.
