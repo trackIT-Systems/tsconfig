@@ -119,21 +119,32 @@ def main():
         logger.error(f"Missing: {e}")
         sys.exit(1)
 
-    # Verify API is reachable
+    # Verify API is reachable with retry logic
     logger.info(f"Verifying API connectivity to {args.api_url}...")
-    try:
-        import httpx
+    max_retries = 10  # 10 seconds with 1-second intervals
+    retry_interval = 1
+    
+    for attempt in range(max_retries):
+        try:
+            import httpx
 
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{args.api_url}/api/server-mode")
-            if response.status_code == 200:
-                logger.info("✓ API is reachable")
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(f"{args.api_url}/api/server-mode")
+                if response.status_code == 200:
+                    logger.info("✓ API is reachable")
+                    break
+                else:
+                    logger.warning(f"API returned status code: {response.status_code}")
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"✗ Cannot reach API (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.info(f"Retrying in {retry_interval} seconds...")
+                import time
+                time.sleep(retry_interval)
             else:
-                logger.warning(f"API returned status code: {response.status_code}")
-    except Exception as e:
-        logger.error(f"✗ Cannot reach API: {e}")
-        logger.error("Please ensure tsconfig is running and accessible")
-        sys.exit(1)
+                logger.error(f"✗ Cannot reach API after {max_retries} attempts: {e}")
+                logger.error("Please ensure tsconfig is running and accessible")
+                sys.exit(1)
 
     # Create and start the BLE GATT server
     try:
