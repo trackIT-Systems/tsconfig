@@ -83,10 +83,37 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
 
 4. **Run the application**:
    ```bash
+   # Using uvicorn directly (recommended)
+   python3 -m uvicorn app.main:app --reload
+   
+   # Or using pdm
    pdm run uvicorn app.main:app --reload
    ```
 
 The application will be available at `http://localhost:8000`
+
+### Logging Configuration
+
+The application supports configurable logging levels optimized for journald consumption:
+
+```bash
+# Default (WARNING level - only warnings and errors)
+python3 -m uvicorn app.main:app --reload
+
+# INFO level (shows operational events)
+LOG_LEVEL=INFO python3 -m uvicorn app.main:app --reload
+
+# DEBUG level (shows detailed diagnostics)
+LOG_LEVEL=DEBUG python3 -m uvicorn app.main:app --reload
+```
+
+**Log Levels:**
+- **WARNING** (default): Service operations, configuration changes, API issues
+- **INFO**: Application startup, service registration, completed operations
+- **DEBUG**: D-Bus communication, HTTP details, adapter states
+- **ERROR**: Failed operations, exceptions, resource failures
+
+**Note:** Third-party library logs (including HTTP access logs) respect the configured log level. At WARNING level, you'll only see warnings and errors from all libraries. At INFO level, you'll see operational messages from uvicorn, httpx, etc. At DEBUG level, you'll see detailed diagnostics from all components.
 
 ### Running Behind a Reverse Proxy
 
@@ -95,10 +122,10 @@ If you need to run tsconfig at a subpath (e.g., `http://example.com/tsconfig/`),
 ```bash
 # Run at a subpath
 export TSCONFIG_BASE_URL="/tsconfig"
-pdm run uvicorn app.main:app --reload
+python3 -m uvicorn app.main:app --reload
 
 # Or inline
-TSCONFIG_BASE_URL="/tsconfig" pdm run uvicorn app.main:app --reload
+TSCONFIG_BASE_URL="/tsconfig" python3 -m uvicorn app.main:app --reload
 ```
 
 The default value is `/` (root path). When configured, all URLs (API endpoints, static files, and navigation) will respect the base path.

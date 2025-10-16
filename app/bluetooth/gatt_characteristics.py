@@ -6,16 +6,16 @@ for each tsconfig API endpoint exposed via BLE GATT.
 
 import asyncio
 import json
-import logging
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 import dbus
 import dbus.service
 
 from app.bluetooth.api_client import TsConfigApiClient
 from app.bluetooth.protocol import chunker, formatter, parser
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # BlueZ D-Bus constants
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
@@ -96,7 +96,7 @@ class Characteristic(dbus.service.Object):
         if self.notifying:
             return
         self.notifying = True
-        logger.info(f"Notifications started for {self.uuid}")
+        logger.debug(f"Notifications started for {self.uuid}")
 
     @dbus.service.method(GATT_CHRC_IFACE)
     def StopNotify(self):
@@ -104,7 +104,7 @@ class Characteristic(dbus.service.Object):
         if not self.notifying:
             return
         self.notifying = False
-        logger.info(f"Notifications stopped for {self.uuid}")
+        logger.debug(f"Notifications stopped for {self.uuid}")
 
     @dbus.service.signal(DBUS_PROP_IFACE, signature="sa{sv}as")
     def PropertiesChanged(self, interface, changed_properties, invalidated_properties):
@@ -229,9 +229,7 @@ class ReadOnlyCharacteristic(Characteristic):
 
                 # Schedule data to be sent via notifications AFTER read completes
                 # This prevents the notification from overwriting the read response value
-                logger.info(
-                    f"Preparing {len(response_bytes)} bytes in {len(chunks)} notification chunks for {self.uuid}"
-                )
+                logger.debug(f"Preparing {len(response_bytes)} bytes in {len(chunks)} notification chunks for {self.uuid}")
                 from gi.repository import GLib
 
                 GLib.idle_add(lambda: self.send_chunked_response(response) or False)

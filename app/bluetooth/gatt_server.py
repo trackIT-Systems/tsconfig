@@ -15,8 +15,9 @@ from gi.repository import GLib
 
 from app.bluetooth.api_client import TsConfigApiClient
 from app.bluetooth.services import SystemdService, SystemService, UploadService
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # BlueZ D-Bus constants
 BLUEZ_SERVICE_NAME = "org.bluez"
@@ -72,7 +73,7 @@ class Application(dbus.service.Object):
         self.add_service(SystemdService(bus, 1, self.path, api_client, require_pairing))
         self.add_service(UploadService(bus, 2, self.path, api_client, require_pairing))
 
-        logger.info(f"GATT Application created with {len(self.services)} services")
+        logger.debug(f"GATT Application created with {len(self.services)} services")
 
     def get_path(self) -> str:
         """Get the D-Bus object path."""
@@ -212,14 +213,14 @@ class BleGattServer:
 
         for path, interfaces in objects.items():
             if ADAPTER_IFACE in interfaces:
-                logger.info(f"Found Bluetooth adapter: {path}")
+                logger.debug(f"Found Bluetooth adapter: {path}")
                 return path
 
         raise Exception("No Bluetooth adapter found")
 
     def setup(self):
         """Set up the BLE GATT server."""
-        logger.info("Setting up BLE GATT server...")
+        logger.debug("Setting up BLE GATT server...")
 
         # Initialize D-Bus
         logger.debug("Initializing D-Bus connection...")
@@ -237,7 +238,7 @@ class BleGattServer:
         try:
             powered = self.adapter_props.Get(ADAPTER_IFACE, "Powered")
             address = self.adapter_props.Get(ADAPTER_IFACE, "Address")
-            logger.info(f"Adapter {address} - Powered: {powered}")
+            logger.debug(f"Adapter {address} - Powered: {powered}")
         except Exception as e:
             logger.warning(f"Could not read adapter properties: {e}")
 
@@ -284,7 +285,7 @@ class BleGattServer:
 
     def register_advertisement(self):
         """Register the BLE advertisement with BlueZ."""
-        logger.info("Registering BLE advertisement...")
+        logger.debug("Registering BLE advertisement...")
 
         def success_handler():
             logger.info(f"BLE advertisement registered successfully as '{self.device_name}'")
@@ -355,7 +356,7 @@ class BleGattServer:
         if self.ad_manager and self.advertisement:
             try:
                 self.ad_manager.UnregisterAdvertisement(self.advertisement.get_path())
-                logger.info("BLE advertisement unregistered")
+                logger.debug("BLE advertisement unregistered")
             except Exception as e:
                 logger.error(f"Error unregistering advertisement: {e}")
 
@@ -363,7 +364,7 @@ class BleGattServer:
         if self.gatt_manager and self.application:
             try:
                 self.gatt_manager.UnregisterApplication(self.application.get_path())
-                logger.info("GATT application unregistered")
+                logger.debug("GATT application unregistered")
             except Exception as e:
                 logger.error(f"Error unregistering application: {e}")
 
