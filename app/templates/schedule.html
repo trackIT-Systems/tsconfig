@@ -331,12 +331,6 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            <!-- Info Alert -->
-                            <div class="alert alert-info mb-4">
-                                <i class="fas fa-info-circle me-2"></i>
-                                Manage SSH public keys for secure remote access.
-                            </div>
-
                             <!-- Existing Keys List -->
                             <div class="mb-4">
                                 <h6 class="border-bottom pb-2">
@@ -390,13 +384,13 @@
                             </div>
 
                             <!-- Add New Key Form -->
-                            <div class="mb-4">
+                            <div>
                                 <h6 class="border-bottom pb-2">
                                     <i class="fas fa-plus me-2"></i>
                                     Add New SSH Key
                                 </h6>
                                 <form @submit.prevent="addKey">
-                                    <div class="mb-3">
+                                    <div class="mb-2">
                                         <label class="form-label">SSH Public Key</label>
                                         <textarea class="form-control font-monospace small" 
                                                   x-model="newKey"
@@ -407,23 +401,24 @@
                                             Paste the entire contents of your SSH public key file.
                                         </div>
                                     </div>
-                                    <button type="submit" 
-                                            class="btn btn-success"
-                                            :disabled="!newKey.trim() || loading">
-                                        <template x-if="!loading">
-                                            <span>
-                                                <i class="fas fa-plus me-1"></i>
-                                                <i class="fas fa-save me-1"></i>
-                                                Add & Save Key
-                                            </span>
-                                        </template>
-                                        <template x-if="loading">
-                                            <span>
-                                                <i class="fas fa-spinner fa-spin me-1"></i>
-                                                Saving...
-                                            </span>
-                                        </template>
-                                    </button>
+                                    <div class="text-end mt-1">
+                                        <button type="submit" 
+                                                class="btn btn-success"
+                                                :disabled="!newKey.trim() || loading">
+                                            <template x-if="!loading">
+                                                <span>
+                                                    <i class="fas fa-plus me-1"></i>
+                                                    Add Key
+                                                </span>
+                                            </template>
+                                            <template x-if="loading">
+                                                <span>
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Saving...
+                                                </span>
+                                            </template>
+                                        </button>
+                                    </div>
                                 </form>
                             </div>
 

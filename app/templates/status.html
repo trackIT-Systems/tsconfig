@@ -1,12 +1,12 @@
 <!-- Status Section -->
 <div x-data="statusPage()" x-init="initStatus()">
         <!-- Status Header -->
-        <div class="row mb-4">
+        <div class="row mb-3">
             <div class="col">
                 <h2 class="mb-2">
                     <i class="fas fa-server me-3"></i>System Status
                 </h2>
-                <p class="text-muted">Real-time system information and health monitoring</p>
+                <p class="text-muted mb-0">Real-time system information and health monitoring</p>
             </div>
             <div class="col-auto">
                 <button class="btn btn-outline-primary" 
@@ -28,7 +28,7 @@
 
         <!-- Systemd Services Messages -->
         <template x-if="actionMessage || servicesError">
-            <div class="row mb-4">
+            <div class="row mb-3">
                 <div class="col">
                     <!-- Action feedback -->
                     <template x-if="actionMessage">
@@ -52,7 +52,7 @@
         </template>
 
         <!-- Systemd Services -->
-        <div class="row mb-4">
+        <div class="row mb-3">
             <div class="col">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -247,7 +247,7 @@
 
             <!-- Status Cards -->
             <div x-show="systemInfo" x-cloak>
-                <div class="row g-4 mt-4">
+                <div class="row g-4 mt-3">
                     <!-- Operating System -->
                     <div class="col-md-6 col-xl-3">
                         <div class="card h-100 status-card">
@@ -563,7 +563,7 @@
             </div>
 
             <!-- Tracker Location -->
-            <div class="row mb-4">
+            <div class="row mb-4 mt-4">
                 <div class="col">
                     <div class="card">
                         <div class="card-header">
