@@ -1,8 +1,10 @@
 """Configuration file upload endpoints."""
 
+import os
 import subprocess
 import zipfile
 from configparser import ConfigParser
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -22,6 +24,30 @@ from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.configs.wireguard import WireguardConfig
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
+
+
+def round_mtime_for_fat32(dt: datetime) -> datetime:
+    """Round datetime up to next even second for FAT32 compatibility.
+    
+    FAT32 has 2-second resolution for modification times. To prevent duplicate
+    uploads when timestamps have odd seconds, we round UP to the next even second.
+    
+    Args:
+        dt: Input datetime
+        
+    Returns:
+        Datetime rounded up to next even second
+    """
+    # Remove microseconds first
+    dt = dt.replace(microsecond=0)
+    
+    if dt.second % 2 == 1:
+        # Odd second - add 1 second to round up to next even second
+        # This automatically handles minute/hour/day rollover
+        return dt + timedelta(seconds=1)
+    else:
+        # Even second - already good
+        return dt
 
 
 def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
@@ -83,6 +109,184 @@ def parse_ini_file(content: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse INI file: {str(e)}")
 
 
+def parse_mtime_and_validate(mtime: Optional[str], force: bool) -> Optional[datetime]:
+    """Parse and validate mtime parameter.
+    
+    Args:
+        mtime: ISO timestamp string or None
+        force: Whether force flag is set
+        
+    Returns:
+        Parsed datetime or None
+        
+    Raises:
+        HTTPException: If validation fails
+    """
+    if not force and mtime is None:
+        raise HTTPException(
+            status_code=400,
+            detail="mtime parameter is required when force=False",
+        )
+    
+    if mtime is not None:
+        try:
+            return datetime.fromisoformat(mtime)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid mtime format '{mtime}'. Expected ISO format like '2025-10-17T08:59:50'",
+            )
+    
+    return None
+
+
+def create_config_instance(filename: str, config_type: str, content_str: str):
+    """Create appropriate config instance and parse content.
+    
+    Args:
+        filename: Name of config file
+        config_type: Type of config
+        content_str: File content as string
+        
+    Returns:
+        Tuple of (config_instance, parsed_config)
+        
+    Raises:
+        HTTPException: If parsing fails
+    """
+    try:
+        if config_type == "radiotracking":
+            parsed_config = parse_ini_file(content_str)
+            config_instance = RadioTrackingConfig()
+        elif config_type == "schedule":
+            parsed_config = parse_yaml_file(content_str)
+            config_instance = ScheduleConfig()
+        elif config_type == "soundscapepipe":
+            parsed_config = parse_yaml_file(content_str)
+            config_instance = SoundscapepipeConfig()
+        elif config_type == "authorized_keys":
+            config_instance = AuthorizedKeysConfig()
+            existing_config = config_instance.load()
+            existing_keys = existing_config.get("keys", [])
+            new_keys = []
+            for idx, line in enumerate(content_str.strip().split("\n")):
+                parsed = config_instance._parse_key_line(line, len(existing_keys) + idx)
+                if parsed:
+                    new_keys.append(parsed)
+            parsed_config = {"keys": existing_keys + new_keys}
+        elif config_type in ["cmdline", "wireguard", "mosquitto_cert", "mosquitto_conf"]:
+            parsed_config = {"content": content_str}
+            if config_type == "cmdline":
+                config_instance = CmdlineConfig()
+            elif config_type == "wireguard":
+                config_instance = WireguardConfig()
+            elif config_type == "mosquitto_cert":
+                config_instance = MosquittoCertConfig()
+            else:  # mosquitto_conf
+                config_instance = MosquittoConfConfig()
+        elif config_type == "geolocation":
+            lines = content_str.strip().split("\n")
+            data_lines = [
+                line.split("#")[0].strip() for line in lines if line.strip() and not line.strip().startswith("#")
+            ]
+            if len(data_lines) != 4:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Geolocation file must have exactly 4 data lines (got {len(data_lines)})",
+                )
+            try:
+                parsed_config = {
+                    "lat": float(data_lines[0]),
+                    "lon": float(data_lines[1]),
+                    "alt": float(data_lines[2]),
+                    "accuracy": float(data_lines[3]),
+                }
+            except (ValueError, IndexError) as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid geolocation file format: {str(e)}",
+                )
+            config_instance = GeolocationConfig()
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported configuration file: {filename}. "
+                "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
+                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation",
+            )
+        
+        return config_instance, parsed_config
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to parse configuration file: {str(e)}",
+        )
+
+
+def build_standard_response(success: bool, config_type: str, filename: str, **kwargs) -> Dict[str, Any]:
+    """Build standardized response structure.
+    
+    Args:
+        success: Whether operation was successful
+        config_type: Type of configuration
+        filename: Name of uploaded file
+        **kwargs: Additional response fields
+        
+    Returns:
+        Standardized response dictionary
+    """
+    response = {
+        "success": success,
+        "config_type": config_type,
+        "filename": filename,
+        "timestamp": datetime.now().isoformat(),
+    }
+    response.update(kwargs)
+    return response
+
+
+def handle_service_restart(config_type: str, restart_service: bool) -> Dict[str, Any]:
+    """Handle service restart logic.
+    
+    Args:
+        config_type: Type of configuration
+        restart_service: Whether to restart service
+        
+    Returns:
+        Dictionary with restart results
+    """
+    result = {
+        "service_restarted": False,
+        "service_restart_error": None,
+    }
+    
+    if not restart_service:
+        return result
+    
+    if config_loader.is_server_mode():
+        result["service_restart_error"] = "Service restart is not available in server mode"
+        return result
+    
+    service_mapping = {
+        "radiotracking": "radiotracking",
+        "schedule": "wittypid", 
+        "soundscapepipe": "soundscapepipe",
+    }
+    
+    service_name = service_mapping.get(config_type)
+    if not service_name:
+        result["service_restart_error"] = f"No service mapping for config type: {config_type}"
+        return result
+    
+    success, error = restart_systemd_service(service_name)
+    result["service_restarted"] = success
+    if error:
+        result["service_restart_error"] = error
+    
+    return result
+
+
 def parse_yaml_file(content: str) -> Dict[str, Any]:
     """Parse YAML file content and return as dictionary.
 
@@ -111,8 +315,9 @@ def parse_yaml_file(content: str) -> Dict[str, Any]:
 @router.post("/config")
 async def upload_config(
     file: UploadFile = File(..., description="Configuration file to upload"),
-    config_group: Optional[str] = Form(None, description="Config group name for server mode"),
     restart_service: bool = Form(False, description="Restart the respective service after upload"),
+    mtime: Optional[str] = Form(None, description="Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50)"),
+    force: bool = Form(False, description="Force overwrite regardless of file modification time"),
 ):
     """Upload and validate a configuration file.
 
@@ -128,219 +333,158 @@ async def upload_config(
     - geolocation - Geolocation file (geoclue format)
 
     The file will be validated and if valid, will replace the existing configuration.
+    
+    When force=False:
+    - mtime parameter is REQUIRED
+    - File is only overwritten if uploaded mtime is newer than existing file
+    - File mtime is set to the uploaded mtime (rounded for FAT32 compatibility)
+    
+    When force=True:
+    - mtime parameter is optional (ignored if provided)
+    - File is always overwritten regardless of timestamps
+    - File mtime is set to current system time
+    
     Optionally, the respective systemd service can be restarted after upload.
+
+    This endpoint is disabled in server mode.
 
     Args:
         file: The configuration file to upload
-        config_group: Optional config group name for server mode
         restart_service: Whether to restart the respective service after successful upload (default: False)
+        mtime: Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50) - REQUIRED when force=False, ignored when force=True
+        force: Force overwrite regardless of file modification time (default: False)
 
     Returns:
-        Success message if successful, or validation errors if invalid
+        Success message if successful, validation errors if invalid, or skipped if file is not newer
     """
-    # Read file content
+    # Check if server mode is enabled - disable endpoint if so
+    if config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=403,
+            detail="Config upload endpoints are disabled in server mode",
+        )
+
+    # Read and decode file content
     try:
         content = await file.read()
         content_str = content.decode("utf-8")
     except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=400,
-            detail="File must be UTF-8 encoded text",
-        )
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded text")
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to read file: {str(e)}",
-        )
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
 
     # Determine config type from filename
-    filename = file.filename.lower() if file.filename else ""
-
-    config_instance = None
-    config_type = None
-    parsed_config = None
-
-    # Get config directory for the group (if specified)
-    config_dir = None
-    if config_group:
-        config_dir = config_loader.get_config_group_dir(config_group)
-        if not config_dir:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Config group '{config_group}' not found",
-            )
-
-    try:
-        if filename == "radiotracking.ini":
-            config_type = "radiotracking"
-            parsed_config = parse_ini_file(content_str)
-            config_instance = RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
-
-        elif filename == "schedule.yml":
-            config_type = "schedule"
-            parsed_config = parse_yaml_file(content_str)
-            config_instance = ScheduleConfig(config_dir) if config_dir else ScheduleConfig()
-
-        elif filename == "soundscapepipe.yml":
-            config_type = "soundscapepipe"
-            parsed_config = parse_yaml_file(content_str)
-            config_instance = SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
-
-        elif filename == "authorized_keys":
-            config_type = "authorized_keys"
-            # For authorized_keys, we need to append to existing keys
-            config_instance = AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
-
-            # Load existing keys
-            existing_config = config_instance.load()
-            existing_keys = existing_config.get("keys", [])
-
-            # Parse new keys from uploaded file
-            new_keys = []
-            for idx, line in enumerate(content_str.strip().split("\n")):
-                parsed = config_instance._parse_key_line(line, len(existing_keys) + idx)
-                if parsed:
-                    new_keys.append(parsed)
-
-            # Combine existing and new keys
-            parsed_config = {"keys": existing_keys + new_keys}
-
-        elif filename == "cmdline.txt":
-            config_type = "cmdline"
-            # Plain text content
-            parsed_config = {"content": content_str}
-            config_instance = CmdlineConfig()
-
-        elif filename == "wireguard.conf":
-            config_type = "wireguard"
-            # Plain text content, will be validated as INI
-            parsed_config = {"content": content_str}
-            config_instance = WireguardConfig()
-
-        elif filename == "server.crt":
-            config_type = "mosquitto_cert"
-            # Plain text content (certificate)
-            parsed_config = {"content": content_str}
-            config_instance = MosquittoCertConfig()
-
-        elif filename == "server.conf":
-            config_type = "mosquitto_conf"
-            # Plain text content (mosquitto config)
-            parsed_config = {"content": content_str}
-            config_instance = MosquittoConfConfig()
-
-        elif filename == "geolocation":
-            config_type = "geolocation"
-            # Parse geolocation file format
-            lines = content_str.strip().split("\n")
-            data_lines = [
-                line.split("#")[0].strip() for line in lines if line.strip() and not line.strip().startswith("#")
-            ]
-
-            if len(data_lines) != 4:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Geolocation file must have exactly 4 data lines (got {len(data_lines)})",
-                )
-
-            try:
-                parsed_config = {
-                    "lat": float(data_lines[0]),
-                    "lon": float(data_lines[1]),
-                    "alt": float(data_lines[2]),
-                    "accuracy": float(data_lines[3]),
-                }
-            except (ValueError, IndexError) as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid geolocation file format: {str(e)}",
-                )
-
-            config_instance = GeolocationConfig()
-
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported configuration file: {file.filename}. "
-                "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
-                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation",
-            )
-
-    except ValueError as e:
+    filename_lower = file.filename.lower() if file.filename else ""
+    filename_to_type = {
+        "radiotracking.ini": "radiotracking",
+        "schedule.yml": "schedule", 
+        "soundscapepipe.yml": "soundscapepipe",
+        "authorized_keys": "authorized_keys",
+        "cmdline.txt": "cmdline",
+        "wireguard.conf": "wireguard",
+        "server.crt": "mosquitto_cert",
+        "server.conf": "mosquitto_conf",
+        "geolocation": "geolocation",
+    }
+    
+    config_type = filename_to_type.get(filename_lower)
+    if not config_type:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to parse configuration file: {str(e)}",
+            detail=f"Unsupported configuration file: {file.filename}. "
+            f"Supported files are: {', '.join(filename_to_type.keys())}",
         )
 
+    # Validate mtime and parse if needed
+    upload_mtime = parse_mtime_and_validate(mtime, force)
+    
+    # Create config instance and parse content
+    config_instance, parsed_config = create_config_instance(file.filename, config_type, content_str)
+    
     # Validate the configuration
-    try:
-        validation_errors = config_instance.validate(parsed_config)
-
-        if validation_errors:
-            return {
-                "success": False,
-                "valid": False,
-                "config_type": config_type,
-                "filename": file.filename,
-                "errors": validation_errors,
-                "message": f"Configuration file '{file.filename}' is invalid",
-            }
-
-        # Configuration is valid, save it
-        try:
-            config_instance.save(parsed_config)
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to save configuration: {str(e)}",
-            )
-
-        # Prepare response
-        response = {
-            "success": True,
-            "valid": True,
-            "config_type": config_type,
-            "filename": file.filename,
-            "message": f"Configuration file '{file.filename}' uploaded and validated successfully",
-            "config_path": str(config_instance.config_file),
-            "config_group": config_group,
-            "service_restarted": False,
-            "service_restart_error": None,
-        }
-
-        # Optionally restart the service
-        if restart_service:
-            # Service restart only works in tracker mode (not server mode)
-            if config_loader.is_server_mode():
-                response["service_restart_error"] = "Service restart is not available in server mode"
-            else:
-                # Map config type to service name (matching the UI mappings)
-                service_mapping = {
-                    "radiotracking": "radiotracking",
-                    "schedule": "wittypid",
-                    "soundscapepipe": "soundscapepipe",
-                }
-                service_name = service_mapping.get(config_type)
-
-                if not service_name:
-                    response["service_restart_error"] = f"Unknown config type: {config_type}"
-                else:
-                    success, error = restart_systemd_service(service_name)
-                    response["service_restarted"] = success
-
-                    if not success:
-                        response["service_restart_error"] = error
-                        response["message"] += f" (Warning: Service restart failed: {error})"
-                    else:
-                        response["message"] += f" and service '{service_name}' restarted"
-
-        return response
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to validate configuration: {str(e)}",
+    validation_errors = config_instance.validate(parsed_config)
+    if validation_errors:
+        return build_standard_response(
+            success=False,
+            config_type=config_type,
+            filename=file.filename,
+            valid=False,
+            errors=validation_errors,
+            message=f"Configuration file '{file.filename}' is invalid",
         )
+
+    # Check mtime comparison when not forced
+    existing_mtime = None
+    if not force and upload_mtime:
+        upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+        
+        if config_instance.config_file.exists():
+            existing_mtime = datetime.fromtimestamp(config_instance.config_file.stat().st_mtime)
+            
+            if upload_mtime_rounded <= existing_mtime:
+                return build_standard_response(
+                    success=False,
+                    config_type=config_type,
+                    filename=file.filename,
+                    valid=True,
+                    skipped=True,
+                    message=f"File is not newer. Upload: {upload_mtime.isoformat()} "
+                           f"(rounded: {upload_mtime_rounded.isoformat()}), Existing: {existing_mtime.isoformat()}",
+                    upload_mtime=upload_mtime.isoformat(),
+                    upload_mtime_rounded=upload_mtime_rounded.isoformat(),
+                    existing_mtime=existing_mtime.isoformat(),
+                    config_path=str(config_instance.config_file),
+                )
+
+    # Save configuration
+    try:
+        config_instance.save(parsed_config)
+        
+        # Set file mtime if provided and not forced
+        if upload_mtime and not force:
+            upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+            os.utime(config_instance.config_file, (upload_mtime_rounded.timestamp(), upload_mtime_rounded.timestamp()))
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
+
+    # Build success response
+    mtime_set = upload_mtime is not None and not force
+    message = f"Configuration file '{file.filename}' uploaded successfully"
+    if force:
+        message += " (forced - using current system time)"
+    elif mtime_set:
+        message += " (mtime preserved)"
+    
+    response_data = {
+        "valid": True,
+        "message": message,
+        "config_path": str(config_instance.config_file),
+        "mtime_set": mtime_set,
+        "force_used": force,
+    }
+    
+    # Add mtime info if provided
+    if upload_mtime:
+        upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+        response_data.update({
+            "upload_mtime": upload_mtime.isoformat(),
+            "upload_mtime_rounded": upload_mtime_rounded.isoformat(),
+        })
+    if existing_mtime:
+        response_data["existing_mtime"] = existing_mtime.isoformat()
+    
+    # Handle service restart
+    restart_result = handle_service_restart(config_type, restart_service)
+    response_data.update(restart_result)
+    
+    # Update message with restart info
+    if restart_result["service_restarted"]:
+        response_data["message"] += f" and service restarted"
+    elif restart_result["service_restart_error"]:
+        response_data["message"] += f" (Service restart failed: {restart_result['service_restart_error']})"
+
+    return build_standard_response(success=True, config_type=config_type, filename=file.filename, **response_data)
 
 
 # Recognized configuration files
@@ -367,25 +511,24 @@ SERVICE_MAPPING = {
 }
 
 
-def get_config_instance(config_type: str, config_dir: Optional[Path] = None):
+def get_config_instance(config_type: str):
     """Get appropriate config instance for the given type.
 
     Args:
         config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys,
                      cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
-        config_dir: Optional config directory (ignored for cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
 
     Returns:
         Config instance for the specified type
     """
     if config_type == "radiotracking":
-        return RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
+        return RadioTrackingConfig()
     elif config_type == "schedule":
-        return ScheduleConfig(config_dir) if config_dir else ScheduleConfig()
+        return ScheduleConfig()
     elif config_type == "soundscapepipe":
-        return SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
+        return SoundscapepipeConfig()
     elif config_type == "authorized_keys":
-        return AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
+        return AuthorizedKeysConfig()
     elif config_type == "cmdline":
         return CmdlineConfig()
     elif config_type == "wireguard":
@@ -454,7 +597,6 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
 @router.post("/config-zip")
 async def upload_config_zip(
     file: UploadFile = File(..., description="Zip file containing configuration files"),
-    config_group: Optional[str] = Form(None, description="Config group name for server mode"),
     restart_services: bool = Form(False, description="Restart affected services after upload"),
     pedantic: bool = Form(False, description="Reject upload if unknown files are present"),
 ):
@@ -476,15 +618,23 @@ async def upload_config_zip(
 
     In pedantic mode, the upload will be rejected if the zip contains any unrecognized files.
 
+    This endpoint is disabled in server mode.
+
     Args:
         file: Zip file containing configuration files
-        config_group: Optional config group name for server mode
         restart_services: Whether to restart affected services after successful upload (default: False)
         pedantic: Reject upload if unknown files are present (default: False)
 
     Returns:
         Detailed results including validation status for each file, files processed, ignored, and service restart status
     """
+    # Check if server mode is enabled - disable endpoint if so
+    if config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=403,
+            detail="Config upload endpoints are disabled in server mode",
+        )
+
     # Read zip file content
     try:
         content = await file.read()
@@ -512,15 +662,6 @@ async def upload_config_zip(
             detail=f"Failed to read zip file: {str(e)}",
         )
 
-    # Get config directory for the group (if specified)
-    config_dir = None
-    if config_group:
-        config_dir = config_loader.get_config_group_dir(config_group)
-        if not config_dir:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Config group '{config_group}' not found",
-            )
 
     # Identify recognized and unknown files
     recognized_files = {}
@@ -576,7 +717,7 @@ async def upload_config_zip(
 
         try:
             # Get config instance
-            config_instance = get_config_instance(config_type, config_dir)
+            config_instance = get_config_instance(config_type)
             config_instances[filename] = config_instance
 
             # Parse the file
@@ -629,7 +770,6 @@ async def upload_config_zip(
         "validation_results": validation_results,
         "services_restarted": [],
         "service_restart_errors": {},
-        "config_group": config_group,
     }
 
     # If not all files are valid, return validation errors without saving

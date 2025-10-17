@@ -207,16 +207,18 @@ class TsConfigApiClient:
         self,
         filename: str,
         content: str,
-        config_group: Optional[str] = None,
         restart_service: bool = False,
+        mtime: Optional[str] = None,
+        force: bool = False,
     ) -> Dict[str, Any]:
         """Upload a configuration file.
 
         Args:
             filename: Name of the config file
             content: File content (base64 encoded for binary files)
-            config_group: Optional config group name
             restart_service: Whether to restart the service after upload
+            mtime: Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50)
+            force: Force overwrite regardless of file modification time
 
         Returns:
             Upload result
@@ -234,9 +236,10 @@ class TsConfigApiClient:
             files = {"file": (filename, file_content)}
             data = {
                 "restart_service": str(restart_service).lower(),
+                "force": str(force).lower(),
             }
-            if config_group:
-                data["config_group"] = config_group
+            if mtime is not None:
+                data["mtime"] = str(mtime)
 
             response = await self.client.post("/api/upload/config", files=files, data=data)
             response.raise_for_status()
@@ -249,7 +252,6 @@ class TsConfigApiClient:
         self,
         filename: str,
         content: str,
-        config_group: Optional[str] = None,
         restart_services: bool = False,
         pedantic: bool = False,
     ) -> Dict[str, Any]:
@@ -258,7 +260,6 @@ class TsConfigApiClient:
         Args:
             filename: Name of the zip file
             content: File content (base64 encoded)
-            config_group: Optional config group name
             restart_services: Whether to restart services after upload
             pedantic: Reject upload if unknown files are present
 
@@ -276,8 +277,6 @@ class TsConfigApiClient:
                 "restart_services": str(restart_services).lower(),
                 "pedantic": str(pedantic).lower(),
             }
-            if config_group:
-                data["config_group"] = config_group
 
             response = await self.client.post("/api/upload/config-zip", files=files, data=data)
             response.raise_for_status()
