@@ -10,17 +10,13 @@ export function statusPage() {
         systemInfo: null,
         loading: true,
         refreshing: false,
-        statusError: null,
         lastUpdated: null,
         refreshInterval: null,
         refreshIntervalSeconds: 30, // Default value, will be loaded from config
         // Systemd services properties
         services: [],
         servicesLoading: false,
-        servicesError: null,
         actionLoading: false,
-        actionMessage: '',
-        actionError: false,
         // Service restart states (track individual service restart states)
         serviceRestartStates: {}, // serviceName -> 'idle' | 'restarting' | 'restarted'
         // Service start/stop states (track individual service start/stop states)
@@ -73,7 +69,6 @@ export function statusPage() {
             } else {
                 this.loading = true;
             }
-            this.statusError = null;
             
             try {
                 // Refresh system status, services, and timedatectl in parallel
@@ -105,7 +100,7 @@ export function statusPage() {
                 // Update local services data from the forced refresh
                 this.services = serviceManager.services;
             } catch (err) {
-                this.statusError = `Failed to load system status: ${err.message}`;
+                this.showToast(`Failed to load system status: ${err.message}`, 'error', { title: 'System Status Error' });
                 console.error('Status refresh error:', err);
             } finally {
                 this.loading = false;
@@ -175,9 +170,8 @@ export function statusPage() {
                 // Only update services if request was successful
                 this.services = data;
                 // Clear any previous errors on successful load
-                this.servicesError = null;
             } catch (err) {
-                this.servicesError = `Failed to load services: ${err.message}`;
+                this.showToast(`Failed to load services: ${err.message}`, 'error');
                 console.error('Services load error:', err);
                 // Don't clear services on error, keep showing previous data
             } finally {
@@ -222,10 +216,21 @@ export function statusPage() {
             return this.serviceStartStopStates[serviceName] || 'idle';
         },
 
+        showToast(message, type = 'info', options = {}) {
+            // Use global toast manager
+            if (window.toastManager) {
+                const defaultTitle = type === 'success' ? 'Success' : 
+                                   type === 'error' ? 'Error' : 
+                                   type === 'warning' ? 'Warning' : 'System Status';
+                window.toastManager.show(message, type, { title: defaultTitle, ...options });
+            } else {
+                // Fallback to console if toast manager not available
+                console.log(`[STATUS ${type.toUpperCase()}] ${message}`);
+            }
+        },
+
         async performAction(serviceName, action) {
             this.actionLoading = true;
-            this.actionMessage = '';
-            this.actionError = false;
             
             // For restart actions, set the service-specific state
             if (action === 'restart') {
@@ -250,8 +255,7 @@ export function statusPage() {
                     throw new Error(data.detail || `Failed to ${action} service`);
                 }
                 
-                this.actionMessage = data.message;
-                this.actionError = false;
+                this.showToast(data.message, 'success', { title: 'Service Action' });
                 
                 // For restart actions, set the service-specific state
                 if (action === 'restart') {
@@ -264,26 +268,14 @@ export function statusPage() {
                     this.services = services;
                 }, 1000);
                 
-                // Clear message after 5 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                }, 5000);
-                
             } catch (err) {
-                this.actionMessage = err.message;
-                this.actionError = true;
+                this.showToast(err.message, 'error', { title: 'Service Action Failed' });
                 console.error(`Service ${action} error:`, err);
                 
                 // For restart actions, reset the service-specific state
                 if (action === 'restart') {
                     this.setServiceRestartState(serviceName, 'idle');
                 }
-                
-                // Clear error message after 10 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                    this.actionError = false;
-                }, 10000);
             } finally {
                 this.actionLoading = false;
             }
@@ -291,8 +283,6 @@ export function statusPage() {
 
         async performStartStopAction(serviceName, action) {
             this.actionLoading = true;
-            this.actionMessage = '';
-            this.actionError = false;
             
             // Set the service-specific state
             if (action === 'start') {
@@ -319,8 +309,7 @@ export function statusPage() {
                     throw new Error(data.detail || `Failed to ${action} service`);
                 }
                 
-                this.actionMessage = data.message;
-                this.actionError = false;
+                this.showToast(data.message, 'success', { title: 'Service Action' });
                 
                 // Set the service-specific state to completed
                 if (action === 'start') {
@@ -335,24 +324,12 @@ export function statusPage() {
                     this.services = services;
                 }, 1000);
                 
-                // Clear message after 5 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                }, 5000);
-                
             } catch (err) {
-                this.actionMessage = err.message;
-                this.actionError = true;
+                this.showToast(err.message, 'error', { title: 'Service Action Failed' });
                 console.error(`Service ${action} error:`, err);
                 
                 // Reset the service-specific state on error
                 this.setServiceStartStopState(serviceName, 'idle');
-                
-                // Clear error message after 10 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                    this.actionError = false;
-                }, 10000);
             } finally {
                 this.actionLoading = false;
             }
@@ -360,8 +337,6 @@ export function statusPage() {
 
         async toggleEnable(serviceName, currentlyEnabled) {
             this.actionLoading = true;
-            this.actionMessage = '';
-            this.actionError = false;
             
             try {
                 // Determine the action based on current state
@@ -384,8 +359,7 @@ export function statusPage() {
                     throw new Error(data.detail || `Failed to ${action} service`);
                 }
                 
-                this.actionMessage = data.message;
-                this.actionError = false;
+                this.showToast(data.message, 'success', { title: 'Service Enable/Disable' });
                 
                 // Refresh services list after action
                 setTimeout(async () => {
@@ -393,21 +367,9 @@ export function statusPage() {
                     this.services = services;
                 }, 1000);
                 
-                // Clear message after 5 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                }, 5000);
-                
             } catch (err) {
-                this.actionMessage = err.message;
-                this.actionError = true;
+                this.showToast(err.message, 'error', { title: 'Service Enable/Disable Failed' });
                 console.error(`Service toggle error:`, err);
-                
-                // Clear error message after 10 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                    this.actionError = false;
-                }, 10000);
             } finally {
                 this.actionLoading = false;
             }
@@ -457,12 +419,7 @@ export function statusPage() {
                 const data = await response.json();
                 
                 // Show success message
-                window.dispatchEvent(new CustomEvent('show-message', {
-                    detail: { 
-                        message: data.message || 'System reboot initiated. The system will restart shortly.', 
-                        isError: false 
-                    }
-                }));
+                this.showToast(data.message || 'System reboot initiated. The system will restart shortly.', 'success', { title: 'System Reboot' });
                 
                 // Keep the loading state since the system will reboot
                 // The page will become inaccessible, so no need to reset loading state
@@ -471,12 +428,7 @@ export function statusPage() {
                 this.rebootLoading = false;
                 
                 // Show error message
-                window.dispatchEvent(new CustomEvent('show-message', {
-                    detail: { 
-                        message: `Failed to reboot system: ${err.message}`, 
-                        isError: true 
-                    }
-                }));
+                this.showToast(`Failed to reboot system: ${err.message}`, 'error', { title: 'System Reboot Failed' });
                 
                 console.error('Reboot error:', err);
             }
@@ -520,32 +472,21 @@ export function statusPage() {
                 const data = await response.json();
                 
                 // Show success message
-                this.actionMessage = data.message || `Reboot protection ${this.rebootProtectionEnabled ? 'enabled' : 'disabled'}`;
-                this.actionError = false;
+                let message = data.message || `Reboot protection ${this.rebootProtectionEnabled ? 'enabled' : 'disabled'}`;
                 
                 // Show warnings if any
                 if (data.warnings && data.warnings.length > 0) {
-                    this.actionMessage += ` (Warnings: ${data.warnings.join(', ')})`;
+                    message += ` (Warnings: ${data.warnings.join(', ')})`;
                 }
                 
-                // Clear message after 5 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                }, 5000);
+                this.showToast(message, 'success', { title: 'Reboot Protection' });
                 
             } catch (err) {
                 // Revert the toggle state on error
                 this.rebootProtectionEnabled = !this.rebootProtectionEnabled;
                 
-                this.actionMessage = `Failed to toggle reboot protection: ${err.message}`;
-                this.actionError = true;
+                this.showToast(`Failed to toggle reboot protection: ${err.message}`, 'error', { title: 'Reboot Protection Failed' });
                 console.error('Reboot protection toggle error:', err);
-                
-                // Clear error message after 10 seconds
-                setTimeout(() => {
-                    this.actionMessage = '';
-                    this.actionError = false;
-                }, 10000);
             } finally {
                 this.rebootProtectionLoading = false;
             }

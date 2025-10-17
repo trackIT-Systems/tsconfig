@@ -18,38 +18,7 @@
             </div>
         </div>
 
-        <!-- Status Error Alert -->
-        <template x-if="statusError">
-            <div x-cloak class="alert alert-danger d-flex align-items-center mb-4" role="alert">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <div x-text="statusError"></div>
-            </div>
-        </template>
-
-        <!-- Systemd Services Messages -->
-        <template x-if="actionMessage || servicesError">
-            <div class="row mb-3">
-                <div class="col">
-                    <!-- Action feedback -->
-                    <template x-if="actionMessage">
-                        <div class="alert" 
-                                :class="actionError ? 'alert-danger' : 'alert-success'" 
-                                role="alert">
-                            <i :class="actionError ? 'fas fa-exclamation-triangle' : 'fas fa-check-circle'" class="me-2"></i>
-                            <span x-text="actionMessage"></span>
-                        </div>
-                    </template>
-
-                    <!-- Error state -->
-                    <template x-if="servicesError">
-                        <div class="alert alert-danger d-flex align-items-center" role="alert">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <div x-text="servicesError"></div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </template>
+        <!-- Status and service notifications appear as toast messages -->
 
         <!-- Systemd Services -->
         <div class="row mb-3">
@@ -293,7 +262,7 @@
                                 </div>
                                 <h6 class="card-title text-muted">Hardware Model</h6>
                                 <div class="status-value text-danger" 
-                                     x-text="showRevision ? `Revision: ${systemInfo?.hardware?.revision || 'N/A'}` : (systemInfo?.hardware?.model || 'N/A')"
+                                     x-text="showRevision ? `Revision: ${systemInfo?.hardware?.revision || 'N/A'}` : ((systemInfo?.hardware?.model || 'N/A').startsWith('Raspberry') ? (systemInfo?.hardware?.model || 'N/A').substring(10) : (systemInfo?.hardware?.model || 'N/A'))"
                                      style="transition: all 0.2s ease;"></div>
                             </div>
                         </div>

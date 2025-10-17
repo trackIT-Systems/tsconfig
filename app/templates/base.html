@@ -28,9 +28,22 @@
 <body class="d-flex flex-column h-100">
     {% include 'partials/navbar.html' %}
     
+    <!-- Global Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1200;" id="globalToastContainer">
+        <div class="toast" id="globalToast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <i class="toast-icon me-2 fas fa-info-circle text-primary"></i>
+                <strong class="me-auto toast-title">tsconfig</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                <!-- Dynamic message content -->
+            </div>
+        </div>
+    </div>
+
     <main>
         <div class="container mt-4">
-            {% include 'partials/alerts.html' %}
             {% block content %}{% endblock %}
         </div>
     </main>
@@ -40,6 +53,9 @@
     {% include 'partials/shell_modal.html' %}
     
     {% block extra_body %}{% endblock %}
+    
+    <!-- Load toast utility first -->
+    <script type="module" src="{{ url_for('static', path='js/utils/toastUtils.js') }}"></script>
     
     <!-- Load app modules FIRST - these will expose components to window -->
     <script type="module" src="{{ url_for('static', path='js/app.js') }}"></script>

@@ -3,9 +3,6 @@ import { apiUrl } from '../utils/apiUtils.js';
 export function configManager() {
     return {
         activeConfig: 'status',  // Default to status page
-        message: '',
-        error: false,
-        warning: false,
         expertMode: false,  // Add expert mode state
         availableServices: [],  // List of services with config files available
         servicesLoaded: false,  // Track if services have been loaded
@@ -175,9 +172,11 @@ export function configManager() {
             
             // Listen for Alpine.js custom events from child components (like soundscapepipe)
             this.$el.addEventListener('message', (event) => {
-                this.message = event.detail.message;
-                this.error = event.detail.error;
-                this.warning = false;
+                // Convert legacy message events to toasts
+                if (event.detail.message) {
+                    const type = event.detail.error ? 'error' : 'info';
+                    this.showToast(event.detail.message, type);
+                }
             });
             
             // Set up periodic hostname refresh (every 30 seconds)
@@ -201,9 +200,20 @@ export function configManager() {
         },
 
         showMessage(message, isError) {
-            this.message = message;
-            this.error = isError;
-            this.warning = !isError && message.includes("No configuration found");
+            // Legacy support - convert to toast
+            const type = isError ? 'error' : message.includes("No configuration found") ? 'warning' : 'success';
+            this.showToast(message, type);
+        },
+
+        showToast(message, type = 'info', options = {}) {
+            // Use global toast manager for immediate feedback
+            if (window.toastManager) {
+                window.toastManager.show(message, type, options);
+            } else {
+                // Fallback to console and existing alert system
+                console.log(`[CONFIG ${type.toUpperCase()}] ${message}`);
+                this.showMessage(message, type === 'error');
+            }
         },
 
         async loadAvailableServices() {

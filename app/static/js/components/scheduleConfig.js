@@ -78,10 +78,7 @@ export function scheduleConfig() {
                     schedule: []
                 };
                 
-                // Clear any existing messages
-                this.message = '';
-                this.error = false;
-                this.warning = false;
+                // Clear any existing messages (now handled by toasts)
                 
                 // Reload the configuration
                 await this.loadConfig();
@@ -178,9 +175,7 @@ export function scheduleConfig() {
                 }
                 
                 // Use the same message system as the schedule component
-                window.dispatchEvent(new CustomEvent('show-message', {
-                    detail: { message: data.message, isError: false }
-                }));
+                this.showMessage(data.message, false);
                 
                 // Refresh service status after action
                 setTimeout(async () => {
@@ -188,9 +183,7 @@ export function scheduleConfig() {
                 }, 1000);
                 
             } catch (err) {
-                window.dispatchEvent(new CustomEvent('show-message', {
-                    detail: { message: err.message, isError: true }
-                }));
+                this.showMessage(err.message, true);
                 console.error(`Service toggle error:`, err);
             } finally {
                 this.actionLoading = false;
@@ -310,7 +303,14 @@ export function scheduleConfig() {
         },
 
         showMessage(message, isError) {
-            // Dispatch a custom event that the parent can listen for
+            // Use toast for immediate feedback
+            if (window.toastManager) {
+                const type = isError ? 'error' : 'success';
+                const title = isError ? 'Schedule Configuration Error' : 'Schedule Configuration';
+                window.toastManager.show(message, type, { title });
+            }
+            
+            // Also dispatch a custom event that the parent can listen for (backward compatibility)
             window.dispatchEvent(new CustomEvent('show-message', {
                 detail: { message, isError }
             }));

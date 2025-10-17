@@ -5,8 +5,6 @@ export function sshKeysConfig() {
         keys: [],
         newKey: '',
         loading: false,
-        message: '',
-        messageType: 'success',
 
         // Server mode helper
         get serverMode() {
@@ -56,7 +54,6 @@ export function sshKeysConfig() {
             }
 
             this.loading = true;
-            this.message = '';
 
             try {
                 // Build API URL with config_group parameter if in server mode
@@ -98,7 +95,6 @@ export function sshKeysConfig() {
             }
 
             this.loading = true;
-            this.message = '';
 
             try {
                 // Build API URL with config_group parameter if in server mode
@@ -127,14 +123,14 @@ export function sshKeysConfig() {
         },
 
         showMessage(msg, type = 'success') {
-            this.message = msg;
-            this.messageType = type;
-            
-            // Auto-hide success messages after 5 seconds
-            if (type === 'success') {
-                setTimeout(() => {
-                    this.message = '';
-                }, 5000);
+            // Use global toast manager
+            if (window.toastManager) {
+                const title = type === 'success' ? 'SSH Keys - Success' : 
+                             type === 'error' ? 'SSH Keys - Error' : 'SSH Keys';
+                window.toastManager.show(msg, type, { title });
+            } else {
+                // Fallback to console if toast manager not available
+                console.log(`[SSH ${type.toUpperCase()}] ${msg}`);
             }
         }
     };

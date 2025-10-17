@@ -635,8 +635,15 @@ export function soundscapepipeConfig() {
         },
 
         showMessage(message, isError = false) {
-            // Dispatch to parent component
-            this.$dispatch('message', { message, error: isError });
+            // Use global toast manager for immediate feedback
+            if (window.toastManager) {
+                const type = isError ? 'error' : 'success';
+                const title = isError ? 'Soundscapepipe Error' : 'Soundscapepipe';
+                window.toastManager.show(message, type, { title });
+            } else {
+                // Fallback: dispatch to parent component for legacy support
+                this.$dispatch('message', { message, error: isError });
+            }
         },
 
         streamLogs(serviceName) {

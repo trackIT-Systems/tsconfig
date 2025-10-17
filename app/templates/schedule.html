@@ -422,13 +422,7 @@
                                 </form>
                             </div>
 
-                            <!-- Messages -->
-                            <div x-show="message" 
-                                 class="alert" 
-                                 :class="{ 'alert-success': messageType === 'success', 'alert-danger': messageType === 'error' }"
-                                 x-transition>
-                                <span x-text="message"></span>
-                            </div>
+                            <!-- Toast notifications appear in top-right corner -->
                         </div>
                     </div>
                 </div>
@@ -436,3 +430,4 @@
         </div>
     </div>
 </div>
+

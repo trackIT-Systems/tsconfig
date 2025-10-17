@@ -79,10 +79,17 @@ export function radiotrackingConfig() {
         actionLoading: false,
 
         dispatchMessage(message, isError) {
-            // Dispatch a custom event that the parent can listen for
-            window.dispatchEvent(new CustomEvent('show-message', {
-                detail: { message, isError }
-            }));
+            // Use global toast manager for immediate feedback
+            if (window.toastManager) {
+                const type = isError ? 'error' : 'success';
+                const title = isError ? 'Radio Tracking Error' : 'Radio Tracking';
+                window.toastManager.show(message, type, { title });
+            } else {
+                // Fallback: dispatch to parent component for legacy support
+                window.dispatchEvent(new CustomEvent('show-message', {
+                    detail: { message, isError }
+                }));
+            }
         },
 
         addDevice() {
