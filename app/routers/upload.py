@@ -1,11 +1,12 @@
 """Configuration file upload endpoints."""
 
+import calendar
 import os
 import subprocess
 import time
 import zipfile
 from configparser import ConfigParser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -114,11 +115,11 @@ def parse_mtime_and_validate(mtime: Optional[str], force: bool) -> Optional[date
     """Parse and validate mtime parameter.
     
     Args:
-        mtime: ISO timestamp string or None
+        mtime: ISO timestamp string or None (interpreted as UTC if no timezone specified)
         force: Whether force flag is set
         
     Returns:
-        Parsed datetime or None
+        Parsed datetime (naive, in UTC) or None
         
     Raises:
         HTTPException: If validation fails
@@ -131,11 +132,18 @@ def parse_mtime_and_validate(mtime: Optional[str], force: bool) -> Optional[date
     
     if mtime is not None:
         try:
-            return datetime.fromisoformat(mtime)
+            dt = datetime.fromisoformat(mtime)
+            # If naive (no timezone), interpret as UTC
+            if dt.tzinfo is None:
+                # Already naive, just treating it as UTC implicitly
+                return dt
+            else:
+                # Convert to UTC and make naive
+                return dt.astimezone(timezone.utc).replace(tzinfo=None)
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid mtime format '{mtime}'. Expected ISO format like '2025-10-17T08:59:50'",
+                detail=f"Invalid mtime format '{mtime}'. Expected ISO format like '2025-10-17T08:59:50' or '2025-10-17T08:59:50+00:00'",
             )
     
     return None
@@ -420,7 +428,8 @@ async def upload_config(
         upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
         
         if config_instance.config_file.exists():
-            existing_mtime = datetime.fromtimestamp(config_instance.config_file.stat().st_mtime)
+            # Read file mtime as UTC (naive datetime)
+            existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
             
             if upload_mtime_rounded <= existing_mtime:
                 return build_standard_response(
@@ -444,7 +453,9 @@ async def upload_config(
         # Set file mtime if provided and not forced
         if upload_mtime and not force:
             upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
-            os.utime(config_instance.config_file, (upload_mtime_rounded.timestamp(), upload_mtime_rounded.timestamp()))
+            # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
+            timestamp = calendar.timegm(upload_mtime_rounded.timetuple())
+            os.utime(config_instance.config_file, (timestamp, timestamp))
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
@@ -551,7 +562,7 @@ def extract_zip_file_timestamps(zip_buffer: BytesIO) -> Dict[str, datetime]:
         zip_buffer: BytesIO buffer containing zip data
         
     Returns:
-        Dictionary mapping filename to datetime object
+        Dictionary mapping filename to datetime object (naive, interpreted as UTC)
     """
     timestamps = {}
     
@@ -564,8 +575,9 @@ def extract_zip_file_timestamps(zip_buffer: BytesIO) -> Dict[str, datetime]:
             # Get just the basename (ignore any directory structure in zip)
             basename = zip_info.filename.split("/")[-1]
             
-            # Convert zip timestamp to datetime
+            # Convert zip timestamp to datetime (interpreted as UTC)
             # zip_info.date_time is (year, month, day, hour, minute, second)
+            # Zip timestamps don't have timezone info, so we treat them as UTC
             if len(zip_info.date_time) >= 6:
                 zip_datetime = datetime(*zip_info.date_time[:6])
                 timestamps[basename] = zip_datetime
@@ -600,7 +612,8 @@ def compare_file_timestamps(config_instances: Dict[str, Any], zip_timestamps: Di
         }
         
         if config_instance.config_file.exists():
-            existing_mtime = datetime.fromtimestamp(config_instance.config_file.stat().st_mtime)
+            # Read file mtime as UTC (naive datetime)
+            existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
             result["existing_timestamp"] = existing_mtime.isoformat()
             
             # Compare rounded zip timestamp with existing timestamp
@@ -925,7 +938,9 @@ async def upload_config_zip(
                 if zip_timestamp:
                     zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
                     config_file_path = config_instances[filename].config_file
-                    os.utime(config_file_path, (zip_timestamp_rounded.timestamp(), zip_timestamp_rounded.timestamp()))
+                    # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
+                    timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
+                    os.utime(config_file_path, (timestamp, timestamp))
             
             saved_files.append(filename)
         except Exception as e:
