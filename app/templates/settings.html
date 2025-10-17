@@ -79,18 +79,6 @@
                                 <!-- Service status elements - hidden in server mode -->
                                 <template x-if="!serverMode">
                                     <div class="d-flex align-items-center">
-                                        <!-- Enable/Disable Toggle -->
-                                        <div class="form-check form-switch mb-0">
-                                            <input class="form-check-input" 
-                                                   type="checkbox" 
-                                                   id="enableSwitch-wittypid"
-                                                   :checked="serviceStatus.enabled"
-                                                   @change="toggleEnable('wittypid', serviceStatus.enabled)"
-                                                   :disabled="actionLoading || serviceStatus.status === 'not-found'">
-                                            <label class="form-check-label" for="enableSwitch-wittypid" style="display: none;">
-                                            </label>
-                                        </div>
-                                        
                                         <h5 class="card-title mb-0 me-2">wittypid</h5>
                                         <!-- Service Status Indicator -->
                                         <div class="d-flex align-items-center gap-2">
@@ -116,14 +104,70 @@
                                     <h5 class="card-title mb-0">Schedule Configuration</h5>
                                 </template>
                             </div>
-                            <button type="button" 
-                                    class="btn btn-outline-info btn-sm" 
-                                    @click="streamLogs('wittypid')"
-                                    title="View wittypid service logs"
-                                    x-show="!serverMode">
-                                <i class="fas fa-file-alt me-1"></i>
-                                Logs
-                            </button>
+                            <div class="d-flex align-items-center gap-2">
+                                <!-- Start/Stop button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('wittypid') === 'idle') || getServiceStartStopState('wittypid') === 'started',
+                                            'btn-success': getServiceStartStopState('wittypid') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('wittypid') === 'idle') || getServiceStartStopState('wittypid') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('wittypid') === 'stopping'
+                                        }"
+                                        @click="performStartStopAction('wittypid', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('wittypid') === 'starting' || getServiceStartStopState('wittypid') === 'stopping'"
+                                        :title="serviceStatus.active ? 'Stop service' : 'Start service'"
+                                        x-show="!serverMode">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('wittypid') === 'idle'">
+                                        <i class="fas fa-play"></i>
+                                    </template>
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('wittypid') === 'idle'">
+                                        <i class="fas fa-stop"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('wittypid') === 'starting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('wittypid') === 'stopping'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('wittypid') === 'started'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('wittypid') === 'stopped'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <!-- Restart button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-warning': getServiceRestartState('wittypid') === 'idle',
+                                            'btn-primary': getServiceRestartState('wittypid') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('wittypid') === 'restarted'
+                                        }"
+                                        @click="performAction('wittypid', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('wittypid') === 'restarting'"
+                                        title="Restart service"
+                                        x-show="!serverMode">
+                                    <template x-if="getServiceRestartState('wittypid') === 'idle'">
+                                        <i class="fas fa-redo"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('wittypid') === 'restarting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('wittypid') === 'restarted'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm" 
+                                        @click="streamLogs('wittypid')"
+                                        title="View wittypid service logs"
+                                        x-show="!serverMode">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Logs
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <!-- Schedule Configuration Form -->

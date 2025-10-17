@@ -252,8 +252,8 @@ async def list_services():
 @router.post("/action")
 async def service_action(action: ServiceAction):
     """Perform action on a systemd service."""
-    if action.action not in ["start", "stop", "restart", "enable", "disable"]:
-        raise HTTPException(status_code=400, detail="Invalid action. Must be start, stop, restart, enable, or disable")
+    if action.action not in ["start", "stop", "restart"]:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be start, stop, or restart")
 
     # Validate service is in our configured list
     configured_services = get_configured_services(include_expert=True)
@@ -262,13 +262,8 @@ async def service_action(action: ServiceAction):
         raise HTTPException(status_code=400, detail="Service not in configured list")
 
     try:
-        # Build systemctl command based on action
-        if action.action in ["enable", "disable"]:
-            # Use --now flag for enable/disable to also start/stop the service
-            cmd = ["sudo", "systemctl", action.action, "--now", action.service]
-        else:
-            # Regular start/stop/restart commands
-            cmd = ["sudo", "systemctl", action.action, action.service]
+        # Build systemctl command
+        cmd = ["sudo", "systemctl", action.action, action.service]
 
         # Execute systemctl command
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -279,13 +274,8 @@ async def service_action(action: ServiceAction):
                 status_code=500, detail=f"Failed to {action.action} service {action.service}: {error_msg}"
             )
 
-        # Create appropriate success message
-        if action.action == "enable":
-            message = f"Successfully enabled and started service {action.service}"
-        elif action.action == "disable":
-            message = f"Successfully disabled and stopped service {action.service}"
-        else:
-            message = f"Successfully {action.action}ed service {action.service}"
+        # Create success message
+        message = f"Successfully {action.action}ed service {action.service}"
 
         return {"success": True, "message": message, "service": action.service, "action": action.action}
 

@@ -88,19 +88,6 @@
                                         <!-- Service name and main status -->
                                         <div class="flex-grow-1">
                                             <div class="d-flex align-items-center gap-2">
-                                                <!-- Enable/Disable Toggle -->
-                                                <div class="form-check form-switch mb-0" style="padding-left: 0; min-height: auto;">
-                                                    <input class="form-check-input" 
-                                                           type="checkbox" 
-                                                           :id="'enableSwitch-' + service.name"
-                                                           :checked="service.enabled"
-                                                           @change="toggleEnable(service.name, service.enabled)"
-                                                           :disabled="actionLoading || service.status === 'not-found'"
-                                                           style="margin: 0; transform: scale(0.8);">
-                                                    <label class="form-check-label" :for="'enableSwitch-' + service.name" style="display: none;">
-                                                    </label>
-                                                </div>
-                                                
                                                 <h6 class="mb-0 fw-bold">
                                                     <code class="text-primary" x-text="service.name"></code>
                                                 </h6>

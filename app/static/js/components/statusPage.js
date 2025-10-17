@@ -1,4 +1,5 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
+import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { systemConfigManager } from '../managers/systemConfigManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
@@ -7,6 +8,7 @@ import { apiUrl } from '../utils/apiUtils.js';
 export function statusPage() {
     return {
         ...saveStateMixin(),
+        ...serviceActionMixin(),
         systemInfo: null,
         loading: true,
         refreshing: false,
@@ -17,10 +19,6 @@ export function statusPage() {
         services: [],
         servicesLoading: false,
         actionLoading: false,
-        // Service restart states (track individual service restart states)
-        serviceRestartStates: {}, // serviceName -> 'idle' | 'restarting' | 'restarted'
-        // Service start/stop states (track individual service start/stop states)
-        serviceStartStopStates: {}, // serviceName -> 'idle' | 'starting' | 'stopping' | 'started' | 'stopped'
         // Reboot functionality
         rebootLoading: false,
         // Reboot protection functionality
@@ -188,33 +186,6 @@ export function statusPage() {
             }
         },
 
-        setServiceRestartState(serviceName, state) {
-            this.serviceRestartStates[serviceName] = state;
-            if (state === 'restarted') {
-                setTimeout(() => {
-                    this.serviceRestartStates[serviceName] = 'idle';
-                }, 5000);
-            }
-        },
-
-        getServiceRestartState(serviceName) {
-            return this.serviceRestartStates[serviceName] || 'idle';
-        },
-
-        setServiceStartStopState(serviceName, state) {
-            this.serviceStartStopStates[serviceName] = state;
-            
-            // Auto-reset after 5 seconds for completed states
-            if (state === 'started' || state === 'stopped') {
-                setTimeout(() => {
-                    this.serviceStartStopStates[serviceName] = 'idle';
-                }, 5000);
-            }
-        },
-
-        getServiceStartStopState(serviceName) {
-            return this.serviceStartStopStates[serviceName] || 'idle';
-        },
 
         showToast(message, type = 'info', options = {}) {
             // Use global toast manager
@@ -226,152 +197,6 @@ export function statusPage() {
             } else {
                 // Fallback to console if toast manager not available
                 console.log(`[STATUS ${type.toUpperCase()}] ${message}`);
-            }
-        },
-
-        async performAction(serviceName, action) {
-            this.actionLoading = true;
-            
-            // For restart actions, set the service-specific state
-            if (action === 'restart') {
-                this.setServiceRestartState(serviceName, 'restarting');
-            }
-            
-            try {
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
-                this.showToast(data.message, 'success', { title: 'Service Action' });
-                
-                // For restart actions, set the service-specific state
-                if (action === 'restart') {
-                    this.setServiceRestartState(serviceName, 'restarted');
-                }
-                
-                // Refresh services list after action
-                setTimeout(async () => {
-                    const services = await serviceManager.getServices(true); // Force refresh
-                    this.services = services;
-                }, 1000);
-                
-            } catch (err) {
-                this.showToast(err.message, 'error', { title: 'Service Action Failed' });
-                console.error(`Service ${action} error:`, err);
-                
-                // For restart actions, reset the service-specific state
-                if (action === 'restart') {
-                    this.setServiceRestartState(serviceName, 'idle');
-                }
-            } finally {
-                this.actionLoading = false;
-            }
-        },
-
-        async performStartStopAction(serviceName, action) {
-            this.actionLoading = true;
-            
-            // Set the service-specific state
-            if (action === 'start') {
-                this.setServiceStartStopState(serviceName, 'starting');
-            } else if (action === 'stop') {
-                this.setServiceStartStopState(serviceName, 'stopping');
-            }
-            
-            try {
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
-                this.showToast(data.message, 'success', { title: 'Service Action' });
-                
-                // Set the service-specific state to completed
-                if (action === 'start') {
-                    this.setServiceStartStopState(serviceName, 'started');
-                } else if (action === 'stop') {
-                    this.setServiceStartStopState(serviceName, 'stopped');
-                }
-                
-                // Refresh services list after action
-                setTimeout(async () => {
-                    const services = await serviceManager.getServices(true); // Force refresh
-                    this.services = services;
-                }, 1000);
-                
-            } catch (err) {
-                this.showToast(err.message, 'error', { title: 'Service Action Failed' });
-                console.error(`Service ${action} error:`, err);
-                
-                // Reset the service-specific state on error
-                this.setServiceStartStopState(serviceName, 'idle');
-            } finally {
-                this.actionLoading = false;
-            }
-        },
-
-        async toggleEnable(serviceName, currentlyEnabled) {
-            this.actionLoading = true;
-            
-            try {
-                // Determine the action based on current state
-                const action = currentlyEnabled ? 'disable' : 'enable';
-                
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
-                this.showToast(data.message, 'success', { title: 'Service Enable/Disable' });
-                
-                // Refresh services list after action
-                setTimeout(async () => {
-                    const services = await serviceManager.getServices(true); // Force refresh
-                    this.services = services;
-                }, 1000);
-                
-            } catch (err) {
-                this.showToast(err.message, 'error', { title: 'Service Enable/Disable Failed' });
-                console.error(`Service toggle error:`, err);
-            } finally {
-                this.actionLoading = false;
             }
         },
 

@@ -1,4 +1,5 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
+import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
 import { apiUrl } from '../utils/apiUtils.js';
@@ -6,6 +7,7 @@ import { apiUrl } from '../utils/apiUtils.js';
 export function soundscapepipeConfig() {
     return {
         ...saveStateMixin(),
+        ...serviceActionMixin(),
         
         // Server mode helper
         get serverMode() {
@@ -128,45 +130,6 @@ export function soundscapepipeConfig() {
                 }
             } catch (error) {
                 console.error('Failed to load service status:', error);
-            }
-        },
-
-        async toggleEnable(serviceName, currentlyEnabled) {
-            this.actionLoading = true;
-            
-            try {
-                // Determine the action based on current state
-                const action = currentlyEnabled ? 'disable' : 'enable';
-                
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
-                this.showMessage(data.message, false);
-                
-                // Refresh service status after action
-                setTimeout(async () => {
-                    await this.loadServiceStatus();
-                }, 1000);
-                
-            } catch (err) {
-                this.showMessage(err.message, true);
-                console.error(`Service toggle error:`, err);
-            } finally {
-                this.actionLoading = false;
             }
         },
 

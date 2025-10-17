@@ -1,4 +1,5 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
+import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
@@ -8,6 +9,7 @@ import { apiUrl } from '../utils/apiUtils.js';
 export function scheduleConfig() {
     return {
         ...saveStateMixin(),
+        ...serviceActionMixin(),
         config: {
             force_on: false,
             button_delay: "00:00",
@@ -148,46 +150,6 @@ export function scheduleConfig() {
                 console.error('Failed to load service status:', error);
             } finally {
                 this.serviceStatusLoading = false;
-            }
-        },
-
-        async toggleEnable(serviceName, currentlyEnabled) {
-            this.actionLoading = true;
-            
-            try {
-                // Determine the action based on current state
-                const action = currentlyEnabled ? 'disable' : 'enable';
-                
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
-                // Use the same message system as the schedule component
-                this.showMessage(data.message, false);
-                
-                // Refresh service status after action
-                setTimeout(async () => {
-                    await this.loadServiceStatus();
-                }, 1000);
-                
-            } catch (err) {
-                this.showMessage(err.message, true);
-                console.error(`Service toggle error:`, err);
-            } finally {
-                this.actionLoading = false;
             }
         },
 
