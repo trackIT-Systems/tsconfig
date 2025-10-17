@@ -22,6 +22,15 @@
                         SSH Keys
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'configupload' }"
+                            @click="systemTab = 'configupload'"
+                            type="button">
+                        <i class="fas fa-file-archive me-1"></i>
+                        Config Upload
+                    </button>
+                </li>
             </ul>
 
             <!-- Tab Content -->
@@ -423,6 +432,165 @@
                             </div>
 
                             <!-- Toast notifications appear in top-right corner -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Config Upload Tab -->
+                <div x-show="systemTab === 'configupload'">
+                    <div class="card" x-data="configUpload()" x-init="init()">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-file-archive me-2"></i>
+                                Configuration Upload
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form @submit.prevent="uploadConfig" enctype="multipart/form-data">
+                                <!-- File Selection -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-file me-2"></i>
+                                        Select Configuration ZIP
+                                    </h6>
+                                    <div class="mb-3">
+                                        <label class="form-label">Configuration ZIP File</label>
+                                        <input type="file" 
+                                               class="form-control" 
+                                               @change="handleFileChange"
+                                               accept=".zip"
+                                               :disabled="uploading"
+                                               required>
+                                        <div class="form-text">
+                                            Upload a ZIP file containing configuration files. All files will be validated before applying any changes. 
+                                            Supported: <code>radiotracking.ini</code>, <code>schedule.yml</code>, <code>soundscapepipe.yml</code>, 
+                                            <code>authorized_keys</code>, <code>cmdline.txt</code>, <code>wireguard.conf</code>, <code>server.crt</code>, 
+                                            <code>server.conf</code>, <code>geolocation</code>.
+                                        </div>
+                                        <template x-if="selectedFile">
+                                            <div class="mt-2">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-file-archive me-1"></i>
+                                                    Selected: <span x-text="selectedFile.name"></span>
+                                                    (<span x-text="formatFileSize(selectedFile.size)"></span>)
+                                                </small>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Upload Options -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-cog me-2"></i>
+                                        Upload Options
+                                    </h6>
+                                    
+                                    <!-- Force Overwrite -->
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="options.force" 
+                                                   id="forceOverwrite"
+                                                   :disabled="uploading">
+                                            <label class="form-check-label" for="forceOverwrite">
+                                                <strong>Force Overwrite</strong>
+                                            </label>
+                                        </div>
+                                        <div class="form-text ms-4">
+                                            When enabled, all files will be overwritten regardless of modification timestamps. 
+                                            When disabled, only newer files will be applied.
+                                        </div>
+                                    </div>
+
+                                    <!-- Pedantic Mode -->
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="options.pedantic" 
+                                                   id="pedanticMode"
+                                                   :disabled="uploading || options.force">
+                                            <label class="form-check-label" for="pedanticMode">
+                                                <strong>Pedantic Mode</strong>
+                                            </label>
+                                        </div>
+                                        <div class="form-text ms-4">
+                                            Reject upload if any existing file is newer than the ZIP version, or if unknown files are present.
+                                            This option is ignored when Force Overwrite is enabled.
+                                        </div>
+                                    </div>
+
+                                    <!-- Restart Services -->
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="options.restartServices" 
+                                                   id="restartServices"
+                                                   :disabled="uploading || options.reboot">
+                                            <label class="form-check-label" for="restartServices">
+                                                <strong>Restart Services</strong>
+                                            </label>
+                                        </div>
+                                        <div class="form-text ms-4">
+                                            Automatically restart affected services after successfully applying the configuration. 
+                                            This option is ignored if System Reboot is enabled.
+                                        </div>
+                                    </div>
+
+                                    <!-- System Reboot -->
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="options.reboot" 
+                                                   id="systemReboot"
+                                                   :disabled="uploading">
+                                            <label class="form-check-label" for="systemReboot">
+                                                <strong>System Reboot</strong>
+                                                <i class="fas fa-exclamation-triangle text-warning ms-1"></i>
+                                            </label>
+                                        </div>
+                                        <div class="form-text ms-4">
+                                            Automatically reboot the system after successfully applying the configuration. 
+                                            This will restart all services and temporarily interrupt connectivity.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Upload Button -->
+                                <div class="d-grid gap-2">
+                                    <button type="submit" 
+                                            class="btn btn-lg"
+                                            :class="{
+                                                'btn-primary': !uploading && !uploadSuccess,
+                                                'btn-success': uploadSuccess,
+                                                'btn-secondary': uploading
+                                            }"
+                                            :disabled="uploading || !selectedFile">
+                                        <template x-if="!uploading && !uploadSuccess">
+                                            <span>
+                                                <i class="fas fa-upload me-2"></i>
+                                                Upload Configuration
+                                            </span>
+                                        </template>
+                                        <template x-if="uploading">
+                                            <span>
+                                                <i class="fas fa-spinner fa-spin me-2"></i>
+                                                Uploading...
+                                            </span>
+                                        </template>
+                                        <template x-if="uploadSuccess">
+                                            <span>
+                                                <i class="fas fa-check me-2"></i>
+                                                Upload Successful!
+                                            </span>
+                                        </template>
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
