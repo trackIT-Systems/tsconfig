@@ -504,9 +504,9 @@ class UploadZipCharacteristic(WriteOnlyCharacteristic):
             return await api_client.upload_zip(
                 filename=data["filename"],
                 content=data["content"],
-                config_group=data.get("config_group"),
                 restart_services=data.get("restart_services", False),
                 pedantic=data.get("pedantic", False),
+                reboot=data.get("reboot", False),
             )
 
         super().__init__(

@@ -2,12 +2,13 @@
 
 import os
 import subprocess
+import time
 import zipfile
 from configparser import ConfigParser
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -543,6 +544,79 @@ def get_config_instance(config_type: str):
         raise ValueError(f"Unknown config type: {config_type}")
 
 
+def extract_zip_file_timestamps(zip_buffer: BytesIO) -> Dict[str, datetime]:
+    """Extract file timestamps from zip archive.
+    
+    Args:
+        zip_buffer: BytesIO buffer containing zip data
+        
+    Returns:
+        Dictionary mapping filename to datetime object
+    """
+    timestamps = {}
+    
+    with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+        for zip_info in zip_file.infolist():
+            # Skip directories
+            if zip_info.filename.endswith("/"):
+                continue
+                
+            # Get just the basename (ignore any directory structure in zip)
+            basename = zip_info.filename.split("/")[-1]
+            
+            # Convert zip timestamp to datetime
+            # zip_info.date_time is (year, month, day, hour, minute, second)
+            if len(zip_info.date_time) >= 6:
+                zip_datetime = datetime(*zip_info.date_time[:6])
+                timestamps[basename] = zip_datetime
+    
+    return timestamps
+
+
+def compare_file_timestamps(config_instances: Dict[str, Any], zip_timestamps: Dict[str, datetime]) -> Dict[str, Dict[str, Any]]:
+    """Compare zip file timestamps with existing files on disk.
+    
+    Args:
+        config_instances: Dictionary of config instances
+        zip_timestamps: Dictionary of zip file timestamps
+        
+    Returns:
+        Dictionary with comparison results for each file
+    """
+    comparison_results = {}
+    
+    for filename, config_instance in config_instances.items():
+        zip_timestamp = zip_timestamps.get(filename)
+        if not zip_timestamp:
+            continue
+            
+        result = {
+            "zip_timestamp": zip_timestamp.isoformat(),
+            "zip_timestamp_rounded": round_mtime_for_fat32(zip_timestamp).isoformat(),
+            "exists_on_disk": config_instance.config_file.exists(),
+            "existing_timestamp": None,
+            "is_newer": False,
+            "should_update": False,
+        }
+        
+        if config_instance.config_file.exists():
+            existing_mtime = datetime.fromtimestamp(config_instance.config_file.stat().st_mtime)
+            result["existing_timestamp"] = existing_mtime.isoformat()
+            
+            # Compare rounded zip timestamp with existing timestamp
+            zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+            result["is_newer"] = zip_timestamp_rounded > existing_mtime
+            result["should_update"] = result["is_newer"]
+        else:
+            # File doesn't exist, should update
+            result["should_update"] = True
+            result["is_newer"] = True
+            
+        comparison_results[filename] = result
+    
+    return comparison_results
+
+
 def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
     """Parse configuration file content based on filename.
 
@@ -598,7 +672,9 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
 async def upload_config_zip(
     file: UploadFile = File(..., description="Zip file containing configuration files"),
     restart_services: bool = Form(False, description="Restart affected services after upload"),
-    pedantic: bool = Form(False, description="Reject upload if unknown files are present"),
+    pedantic: bool = Form(False, description="Reject upload if unknown files are present or if any existing file is newer"),
+    force: bool = Form(False, description="Force overwrite regardless of file modification time"),
+    reboot: bool = Form(False, description="Reboot the system after successfully applying the config-zip"),
 ):
     """Upload and validate multiple configuration files from a zip archive.
 
@@ -614,19 +690,24 @@ async def upload_config_zip(
     - geolocation - Geolocation file (geoclue format)
 
     All files will be validated before any changes are made. If any file fails validation,
-    no files will be modified. If all files are valid, they will all be saved.
+    no files will be modified. If all files are valid, they will be saved based on the mode.
 
-    In pedantic mode, the upload will be rejected if the zip contains any unrecognized files.
+    Upload Modes:
+    - Force mode (force=True): Overwrites all files regardless of timestamps, sets current time as mtime
+    - Default mode (force=False, pedantic=False): Only overwrites files newer than existing, preserves zip timestamps
+    - Pedantic mode (force=False, pedantic=True): Rejects upload if any existing file is newer OR unknown files present
 
     This endpoint is disabled in server mode.
 
     Args:
         file: Zip file containing configuration files
-        restart_services: Whether to restart affected services after successful upload (default: False)
-        pedantic: Reject upload if unknown files are present (default: False)
+        restart_services: Whether to restart affected services after successful upload (default: False). Ignored if reboot=True.
+        pedantic: Reject upload if unknown files are present or if any existing file is newer (default: False)
+        force: Force overwrite regardless of file modification time (default: False)
+        reboot: Whether to reboot the system after successfully applying the config-zip (default: False). When enabled, restart_services is ignored.
 
     Returns:
-        Detailed results including validation status for each file, files processed, ignored, and service restart status
+        Detailed results including validation status, timestamp comparisons, files processed, and service restart status
     """
     # Check if server mode is enabled - disable endpoint if so
     if config_loader.is_server_mode():
@@ -661,6 +742,9 @@ async def upload_config_zip(
             status_code=400,
             detail=f"Failed to read zip file: {str(e)}",
         )
+
+    # Extract file timestamps from zip
+    zip_timestamps = extract_zip_file_timestamps(zip_buffer)
 
 
     # Identify recognized and unknown files
@@ -777,13 +861,72 @@ async def upload_config_zip(
         response["message"] = "Validation failed for one or more files. No changes were made."
         return response
 
-    # All files are valid - save them all
+    # Perform timestamp comparisons for all valid files
+    timestamp_comparisons = compare_file_timestamps(config_instances, zip_timestamps)
+    
+    # Handle pedantic mode timestamp checking (only if not in force mode)
+    if pedantic and not force:
+        # Check if any existing file is newer than its zip counterpart
+        newer_files_on_disk = []
+        for filename, comparison in timestamp_comparisons.items():
+            if (comparison["exists_on_disk"] and 
+                comparison["existing_timestamp"] and 
+                not comparison["is_newer"]):
+                newer_files_on_disk.append({
+                    "filename": filename,
+                    "existing_timestamp": comparison["existing_timestamp"],
+                    "zip_timestamp": comparison["zip_timestamp"],
+                })
+        
+        if newer_files_on_disk:
+            response["success"] = False
+            response["message"] = f"Pedantic mode: {len(newer_files_on_disk)} file(s) on disk are newer than zip versions. No changes were made."
+            response["newer_files_on_disk"] = newer_files_on_disk
+            response["timestamp_comparisons"] = timestamp_comparisons
+            return response
+
+    # Determine which files to save based on mode
+    files_to_save = []
+    files_skipped = []
+    
+    for filename in recognized_files.keys():
+        comparison = timestamp_comparisons.get(filename, {})
+        
+        if force:
+            # Force mode: save all files
+            files_to_save.append(filename)
+        else:
+            # Default mode: only save files that are newer or don't exist
+            if comparison.get("should_update", True):
+                files_to_save.append(filename)
+            else:
+                files_skipped.append({
+                    "filename": filename,
+                    "reason": "File is not newer than existing version",
+                    "existing_timestamp": comparison.get("existing_timestamp"),
+                    "zip_timestamp": comparison.get("zip_timestamp"),
+                })
+
+    # Save the selected files
     saved_files = []
     save_errors = {}
 
-    for filename in recognized_files.keys():
+    for filename in files_to_save:
         try:
             config_instances[filename].save(parsed_configs[filename])
+            
+            # Set appropriate mtime based on mode
+            if force:
+                # Force mode: use current time (default behavior of save())
+                pass
+            else:
+                # Default/pedantic mode: preserve zip timestamp
+                zip_timestamp = zip_timestamps.get(filename)
+                if zip_timestamp:
+                    zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+                    config_file_path = config_instances[filename].config_file
+                    os.utime(config_file_path, (zip_timestamp_rounded.timestamp(), zip_timestamp_rounded.timestamp()))
+            
             saved_files.append(filename)
         except Exception as e:
             save_errors[filename] = str(e)
@@ -795,10 +938,34 @@ async def upload_config_zip(
         return response
 
     # Files saved successfully
-    response["message"] = f"Successfully uploaded and validated {len(saved_files)} configuration file(s)"
+    if force:
+        mode_desc = "force mode"
+    elif pedantic:
+        mode_desc = "pedantic mode"
+    else:
+        mode_desc = "default mode"
+    
+    message_parts = []
+    if saved_files:
+        message_parts.append(f"Successfully uploaded and validated {len(saved_files)} configuration file(s) in {mode_desc}")
+    
+    if files_skipped:
+        message_parts.append(f"Skipped {len(files_skipped)} file(s) (not newer than existing)")
+    
+    response["message"] = ". ".join(message_parts) if message_parts else "No files were processed"
+    
+    # Add timestamp and mode information to response
+    response.update({
+        "mode": mode_desc,
+        "force_used": force,
+        "pedantic_used": pedantic,
+        "timestamp_comparisons": timestamp_comparisons,
+        "files_skipped": files_skipped,
+        "saved_files": saved_files,
+    })
 
-    # Optionally restart services
-    if restart_services:
+    # Optionally restart services (only if not rebooting, as reboot will restart everything)
+    if restart_services and not reboot:
         # Service restart only works in tracker mode (not server mode)
         if config_loader.is_server_mode():
             response["message"] += " (Service restart is not available in server mode)"
@@ -818,10 +985,30 @@ async def upload_config_zip(
 
             # Update message based on restart results
             if response["services_restarted"]:
-                response["message"] += f" and restarted service(s): {', '.join(response['services_restarted'])}"
+                response["message"] += f" and restarted service(s): {', '.join(set(response['services_restarted']))}"
 
             if response["service_restart_errors"]:
                 errors_msg = ", ".join([f"{svc}: {err}" for svc, err in response["service_restart_errors"].items()])
                 response["message"] += f" (Warning: Some services failed to restart: {errors_msg})"
+
+    # Optionally reboot the system
+    if reboot:
+        # Reboot only works in tracker mode (not server mode)
+        if config_loader.is_server_mode():
+            response["message"] += " (System reboot is not available in server mode)"
+            response["reboot_initiated"] = False
+        else:
+            try:
+                # Use systemctl to reboot the system
+                subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
+                response["message"] += ". System reboot initiated"
+                response["reboot_initiated"] = True
+            except subprocess.TimeoutExpired:
+                # Timeout is expected as the system will be rebooting
+                response["message"] += ". System reboot initiated"
+                response["reboot_initiated"] = True
+            except Exception as e:
+                response["message"] += f" (Warning: Failed to initiate reboot: {str(e)})"
+                response["reboot_initiated"] = False
 
     return response
