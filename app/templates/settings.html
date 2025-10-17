@@ -1,5 +1,41 @@
 <!-- System Settings (Schedule + SSH Keys) -->
-<div x-show="activeConfig === 'schedule'" x-cloak x-data="{ systemTab: 'schedule' }">
+<div x-show="activeConfig === 'settings'" x-cloak x-data="{ 
+    systemTab: 'schedule',
+    
+    init() {
+        // Parse subtab from URL hash (format: #settings/subtab)
+        const parseSubtab = () => {
+            const hash = window.location.hash.slice(1); // Remove #
+            const parts = hash.split('/');
+            if (parts[0] === 'settings' && parts.length > 1) {
+                const subtab = parts[1];
+                if (['schedule', 'sshkeys', 'configupload'].includes(subtab)) {
+                    return subtab;
+                }
+            }
+            return 'schedule'; // Default
+        };
+        
+        this.systemTab = parseSubtab();
+        
+        // Watch for systemTab changes and update URL
+        this.$watch('systemTab', (value) => {
+            const currentHash = window.location.hash.slice(1);
+            const parts = currentHash.split('/');
+            if (parts[0] === 'settings') {
+                window.location.hash = `settings/${value}`;
+            }
+        });
+        
+        // Listen for hash changes (back/forward browser navigation)
+        window.addEventListener('hashchange', () => {
+            const newSubtab = parseSubtab();
+            if (newSubtab !== this.systemTab) {
+                this.systemTab = newSubtab;
+            }
+        });
+    }
+}">
     <div class="row">
         <div class="col">
             <!-- Tab Navigation -->

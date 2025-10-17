@@ -22,14 +22,14 @@ export const serverModeManager = {
                 this.configRoot = data.config_root || null;
 
                 // In server mode, get config group from query parameter
-                // URL format: /tsconfig/?config_group=groupname#tab_name
+                // URL format: /tsconfig/?config_group=groupname#tab_name or #tab_name/subtab
                 this.currentConfigGroup = this._parseConfigGroupFromQuery();
                 
                 if (this.enabled && !this.currentConfigGroup && this.configGroups.length > 0) {
                     // Default to first config group if none specified
                     // Redirect to proper query parameter URL
                     const firstGroup = this.configGroups[0];
-                    const currentTab = this._getTabFromHash() || 'schedule';
+                    const currentTab = this._getTabFromHash() || 'settings/schedule';
                     const baseUrl = window.BASE_URL || '';
                     window.location.href = `${baseUrl}/?config_group=${encodeURIComponent(firstGroup)}#${currentTab}`;
                 } else if (this.enabled && this.currentConfigGroup) {
@@ -39,7 +39,7 @@ export const serverModeManager = {
                         if (this.configGroups.length > 0) {
                             // Redirect to valid config group
                             const firstGroup = this.configGroups[0];
-                            const currentTab = this._getTabFromHash() || 'schedule';
+                            const currentTab = this._getTabFromHash() || 'settings/schedule';
                             const baseUrl = window.BASE_URL || '';
                             window.location.href = `${baseUrl}/?config_group=${encodeURIComponent(firstGroup)}#${currentTab}`;
                         }
@@ -72,13 +72,15 @@ export const serverModeManager = {
     },
 
     _getTabFromHash() {
-        // Hash now only contains tab name: #schedule
+        // Hash format: tab_name or tab_name/subtab (e.g., #settings/sshkeys)
         const hash = window.location.hash.slice(1);
         if (!hash) return null;
         
-        const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
-        if (knownTabs.includes(hash)) {
-            return hash;
+        // Extract main tab (before any slash)
+        const mainTab = hash.split('/')[0];
+        const knownTabs = ['settings', 'radiotracking', 'soundscapepipe', 'status'];
+        if (knownTabs.includes(mainTab)) {
+            return hash; // Return full hash to preserve subtab
         }
         return null;
     },
@@ -98,8 +100,8 @@ export const serverModeManager = {
     setCurrentConfigGroup(groupName, tab = null) {
         if (this.enabled && this.configGroups.includes(groupName)) {
             // In server mode, navigate to proper query parameter URL
-            // Format: /tsconfig/?config_group=groupname#tab_name
-            const currentTab = tab || this._getTabFromHash() || 'schedule';
+            // Format: /tsconfig/?config_group=groupname#tab_name or #tab_name/subtab
+            const currentTab = tab || this._getTabFromHash() || 'settings/schedule';
             const baseUrl = window.BASE_URL || '';
             const newUrl = `${baseUrl}/?config_group=${encodeURIComponent(groupName)}#${currentTab}`;
             

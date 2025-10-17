@@ -9,11 +9,11 @@
         </div>
     </template>
 
-    <!-- Schedule Section -->
-    <div x-show="activeConfig === 'schedule' && isServiceAvailable('schedule')" x-cloak>
-        <template x-if="activeConfig === 'schedule' && isServiceAvailable('schedule')">
+    <!-- System Settings Section -->
+    <div x-show="activeConfig === 'settings' && isSettingsAvailable()" x-cloak>
+        <template x-if="activeConfig === 'settings' && isSettingsAvailable()">
             <div>
-                {% include 'schedule.html' %}
+                {% include 'settings.html' %}
             </div>
         </template>
     </div>

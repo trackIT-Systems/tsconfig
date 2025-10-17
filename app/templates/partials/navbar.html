@@ -14,11 +14,11 @@
                         <i class="fas fa-tachometer-alt me-1"></i>Status
                     </a>
                 </li>
-                <li class="nav-item" x-show="isServiceAvailable('schedule')">
+                <li class="nav-item" x-show="isSettingsAvailable()">
                     <a class="nav-link" 
-                       href="#schedule" 
-                       @click.prevent="activeConfig = 'schedule'"
-                       :class="{ 'active': activeConfig === 'schedule', 'fw-bold': activeConfig === 'schedule' }">
+                       href="#settings" 
+                       @click.prevent="activeConfig = 'settings'"
+                       :class="{ 'active': activeConfig === 'settings', 'fw-bold': activeConfig === 'settings' }">
                         <i class="fas fa-cog me-1"></i>System Settings
                     </a>
                 </li>

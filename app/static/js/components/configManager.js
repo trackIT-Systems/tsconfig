@@ -49,14 +49,15 @@ export function configManager() {
             this.expertMode = urlParams.get('expert') === 'true';
 
             // Set initial active config based on URL hash
-            // Hash format is simply: tab_name (same for both tracker and server mode)
+            // Hash format: tab_name or tab_name/subtab (e.g., settings/sshkeys)
             const hash = window.location.hash.slice(1);
-            let tabName = hash;
+            // Extract main tab (before any slash)
+            let tabName = hash.split('/')[0];
             
             if (tabName === 'radiotracking' && this.isServiceAvailable('radiotracking')) {
                 this.activeConfig = 'radiotracking';
-            } else if (tabName === 'schedule' && this.isServiceAvailable('schedule')) {
-                this.activeConfig = 'schedule';
+            } else if (tabName === 'settings' && this.isSettingsAvailable()) {
+                this.activeConfig = 'settings';
             } else if (tabName === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe')) {
                 this.activeConfig = 'soundscapepipe';
             } else if (tabName === 'status' && !this.serverMode) {
@@ -64,8 +65,8 @@ export function configManager() {
             } else {
                 // Default to first available service in server mode, status otherwise
                 if (this.serverMode) {
-                    if (this.isServiceAvailable('schedule')) {
-                        this.activeConfig = 'schedule';
+                    if (this.isSettingsAvailable()) {
+                        this.activeConfig = 'settings';
                     } else if (this.isServiceAvailable('radiotracking')) {
                         this.activeConfig = 'radiotracking';
                     } else if (this.isServiceAvailable('soundscapepipe')) {
@@ -104,11 +105,20 @@ export function configManager() {
 
             // Update URL hash when active config changes
             this.$watch('activeConfig', (value) => {
-                // Hash only contains tab name (config group is in query parameter for server mode)
-                window.location.hash = value;
-                
-                // Ensure map is properly initialized when switching to schedule tab
-                if (value === 'schedule') {
+                // For settings tab, preserve or add subtab; for others, just use tab name
+                if (value === 'settings') {
+                    const currentHash = window.location.hash.slice(1);
+                    const parts = currentHash.split('/');
+                    // If already on settings with a subtab, keep it; otherwise default to schedule
+                    if (parts[0] === 'settings' && parts.length > 1) {
+                        // Keep existing subtab
+                        window.location.hash = currentHash;
+                    } else {
+                        // Default to schedule subtab
+                        window.location.hash = 'settings/schedule';
+                    }
+                    
+                    // Ensure map is properly initialized when switching to settings tab
                     setTimeout(() => {
                         const scheduleComponent = this.$el.querySelector('[x-data*="scheduleConfig"]');
                         if (scheduleComponent && scheduleComponent._x_dataStack) {
@@ -118,6 +128,9 @@ export function configManager() {
                             }
                         }
                     }, 150);
+                } else {
+                    // For other tabs, just use the tab name
+                    window.location.hash = value;
                 }
                 
                 // Ensure map is properly initialized when switching to soundscapepipe tab
@@ -137,11 +150,12 @@ export function configManager() {
             // Listen for hash changes
             window.addEventListener('hashchange', () => {
                 const hash = window.location.hash.slice(1);
-                if (hash === 'status' || 
-                    (hash === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
-                    (hash === 'schedule' && this.isServiceAvailable('schedule')) ||
-                    (hash === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
-                    this.activeConfig = hash;
+                const mainTab = hash.split('/')[0]; // Extract main tab
+                if (mainTab === 'status' || 
+                    (mainTab === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
+                    (mainTab === 'settings' && this.isSettingsAvailable()) ||
+                    (mainTab === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
+                    this.activeConfig = mainTab;
                 }
             });
 
@@ -157,11 +171,12 @@ export function configManager() {
                 
                 // Update active config based on hash
                 const hash = window.location.hash.slice(1);
-                if (hash === 'status' || 
-                    (hash === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
-                    (hash === 'schedule' && this.isServiceAvailable('schedule')) ||
-                    (hash === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
-                    this.activeConfig = hash;
+                const mainTab = hash.split('/')[0]; // Extract main tab
+                if (mainTab === 'status' || 
+                    (mainTab === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
+                    (mainTab === 'settings' && this.isSettingsAvailable()) ||
+                    (mainTab === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
+                    this.activeConfig = mainTab;
                 }
             });
 
@@ -187,11 +202,12 @@ export function configManager() {
             // Listen for hash changes (browser back/forward or manual URL change)
             window.addEventListener('hashchange', () => {
                 const hash = window.location.hash.slice(1);
+                const mainTab = hash.split('/')[0]; // Extract main tab
                 
                 // Update activeConfig if the tab changed
-                const knownTabs = ['schedule', 'radiotracking', 'soundscapepipe', 'status'];
-                if (knownTabs.includes(hash) && hash !== this.activeConfig) {
-                    this.activeConfig = hash;
+                const knownTabs = ['settings', 'radiotracking', 'soundscapepipe', 'status'];
+                if (knownTabs.includes(mainTab) && mainTab !== this.activeConfig) {
+                    this.activeConfig = mainTab;
                 }
             });
             
@@ -265,6 +281,12 @@ export function configManager() {
 
         isServiceAvailable(serviceName) {
             return this.availableServices.includes(serviceName);
+        },
+
+        isSettingsAvailable() {
+            // System Settings tab is available if schedule OR authorized_keys configs exist
+            return this.availableServices.includes('schedule') || 
+                   this.availableServices.includes('authorized_keys');
         },
 
         streamLogs(serviceName) {

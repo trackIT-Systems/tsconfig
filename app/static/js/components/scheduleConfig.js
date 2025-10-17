@@ -53,9 +53,10 @@ export function scheduleConfig() {
             }
             
             this.refreshInterval = setInterval(() => {
-                // Only refresh if schedule tab is active
+                // Only refresh if settings tab is active
                 const currentHash = window.location.hash.slice(1);
-                if (currentHash === 'schedule') {
+                const mainTab = currentHash.split('/')[0];
+                if (mainTab === 'settings') {
                     this.loadServiceStatus();
                 }
             }, refreshIntervalSeconds * 1000);
