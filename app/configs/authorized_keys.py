@@ -39,13 +39,6 @@ class AuthorizedKeysConfig(BaseConfig):
             # In server mode, use the config directory
             return self.config_dir / "authorized_keys"
 
-    @property
-    def secondary_config_file(self) -> Optional[Path]:
-        """Return the secondary configuration file path (tracker mode only)."""
-        if self._is_tracker_mode:
-            return Path("/home/pi/.ssh/authorized_keys")
-        return None
-
     def _ensure_directory_with_permissions(self, file_path: Path) -> None:
         """Ensure the parent directory exists with proper SSH permissions.
 
@@ -154,25 +147,6 @@ class AuthorizedKeysConfig(BaseConfig):
                 # File might not be readable, that's okay
                 pass
 
-        # In tracker mode, also read from secondary file and merge
-        # (prefer keys from secondary file if they differ)
-        if self._is_tracker_mode and self.secondary_config_file:
-            secondary_file = self.secondary_config_file
-            if secondary_file.exists():
-                try:
-                    secondary_keys = []
-                    with open(secondary_file, "r") as f:
-                        for idx, line in enumerate(f):
-                            parsed = self._parse_key_line(line, idx)
-                            if parsed:
-                                secondary_keys.append(parsed)
-
-                    # If secondary has more keys or different keys, prefer it
-                    if len(secondary_keys) > len(keys):
-                        keys = secondary_keys
-                except (IOError, OSError):
-                    pass
-
         return {"keys": keys}
 
     def save(self, config: Dict[str, Any]) -> None:
@@ -212,21 +186,6 @@ class AuthorizedKeysConfig(BaseConfig):
                 self._set_file_permissions(primary_file)
             except (OSError, PermissionError):
                 # Ignore permission errors (e.g., FAT filesystem, file owned by another user)
-                pass
-
-        # In tracker mode, also write to secondary file
-        if self._is_tracker_mode and self.secondary_config_file:
-            secondary_file = self.secondary_config_file
-            self._ensure_directory_with_permissions(secondary_file)
-
-            with open(secondary_file, "w") as f:
-                f.write(content)
-
-            # Try to set permissions (best-effort, don't fail)
-            try:
-                self._set_file_permissions(secondary_file)
-            except (OSError, PermissionError):
-                # Ignore permission errors
                 pass
 
     def validate(self, config: Dict[str, Any]) -> List[str]:
