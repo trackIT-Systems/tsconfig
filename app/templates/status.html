@@ -245,44 +245,6 @@
                 </div>
             </div>
 
-            <!-- Tracker Location -->
-            <div class="row mb-4">
-                <div class="col">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="fas fa-map-marker-alt me-2"></i>Location
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <!-- Location Info -->
-                            <template x-if="geolocation">
-                                <div class="row mb-3">
-                                        <div id="geolocationMap" class="map-container"></div>
-                                </div>
-                            </template>
-                            <!-- No Location -->
-                            <template x-if="!geolocation && !loading">
-                                <div class="text-center py-4 text-muted">
-                                    <i class="fas fa-map-marker-slash fa-3x mb-3"></i>
-                                    <p>No geolocation information available</p>
-                                    <small>Upload a geolocation file to set tracker position</small>
-                                </div>
-                            </template>
-                            <!-- Loading -->
-                            <template x-if="!geolocation && loading">
-                                <div class="text-center py-4">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
-                                    </div>
-                                    <p class="mt-2 text-muted">Loading location...</p>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Status Cards -->
             <div x-show="systemInfo" x-cloak>
                 <div class="row g-4 mt-4">
@@ -596,6 +558,44 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tracker Location -->
+            <div class="row mb-4">
+                <div class="col">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-map-marker-alt me-2"></i>Location
+                            </h5>
+                        </div>
+                        <!-- Location Info -->
+                        <template x-if="geolocation">
+                            <div id="geolocationMap" class="map-container"></div>
+                        </template>
+                        <!-- No Location -->
+                        <template x-if="!geolocation && !loading">
+                            <div class="card-body">
+                                <div class="text-center py-4 text-muted">
+                                    <i class="fas fa-map-marker-slash fa-3x mb-3"></i>
+                                    <p>No geolocation information available</p>
+                                    <small>Upload a geolocation file to set tracker position</small>
+                                </div>
+                            </div>
+                        </template>
+                        <!-- Loading -->
+                        <template x-if="!geolocation && loading">
+                            <div class="card-body">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading location...</p>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>
