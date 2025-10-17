@@ -34,6 +34,12 @@ export function statusPage() {
         timedatectlStatus: null,
         timedatectlLoading: false,
         timedatectlError: null,
+        // Geolocation properties
+        geolocation: null,
+        geolocationMap: null,
+        geolocationMarker: null,
+        geolocationCircle: null,
+        geolocationMapInitialized: false,
 
         async initStatus() {
             // Don't initialize in server mode
@@ -47,6 +53,8 @@ export function statusPage() {
             await this.loadSystemConfig();
             await this.refreshStatus();
             await this.loadServices();
+            // Load geolocation
+            await this.loadGeolocation();
             // Auto-refresh using configured interval when status tab is active
             this.refreshInterval = setInterval(() => {
                 // Only refresh if status tab is active
@@ -573,6 +581,71 @@ export function statusPage() {
             });
             
             return formattedMountpoints.join(', ');
+        },
+
+        async loadGeolocation() {
+            try {
+                const response = await fetch(apiUrl('/api/geolocation'));
+                if (response.ok) {
+                    this.geolocation = await response.json();
+                    // Initialize map if geolocation data is available
+                    if (this.geolocation) {
+                        // Wait a bit to ensure DOM is ready
+                        setTimeout(() => this.initGeolocationMap(), 200);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load geolocation:', error);
+                this.geolocation = null;
+            }
+        },
+
+        initGeolocationMap() {
+            // Only initialize if we have geolocation data and map not already initialized
+            if (!this.geolocation || this.geolocationMapInitialized || !document.getElementById('geolocationMap')) {
+                return;
+            }
+
+            // Initialize map centered on the geolocation
+            this.geolocationMap = L.map('geolocationMap', {
+                center: [this.geolocation.lat, this.geolocation.lon],
+                zoom: 15,
+                zoomControl: true,
+                dragging: true,
+                touchZoom: true,
+                scrollWheelZoom: true,
+                doubleClickZoom: true,
+                boxZoom: true
+            });
+
+            // Add Mapbox satellite streets layer
+            L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
+                attribution: '© Mapbox © OpenStreetMap',
+                maxZoom: 19
+            }).addTo(this.geolocationMap);
+
+            // Add marker at the position (non-draggable, read-only)
+            this.geolocationMarker = L.marker([this.geolocation.lat, this.geolocation.lon], {
+                draggable: false
+            }).addTo(this.geolocationMap);
+
+            // Add accuracy circle
+            this.geolocationCircle = L.circle([this.geolocation.lat, this.geolocation.lon], {
+                radius: this.geolocation.accuracy,
+                color: '#3388ff',
+                fillColor: '#3388ff',
+                fillOpacity: 0.15,
+                weight: 2
+            }).addTo(this.geolocationMap);
+
+            this.geolocationMapInitialized = true;
+
+            // Force a resize to ensure tiles load properly
+            setTimeout(() => {
+                if (this.geolocationMap) {
+                    this.geolocationMap.invalidateSize();
+                }
+            }, 100);
         }
     }
 }

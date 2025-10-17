@@ -14,8 +14,6 @@ export function soundscapepipeConfig() {
         
         config: {
             stream_port: 5001,
-            lat: 50.85318,
-            lon: 8.78735,
             input_device_match: "trackIT Analog Frontend",
             sample_rate: 384000,
             input_length_s: 0.1,
@@ -61,9 +59,6 @@ export function soundscapepipeConfig() {
             uptime: 'N/A'
         },
         refreshInterval: null,
-        map: null,
-        marker: null,
-        mapInitialized: false,
         audioDevices: {},
         loadingDevices: false,
         modelFiles: {},
@@ -278,8 +273,6 @@ export function soundscapepipeConfig() {
                     this.config = {
                         // Ensure all sections exist with defaults
                         stream_port: data.stream_port || 5001,
-                        lat: data.lat || 50.85318,
-                        lon: data.lon || 8.78735,
                         input_device_match: data.input_device_match || "trackIT Analog Frontend",
                         input_length_s: data.input_length_s || 0.1,
                         channels: data.channels || 2,
@@ -326,24 +319,12 @@ export function soundscapepipeConfig() {
                 
                 // Auto-select default models for enabled detectors without a model
                 this.autoSelectDefaultModels();
-                
-                // Initialize map after config is loaded, or update if already initialized
-                if (!this.mapInitialized) {
-                    setTimeout(() => this.initMap(), 200);
-                } else {
-                    this.updateMarkerFromInputs();
-                }
             } catch (error) {
                 this.showMessage(error.message, true);
                 this.configLoaded = true; // Allow user to see form even if loading failed
                 
                 // Auto-select default models even if config loading failed
                 this.autoSelectDefaultModels();
-                
-                // Initialize map with defaults even if config loading failed
-                if (!this.mapInitialized) {
-                    setTimeout(() => this.initMap(), 200);
-                }
             }
         },
 
@@ -676,110 +657,6 @@ export function soundscapepipeConfig() {
                     container.scrollTop = container.scrollHeight;
                 }
             }, 250);
-        },
-
-        initMap() {
-            // Only initialize if not already done and container is visible
-            if (this.mapInitialized || !document.getElementById('soundscapeMap')) {
-                return;
-            }
-
-            // Wait a bit to ensure the container is properly rendered
-            setTimeout(() => {
-                if (!document.getElementById('soundscapeMap') || this.mapInitialized) {
-                    return;
-                }
-
-                // Initialize map with loaded coordinates
-                this.map = L.map('soundscapeMap', {
-                    center: [this.config.lat, this.config.lon],
-                    zoom: 13,
-                    zoomControl: true
-                });
-                
-                // Add Mapbox satellite streets layer
-                L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
-                    attribution: '© Mapbox © OpenStreetMap',
-                    maxZoom: 19
-                }).addTo(this.map);
-
-                // Add locate control
-                L.control.locate({
-                    position: 'topleft',
-                    strings: {
-                        title: "Show my location"
-                    },
-                    flyTo: true,
-                    keepCurrentZoomLevel: true,
-                    locateOptions: {
-                        enableHighAccuracy: true
-                    }
-                }).addTo(this.map);
-
-                // Add marker
-                this.marker = L.marker([this.config.lat, this.config.lon], {
-                    draggable: true
-                }).addTo(this.map);
-
-                // Update coordinates when marker is dragged
-                this.marker.on('dragend', (e) => {
-                    const position = e.target.getLatLng();
-                    this.config.lat = parseFloat(position.lat.toFixed(8));
-                    this.config.lon = parseFloat(position.lng.toFixed(8));
-                });
-
-                // Update marker when map is clicked
-                this.map.on('click', (e) => {
-                    const position = e.latlng;
-                    this.marker.setLatLng(position);
-                    this.config.lat = parseFloat(position.lat.toFixed(8));
-                    this.config.lon = parseFloat(position.lng.toFixed(8));
-                });
-
-                // Handle location found event
-                this.map.on('locationfound', (e) => {
-                    this.config.lat = parseFloat(e.latlng.lat.toFixed(8));
-                    this.config.lon = parseFloat(e.latlng.lng.toFixed(8));
-                    this.updateMarkerFromInputs();
-                });
-
-                this.mapInitialized = true;
-                
-                // Force a resize to ensure tiles load properly
-                setTimeout(() => {
-                    if (this.map) {
-                        this.map.invalidateSize();
-                    }
-                }, 100);
-            }, 100);
-        },
-
-        ensureMapVisible() {
-            // Call this when the soundscapepipe tab becomes active
-            if (this.map && this.mapInitialized) {
-                setTimeout(() => {
-                    this.map.invalidateSize();
-                    this.map.setView([this.config.lat, this.config.lon], 13);
-                }, 50);
-            } else if (!this.mapInitialized) {
-                this.initMap();
-            }
-        },
-
-        updateMarkerFromInputs() {
-            if (this.marker && this.mapInitialized) {
-                // Ensure coordinates are within bounds and have proper precision
-                const lat = Math.min(Math.max(parseFloat(this.config.lat), -90), 90);
-                const lon = Math.min(Math.max(parseFloat(this.config.lon), -180), 180);
-                
-                // Update the marker and map view
-                this.marker.setLatLng([lat, lon]);
-                this.map.setView([lat, lon]);
-                
-                // Update the input values with properly formatted numbers
-                this.config.lat = parseFloat(lat.toFixed(8));
-                this.config.lon = parseFloat(lon.toFixed(8));
-            }
         },
 
         async loadAudioDevices() {

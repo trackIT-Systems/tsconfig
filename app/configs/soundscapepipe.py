@@ -90,17 +90,6 @@ class SoundscapepipeConfig(BaseConfig):
         """Validate the soundscapepipe configuration."""
         errors = []
 
-        # Validate coordinates
-        try:
-            lat = float(config.get("lat", 0))
-            lon = float(config.get("lon", 0))
-            if not (-90 <= lat <= 90):
-                errors.append("Latitude must be between -90 and 90")
-            if not (-180 <= lon <= 180):
-                errors.append("Longitude must be between -180 and 180")
-        except (ValueError, TypeError):
-            errors.append("Invalid coordinate values")
-
         # Validate stream port
         stream_port = config.get("stream_port")
         if stream_port is not None:

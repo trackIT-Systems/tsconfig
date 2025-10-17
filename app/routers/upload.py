@@ -12,9 +12,14 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.config_loader import config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
+from app.configs.cmdline import CmdlineConfig
+from app.configs.geolocation import GeolocationConfig
+from app.configs.mosquitto_cert import MosquittoCertConfig
+from app.configs.mosquitto_conf import MosquittoConfConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.configs.wireguard import WireguardConfig
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
@@ -115,6 +120,12 @@ async def upload_config(
     - radiotracking.ini - Radio tracking configuration
     - schedule.yml - Schedule configuration
     - soundscapepipe.yml - Soundscapepipe configuration
+    - authorized_keys - SSH authorized keys
+    - cmdline.txt - Kernel boot parameters
+    - wireguard.conf - WireGuard VPN configuration
+    - server.crt - Mosquitto server certificate
+    - server.conf - Mosquitto server configuration
+    - geolocation - Geolocation file (geoclue format)
 
     The file will be validated and if valid, will replace the existing configuration.
     Optionally, the respective systemd service can be restarted after upload.
@@ -194,11 +205,65 @@ async def upload_config(
             # Combine existing and new keys
             parsed_config = {"keys": existing_keys + new_keys}
 
+        elif filename == "cmdline.txt":
+            config_type = "cmdline"
+            # Plain text content
+            parsed_config = {"content": content_str}
+            config_instance = CmdlineConfig()
+
+        elif filename == "wireguard.conf":
+            config_type = "wireguard"
+            # Plain text content, will be validated as INI
+            parsed_config = {"content": content_str}
+            config_instance = WireguardConfig()
+
+        elif filename == "server.crt":
+            config_type = "mosquitto_cert"
+            # Plain text content (certificate)
+            parsed_config = {"content": content_str}
+            config_instance = MosquittoCertConfig()
+
+        elif filename == "server.conf":
+            config_type = "mosquitto_conf"
+            # Plain text content (mosquitto config)
+            parsed_config = {"content": content_str}
+            config_instance = MosquittoConfConfig()
+
+        elif filename == "geolocation":
+            config_type = "geolocation"
+            # Parse geolocation file format
+            lines = content_str.strip().split("\n")
+            data_lines = [
+                line.split("#")[0].strip() for line in lines if line.strip() and not line.strip().startswith("#")
+            ]
+
+            if len(data_lines) != 4:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Geolocation file must have exactly 4 data lines (got {len(data_lines)})",
+                )
+
+            try:
+                parsed_config = {
+                    "lat": float(data_lines[0]),
+                    "lon": float(data_lines[1]),
+                    "alt": float(data_lines[2]),
+                    "accuracy": float(data_lines[3]),
+                }
+            except (ValueError, IndexError) as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid geolocation file format: {str(e)}",
+                )
+
+            config_instance = GeolocationConfig()
+
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported configuration file: {file.filename}. "
-                "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys",
+                "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
+                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation",
             )
 
     except ValueError as e:
@@ -284,6 +349,11 @@ RECOGNIZED_CONFIG_FILES = {
     "schedule.yml": "schedule",
     "soundscapepipe.yml": "soundscapepipe",
     "authorized_keys": "authorized_keys",
+    "cmdline.txt": "cmdline",
+    "wireguard.conf": "wireguard",
+    "server.crt": "mosquitto_cert",
+    "server.conf": "mosquitto_conf",
+    "geolocation": "geolocation",
 }
 
 # Service mapping for restart
@@ -291,6 +361,9 @@ SERVICE_MAPPING = {
     "radiotracking": "radiotracking",
     "schedule": "wittypid",
     "soundscapepipe": "soundscapepipe",
+    "wireguard": "wg-quick@wireguard",
+    "mosquitto_cert": "mosquitto",
+    "mosquitto_conf": "mosquitto",
 }
 
 
@@ -298,11 +371,12 @@ def get_config_instance(config_type: str, config_dir: Optional[Path] = None):
     """Get appropriate config instance for the given type.
 
     Args:
-        config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys)
-        config_dir: Optional config directory
+        config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys,
+                     cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
+        config_dir: Optional config directory (ignored for cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
 
     Returns:
-        Config instance (RadioTrackingConfig, ScheduleConfig, SoundscapepipeConfig, or AuthorizedKeysConfig)
+        Config instance for the specified type
     """
     if config_type == "radiotracking":
         return RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
@@ -312,6 +386,16 @@ def get_config_instance(config_type: str, config_dir: Optional[Path] = None):
         return SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
     elif config_type == "authorized_keys":
         return AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
+    elif config_type == "cmdline":
+        return CmdlineConfig()
+    elif config_type == "wireguard":
+        return WireguardConfig()
+    elif config_type == "mosquitto_cert":
+        return MosquittoCertConfig()
+    elif config_type == "mosquitto_conf":
+        return MosquittoConfConfig()
+    elif config_type == "geolocation":
+        return GeolocationConfig()
     else:
         raise ValueError(f"Unknown config type: {config_type}")
 
@@ -343,6 +427,26 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
             if parsed:
                 keys.append(parsed)
         return {"keys": keys}
+    elif filename in ["cmdline.txt", "wireguard.conf", "server.crt", "server.conf"]:
+        # Plain text files - return content as-is
+        return {"content": content}
+    elif filename == "geolocation":
+        # Parse geolocation file format
+        lines = content.strip().split("\n")
+        data_lines = [line.split("#")[0].strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+
+        if len(data_lines) != 4:
+            raise ValueError(f"Geolocation file must have exactly 4 data lines (got {len(data_lines)})")
+
+        try:
+            return {
+                "lat": float(data_lines[0]),
+                "lon": float(data_lines[1]),
+                "alt": float(data_lines[2]),
+                "accuracy": float(data_lines[3]),
+            }
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Invalid geolocation file format: {str(e)}")
     else:
         raise ValueError(f"Unsupported file type: {filename}")
 
@@ -360,6 +464,12 @@ async def upload_config_zip(
     - radiotracking.ini - Radio tracking configuration
     - schedule.yml - Schedule configuration
     - soundscapepipe.yml - Soundscapepipe configuration
+    - authorized_keys - SSH authorized keys
+    - cmdline.txt - Kernel boot parameters
+    - wireguard.conf - WireGuard VPN configuration
+    - server.crt - Mosquitto server certificate
+    - server.conf - Mosquitto server configuration
+    - geolocation - Geolocation file (geoclue format)
 
     All files will be validated before any changes are made. If any file fails validation,
     no files will be modified. If all files are valid, they will all be saved.

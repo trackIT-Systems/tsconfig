@@ -3,10 +3,6 @@
 stream_host: "::"
 stream_port: 5001
 
-# fixed station coordinates (for scheduling)
-lat: 50.85318
-lon: 8.78735
-
 # input device section
 input_device_match: USB AUDIO DEVICE
 sample_rate: 48000  # optional
