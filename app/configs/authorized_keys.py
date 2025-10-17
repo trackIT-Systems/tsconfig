@@ -257,6 +257,9 @@ class AuthorizedKeysConfig(BaseConfig):
 
         Returns:
             Updated configuration dictionary
+
+        Raises:
+            ValueError: If the key format is invalid or if the key already exists
         """
         # Load current config
         config = self.load()
@@ -267,6 +270,21 @@ class AuthorizedKeysConfig(BaseConfig):
 
         if not new_key:
             raise ValueError("Invalid SSH key format")
+
+        # Check if the key already exists
+        # Compare by key_data (the base64 part) to detect duplicates
+        new_key_data = new_key.get("key_data", "")
+        
+        for existing_key in keys:
+            existing_key_data = existing_key.get("key_data", "")
+            # For complex keys (with options), compare the full line
+            if new_key.get("is_complex") or existing_key.get("is_complex"):
+                # Compare full lines, but strip whitespace for comparison
+                if new_key["full_line"].strip() == existing_key["full_line"].strip():
+                    raise ValueError("SSH key already exists in authorized_keys")
+            elif new_key_data and new_key_data == existing_key_data:
+                # For standard keys, compare the key data (base64 part)
+                raise ValueError("SSH key already exists in authorized_keys")
 
         # Add the new key
         keys.append(new_key)

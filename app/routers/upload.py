@@ -177,11 +177,35 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
             config_instance = AuthorizedKeysConfig()
             existing_config = config_instance.load()
             existing_keys = existing_config.get("keys", [])
+            
+            # Parse and filter out duplicate keys
             new_keys = []
-            for idx, line in enumerate(content_str.strip().split("\n")):
-                parsed = config_instance._parse_key_line(line, len(existing_keys) + idx)
+            for line in content_str.strip().split("\n"):
+                parsed = config_instance._parse_key_line(line, 0)
                 if parsed:
-                    new_keys.append(parsed)
+                    # Check if this key already exists
+                    new_key_data = parsed.get("key_data", "")
+                    is_duplicate = False
+                    
+                    for existing_key in existing_keys:
+                        existing_key_data = existing_key.get("key_data", "")
+                        # For complex keys (with options), compare the full line
+                        if parsed.get("is_complex") or existing_key.get("is_complex"):
+                            if parsed["full_line"].strip() == existing_key["full_line"].strip():
+                                is_duplicate = True
+                                break
+                        elif new_key_data and new_key_data == existing_key_data:
+                            is_duplicate = True
+                            break
+                    
+                    # Only add if not a duplicate
+                    if not is_duplicate:
+                        new_keys.append(parsed)
+            
+            # Re-index all keys
+            for idx, key in enumerate(new_keys):
+                key["index"] = len(existing_keys) + idx
+            
             parsed_config = {"keys": existing_keys + new_keys}
         elif config_type in ["cmdline", "wireguard", "mosquitto_cert", "mosquitto_conf"]:
             parsed_config = {"content": content_str}
@@ -447,8 +471,12 @@ async def upload_config(
                 )
 
     # Save configuration
+    save_metadata = {}
     try:
-        config_instance.save(parsed_config)
+        save_result = config_instance.save(parsed_config)
+        # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
+        if save_result and isinstance(save_result, dict):
+            save_metadata = save_result
         
         # Set file mtime if provided and not forced
         if upload_mtime and not force:
@@ -475,6 +503,10 @@ async def upload_config(
         "mtime_set": mtime_set,
         "force_used": force,
     }
+    
+    # Add save metadata (e.g., hostname_changed for cmdline.txt)
+    if save_metadata:
+        response_data.update(save_metadata)
     
     # Add mtime info if provided
     if upload_mtime:
@@ -649,7 +681,7 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
         return parse_yaml_file(content)
     elif filename == "authorized_keys":
         # For authorized_keys, parse each line
-        # Note: This returns new keys only, merging happens in the caller
+        # Note: This returns new keys only, merging and duplicate checking happens in the caller
         keys = []
         temp_config = AuthorizedKeysConfig()
         for idx, line in enumerate(content.strip().split("\n")):
@@ -820,18 +852,39 @@ async def upload_config_zip(
             # Parse the file
             parsed_config = parse_config_file(filename, content)
 
-            # Special handling for authorized_keys: append to existing keys
+            # Special handling for authorized_keys: append to existing keys, filtering duplicates
             if filename == "authorized_keys":
                 existing_config = config_instance.load()
                 existing_keys = existing_config.get("keys", [])
                 new_keys = parsed_config.get("keys", [])
 
-                # Re-index new keys
-                for idx, key in enumerate(new_keys):
+                # Filter out duplicate keys
+                unique_new_keys = []
+                for new_key in new_keys:
+                    new_key_data = new_key.get("key_data", "")
+                    is_duplicate = False
+                    
+                    for existing_key in existing_keys:
+                        existing_key_data = existing_key.get("key_data", "")
+                        # For complex keys (with options), compare the full line
+                        if new_key.get("is_complex") or existing_key.get("is_complex"):
+                            if new_key["full_line"].strip() == existing_key["full_line"].strip():
+                                is_duplicate = True
+                                break
+                        elif new_key_data and new_key_data == existing_key_data:
+                            is_duplicate = True
+                            break
+                    
+                    # Only add if not a duplicate
+                    if not is_duplicate:
+                        unique_new_keys.append(new_key)
+
+                # Re-index unique new keys
+                for idx, key in enumerate(unique_new_keys):
                     key["index"] = len(existing_keys) + idx
 
-                # Combine existing and new keys
-                parsed_config = {"keys": existing_keys + new_keys}
+                # Combine existing and unique new keys
+                parsed_config = {"keys": existing_keys + unique_new_keys}
 
             parsed_configs[filename] = parsed_config
 
@@ -923,10 +976,14 @@ async def upload_config_zip(
     # Save the selected files
     saved_files = []
     save_errors = {}
+    save_metadata = {}  # Track metadata from save operations (e.g., hostname changes)
 
     for filename in files_to_save:
         try:
-            config_instances[filename].save(parsed_configs[filename])
+            save_result = config_instances[filename].save(parsed_configs[filename])
+            # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
+            if save_result and isinstance(save_result, dict):
+                save_metadata[filename] = save_result
             
             # Set appropriate mtime based on mode
             if force:
@@ -978,6 +1035,10 @@ async def upload_config_zip(
         "files_skipped": files_skipped,
         "saved_files": saved_files,
     })
+    
+    # Add save metadata if any (e.g., hostname changes for cmdline.txt)
+    if save_metadata:
+        response["save_metadata"] = save_metadata
 
     # Optionally restart services (only if not rebooting, as reboot will restart everything)
     if restart_services and not reboot:

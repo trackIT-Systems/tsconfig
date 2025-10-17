@@ -27,8 +27,14 @@ class BaseConfig(ABC):
         pass
 
     @abstractmethod
-    def save(self, config: Dict[str, Any]) -> None:
-        """Save the configuration to disk."""
+    def save(self, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Save the configuration to disk.
+        
+        Returns:
+            Optional dictionary with metadata about the save operation.
+            Most implementations return None, but some may return metadata
+            (e.g., cmdline returns hostname change information).
+        """
         pass
 
     @abstractmethod
