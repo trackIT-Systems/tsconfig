@@ -609,7 +609,7 @@ export function statusPage() {
             // Initialize map centered on the geolocation
             this.geolocationMap = L.map('geolocationMap', {
                 center: [this.geolocation.lat, this.geolocation.lon],
-                zoom: 15,
+                zoom: 19,
                 zoomControl: true,
                 dragging: true,
                 touchZoom: true,

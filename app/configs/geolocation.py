@@ -41,8 +41,15 @@ class GeolocationConfig(BaseConfig):
             with open(self.config_file, "r") as f:
                 lines = f.readlines()
 
-            # Filter out comment lines and empty lines
-            data_lines = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+            # Filter out comment-only lines and empty lines, and strip inline comments
+            data_lines = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    # Strip inline comments (everything after #)
+                    value = line.split("#")[0].strip()
+                    if value:
+                        data_lines.append(value)
 
             if len(data_lines) != 4:
                 raise ValueError(f"Expected 4 data lines, got {len(data_lines)}")

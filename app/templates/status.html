@@ -251,30 +251,14 @@
                     <div class="card">
                         <div class="card-header">
                             <h5 class="card-title mb-0">
-                                <i class="fas fa-map-marker-alt me-2"></i>Tracker Location
+                                <i class="fas fa-map-marker-alt me-2"></i>Location
                             </h5>
                         </div>
                         <div class="card-body">
                             <!-- Location Info -->
                             <template x-if="geolocation">
                                 <div class="row mb-3">
-                                    <div class="col-md-8">
                                         <div id="geolocationMap" class="map-container"></div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="mb-2">
-                                            <strong>Latitude:</strong> <span x-text="geolocation.lat.toFixed(6)"></span>°
-                                        </div>
-                                        <div class="mb-2">
-                                            <strong>Longitude:</strong> <span x-text="geolocation.lon.toFixed(6)"></span>°
-                                        </div>
-                                        <div class="mb-2">
-                                            <strong>Altitude:</strong> <span x-text="geolocation.alt.toFixed(1)"></span> m
-                                        </div>
-                                        <div class="mb-2">
-                                            <strong>Accuracy:</strong> <span x-text="geolocation.accuracy.toFixed(1)"></span> m
-                                        </div>
-                                    </div>
                                 </div>
                             </template>
                             <!-- No Location -->

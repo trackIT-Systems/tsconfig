@@ -142,84 +142,6 @@ async def add_base_url_to_context(request: Request, call_next):
 
 
 @app.get(
-    "/",
-    include_in_schema=False,
-    summary="Web Interface Home Page",
-)
-async def home(request: Request, config_group: str = None):
-    """Render the main configuration page with status integration.
-
-    In server mode, accepts optional config_group query parameter to display
-    configuration for a specific group.
-    """
-    # In server mode, validate config_group if provided
-    if config_loader.is_server_mode() and config_group:
-        available_groups = config_loader.list_config_groups()
-        if config_group not in available_groups:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "error": f"Config group '{config_group}' not found",
-                    "requested": config_group,
-                    "available": available_groups,
-                },
-            )
-
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "version": __version__,
-            "base_url": BASE_URL,
-            "config_group": config_group,
-        },
-    )
-
-
-@app.get(
-    "/{groupname}/test",
-    tags=["system"],
-    summary="Test endpoint for config group routing",
-)
-async def test_group_route(groupname: str):
-    """Test endpoint to verify path-based routing is working."""
-    return {
-        "message": "Route is working!",
-        "groupname": groupname,
-        "server_mode": config_loader.is_server_mode(),
-        "available_groups": config_loader.list_config_groups(),
-        "group_exists": groupname in config_loader.list_config_groups(),
-    }
-
-
-@app.get(
-    "/{groupname}",
-    include_in_schema=False,
-    summary="Web Interface for Specific Config Group",
-)
-async def home_with_group(request: Request, groupname: str):
-    """Render the main configuration page for a specific config group (server mode)."""
-    # Verify the config group exists
-    if not config_loader.is_server_mode():
-        return JSONResponse(status_code=404, content={"error": "Server mode is not enabled"})
-
-    available_groups = config_loader.list_config_groups()
-    if groupname not in available_groups:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": f"Config group '{groupname}' not found",
-                "requested": groupname,
-                "available": available_groups,
-            },
-        )
-
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "version": __version__, "base_url": BASE_URL, "config_group": groupname}
-    )
-
-
-@app.get(
     "/api/server-mode",
     tags=["system"],
     summary="Get server mode configuration",
@@ -663,3 +585,38 @@ def _parse_timedatectl_status(status_output):
                     timedatectl_info[key_snake] = value
 
     return timedatectl_info
+
+
+@app.get(
+    "/",
+    include_in_schema=False,
+    summary="Web Interface Home Page",
+)
+async def home(request: Request, config_group: str = None):
+    """Render the main configuration page with status integration.
+
+    In server mode, accepts optional config_group query parameter to display
+    configuration for a specific group.
+    """
+    # In server mode, validate config_group if provided
+    if config_loader.is_server_mode() and config_group:
+        available_groups = config_loader.list_config_groups()
+        if config_group not in available_groups:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": f"Config group '{config_group}' not found",
+                    "requested": config_group,
+                    "available": available_groups,
+                },
+            )
+
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "version": __version__,
+            "base_url": BASE_URL,
+            "config_group": config_group,
+        },
+    )
