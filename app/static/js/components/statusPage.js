@@ -32,8 +32,12 @@ export function statusPage() {
         geolocation: null,
         geolocationMap: null,
         geolocationMarker: null,
-        geolocationCircle: null,
         geolocationMapInitialized: false,
+        // User location properties
+        userLocationMarker: null,
+        userLocationCircle: null,
+        userLocationLine: null,
+        showUserLocation: false,
 
         async initStatus() {
             // Don't initialize in server mode
@@ -366,6 +370,19 @@ export function statusPage() {
             }
         },
 
+        getTrackerIcon() {
+            // Determine icon based on OS name
+            const osName = this.systemInfo?.os_release?.NAME || '';
+            
+            if (osName.includes('tsOS-audio')) {
+                return 'microphone';
+            } else if (osName.includes('tsOS-vhf')) {
+                return 'tower-broadcast';
+            } else {
+                return 'microchip';  // default
+            }
+        },
+
         initGeolocationMap() {
             // Only initialize if we have geolocation data and map not already initialized
             if (!this.geolocation || this.geolocationMapInitialized || !document.getElementById('geolocationMap')) {
@@ -392,19 +409,93 @@ export function statusPage() {
                 zoomOffset: -1
             }).addTo(this.geolocationMap);
 
-            // Add marker at the position (non-draggable, read-only)
+            // Add marker at the tracker position (non-draggable, read-only)
+            const trackerIcon = L.VectorMarkers.icon({
+                icon: this.getTrackerIcon(),
+                prefix: 'fa',
+                markerColor: 'var(--bs-purple)',  // Bootstrap purple CSS variable
+                iconColor: 'white'
+            });
+            
             this.geolocationMarker = L.marker([this.geolocation.lat, this.geolocation.lon], {
-                draggable: false
+                draggable: false,
+                icon: trackerIcon
             }).addTo(this.geolocationMap);
 
-            // Add accuracy circle
-            this.geolocationCircle = L.circle([this.geolocation.lat, this.geolocation.lon], {
-                radius: this.geolocation.accuracy,
-                color: '#3388ff',
-                fillColor: '#3388ff',
-                fillOpacity: 0.15,
-                weight: 2
+            // Add locate control for user's current location
+            const locateControl = L.control.locate({
+                position: 'topright',
+                strings: {
+                    title: "Show my location"
+                },
+                locateOptions: {
+                    maxZoom: 19,
+                    enableHighAccuracy: true
+                },
+                flyTo: false,
+                keepCurrentZoomLevel: true,
+                onLocationError: function(err) {
+                    // Suppress default alert, we handle it with custom toast
+                },
+                circleStyle: {
+                    color: '#136aec',
+                    fillColor: '#136aec',
+                    fillOpacity: 0.15,
+                    weight: 2
+                },
+                markerStyle: {
+                    color: '#136aec',
+                    fillColor: '#2A93EE',
+                    fillOpacity: 0.7,
+                    weight: 3,
+                    opacity: 0.9,
+                    radius: 9
+                },
+                icon: 'fas fa-crosshairs',
+                iconLoading: 'fas fa-spinner fa-spin',
+                showPopup: false,
+                createButtonCallback: function (container, options) {
+                    const link = L.DomUtil.create('a', 'leaflet-bar-part leaflet-bar-part-single', container);
+                    link.title = options.strings.title;
+                    const icon = L.DomUtil.create('i', 'fas fa-location-arrow', link);
+                    return { link: link, icon: icon };
+                }
             }).addTo(this.geolocationMap);
+
+            // Listen for location events
+            this.geolocationMap.on('locationfound', (e) => {
+                this.showUserLocation = true;
+                this.updateDistanceLine(e.latlng);
+            });
+
+            this.geolocationMap.on('locateactivate', () => {
+                this.showUserLocation = true;
+            });
+
+            this.geolocationMap.on('locatedeactivate', () => {
+                this.showUserLocation = false;
+                if (this.userLocationLine) {
+                    this.geolocationMap.removeLayer(this.userLocationLine);
+                    this.userLocationLine = null;
+                }
+            });
+
+            this.geolocationMap.on('locationerror', (e) => {
+                // Suppress the default error alert from leaflet-locate
+                e.preventDefault && e.preventDefault();
+                
+                let message = 'Unable to determine your location.';
+                
+                if (e.message.includes('permission') || e.message.includes('Permission')) {
+                    message = 'Geolocation requires HTTPS. Please access the site via HTTPS or localhost to use this feature.';
+                } else if (e.message.includes('timeout')) {
+                    message = 'Location request timed out. Please try again.';
+                } else if (e.message.includes('denied')) {
+                    message = 'Location permission denied. Please allow location access in your browser settings.';
+                }
+                
+                this.showToast(message, 'warning', { title: 'Geolocation Unavailable' });
+            });
 
             this.geolocationMapInitialized = true;
 
@@ -414,6 +505,40 @@ export function statusPage() {
                     this.geolocationMap.invalidateSize();
                 }
             }, 100);
+        },
+
+        updateDistanceLine(userLatLng) {
+            // Remove existing line if present
+            if (this.userLocationLine) {
+                this.geolocationMap.removeLayer(this.userLocationLine);
+            }
+
+            // Create line between tracker and user location
+            const trackerLatLng = [this.geolocation.lat, this.geolocation.lon];
+            this.userLocationLine = L.polyline([trackerLatLng, userLatLng], {
+                color: '#ffc107',
+                weight: 3,
+                opacity: 0.7,
+                dashArray: '10, 10'
+            }).addTo(this.geolocationMap);
+
+            // Calculate distance
+            const distance = this.geolocationMap.distance(trackerLatLng, userLatLng);
+            
+            // Add distance label in the middle of the line
+            const midpoint = [(trackerLatLng[0] + userLatLng.lat) / 2, (trackerLatLng[1] + userLatLng.lng) / 2];
+            
+            const distanceText = distance > 1000 
+                ? `${(distance / 1000).toFixed(2)} km` 
+                : `${distance.toFixed(1)} m`;
+            
+            // Create a popup with distance information
+            this.userLocationLine.bindPopup(`
+                <div class="text-center">
+                    <strong>Distance</strong><br>
+                    ${distanceText}
+                </div>
+            `);
         }
     }
 }
