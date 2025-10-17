@@ -872,48 +872,6 @@
                             </div>
                         </div>
 
-                        <!-- Scheduling Settings -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2">
-                                <i class="fas fa-calendar-alt me-2"></i>
-                                Scheduling Settings
-                            </h6>
-                            <div class="form-text mb-3">Configure the station location for scheduling detection tasks based on sunrise, sunset, dawn, dusk, and solar noon.</div>
-                            <div class="row">
-                                <!-- Left Column (Controls) -->
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">Latitude</label>
-                                        <input type="number" 
-                                               class="form-control" 
-                                               x-model.number="config.lat"
-                                               min="-90"
-                                               max="90"
-                                               step="0.00000001"
-                                               @input="updateMarkerFromInputs"
-                                               required>
-                                        <div class="form-text">Station latitude (-90 to 90)</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Longitude</label>
-                                        <input type="number" 
-                                               class="form-control" 
-                                               x-model.number="config.lon"
-                                               min="-180"
-                                               max="180"
-                                               step="0.00000001"
-                                               @input="updateMarkerFromInputs"
-                                               required>
-                                        <div class="form-text">Station longitude (-180 to 180)</div>
-                                    </div>
-                                </div>
-
-                                <!-- Right Column (Map) -->
-                                <div class="col-md-8">
-                                    <div id="soundscapeMap" class="map-container"></div>
-                                </div>
-                            </div>
-                        </div>
                         <!-- Recording Section -->
                         <div class="mb-4">
                             <h6 class="border-bottom pb-2">

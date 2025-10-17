@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from app import __version__
 from app.config_loader import config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
+from app.configs.geolocation import GeolocationConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -274,6 +275,34 @@ async def get_server_mode():
         "config_root": str(config_root) if is_server_mode and config_root else None,
         "debug": debug_info if is_server_mode else None,
     }
+
+
+@app.get(
+    "/api/geolocation",
+    tags=["system"],
+    summary="Get tracker geolocation",
+    description="""
+Get current tracker geolocation from /boot/firmware/geolocation file.
+
+Returns:
+- `lat`: Latitude in degrees
+- `lon`: Longitude in degrees
+- `alt`: Altitude in meters
+- `accuracy`: Accuracy radius in meters
+
+Returns null if geolocation file is not found.
+    """,
+    response_description="Geolocation information or null if not available",
+)
+async def get_geolocation():
+    """Get current tracker geolocation."""
+    try:
+        geolocation_config = GeolocationConfig()
+        geolocation = geolocation_config.load()
+        return geolocation
+    except (FileNotFoundError, ValueError) as e:
+        logger.debug(f"Geolocation not available: {str(e)}")
+        return None
 
 
 @app.get(

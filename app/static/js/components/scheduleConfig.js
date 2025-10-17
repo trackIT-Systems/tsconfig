@@ -9,15 +9,10 @@ export function scheduleConfig() {
     return {
         ...saveStateMixin(),
         config: {
-            lat: 0,
-            lon: 0,
             force_on: false,
             button_delay: "00:00",
             schedule: []
         },
-        map: null,
-        marker: null,
-        mapInitialized: false,
         // Service status tracking
         serviceStatus: {
             active: false,
@@ -74,116 +69,10 @@ export function scheduleConfig() {
             }
         },
 
-        initMap() {
-            // Only initialize if not already done and container is visible
-            if (this.mapInitialized || !document.getElementById('map')) {
-                return;
-            }
-
-            // Wait a bit to ensure the container is properly rendered
-            setTimeout(() => {
-                if (!document.getElementById('map') || this.mapInitialized) {
-                    return;
-                }
-
-                // Initialize map with loaded coordinates
-                this.map = L.map('map', {
-                    center: [this.config.lat, this.config.lon],
-                    zoom: 13,
-                    zoomControl: true
-                });
-                
-                // Add Mapbox satellite streets layer
-                L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
-                    attribution: '© Mapbox © OpenStreetMap',
-                    maxZoom: 19
-                }).addTo(this.map);
-
-                // Add locate control
-                L.control.locate({
-                    position: 'topleft',
-                    strings: {
-                        title: "Show my location"
-                    },
-                    flyTo: true,
-                    keepCurrentZoomLevel: true,
-                    locateOptions: {
-                        enableHighAccuracy: true
-                    }
-                }).addTo(this.map);
-
-                // Add marker
-                this.marker = L.marker([this.config.lat, this.config.lon], {
-                    draggable: true
-                }).addTo(this.map);
-
-                // Update coordinates when marker is dragged
-                this.marker.on('dragend', (e) => {
-                    const position = e.target.getLatLng();
-                    this.config.lat = position.lat.toFixed(8);
-                    this.config.lon = position.lng.toFixed(8);
-                });
-
-                // Update marker when map is clicked
-                this.map.on('click', (e) => {
-                    const position = e.latlng;
-                    this.marker.setLatLng(position);
-                    this.config.lat = position.lat.toFixed(8);
-                    this.config.lon = position.lng.toFixed(8);
-                });
-
-                // Handle location found event
-                this.map.on('locationfound', (e) => {
-                    this.config.lat = e.latlng.lat.toFixed(8);
-                    this.config.lon = e.latlng.lng.toFixed(8);
-                    this.updateMarkerFromInputs();
-                });
-
-                this.mapInitialized = true;
-                
-                // Force a resize to ensure tiles load properly
-                setTimeout(() => {
-                    if (this.map) {
-                        this.map.invalidateSize();
-                    }
-                }, 100);
-            }, 100);
-        },
-
-        ensureMapVisible() {
-            // Call this when the schedule tab becomes active
-            if (this.map && this.mapInitialized) {
-                setTimeout(() => {
-                    this.map.invalidateSize();
-                    this.map.setView([this.config.lat, this.config.lon], 13);
-                }, 50);
-            } else if (!this.mapInitialized) {
-                this.initMap();
-            }
-        },
-
-        updateMarkerFromInputs() {
-            if (this.marker && this.mapInitialized) {
-                // Ensure coordinates are within bounds and have proper precision
-                const lat = Math.min(Math.max(parseFloat(this.config.lat), -90), 90);
-                const lon = Math.min(Math.max(parseFloat(this.config.lon), -180), 180);
-                
-                // Update the marker and map view
-                this.marker.setLatLng([lat, lon]);
-                this.map.setView([lat, lon]);
-                
-                // Update the input values with properly formatted numbers
-                this.config.lat = lat.toFixed(8);
-                this.config.lon = lon.toFixed(8);
-            }
-        },
-
         async refreshConfig() {
             try {
                 // Reset to initial state
                 this.config = {
-                    lat: 0,
-                    lon: 0,
                     force_on: false,
                     button_delay: "00:00",
                     schedule: []
@@ -209,18 +98,10 @@ export function scheduleConfig() {
                 if (response.status === 404) {
                     // Set default configuration for schedule
                     this.config = {
-                        lat: 40.7128,
-                        lon: -74.0060,
                         force_on: false,
                         button_delay: "01:00",
                         schedule: []
                     };
-                    // Initialize map after config is loaded
-                    if (!this.mapInitialized) {
-                        this.initMap();
-                    } else {
-                        this.updateMarkerFromInputs();
-                    }
                     this.showMessage("No schedule configuration found. Using default values.", false);
                     return;
                 }
@@ -242,13 +123,6 @@ export function scheduleConfig() {
                     entry.stopSign = stopParts.sign;
                     entry.stopOffset = stopParts.offset;
                 });
-                
-                // Initialize map after config is loaded, or update if already initialized
-                if (!this.mapInitialized) {
-                    this.initMap();
-                } else {
-                    this.updateMarkerFromInputs();
-                }
                 
                 // Load service status only in tracker mode (default mode)
                 if (!this.serverMode) {

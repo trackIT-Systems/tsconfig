@@ -91,40 +91,8 @@
                                     </h6>
                                     
                                     <div class="row">
-                                        <!-- Left Column -->
-                                        <div class="col-md-4">
-                                            <!-- Location -->
-                                            <div class="mb-3">
-                                                <h6>Location</h6>
-                                                <div class="form-text mb-2">
-                                                    This location is used to compute astral events such as sunrise, sunset, dawn, dusk, and solar noon for scheduling.
-                                                </div>
-                                                <div class="row">
-                                                    <div class="col-6">
-                                                        <label class="form-label">Latitude</label>
-                                                        <input type="number" 
-                                                                class="form-control" 
-                                                                x-model="config.lat" 
-                                                                @input="updateMarkerFromInputs()"
-                                                                step="0.00000001" 
-                                                                max="90"
-                                                                min="-90"
-                                                                required>
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <label class="form-label">Longitude</label>
-                                                        <input type="number" 
-                                                                class="form-control" 
-                                                                x-model="config.lon" 
-                                                                @input="updateMarkerFromInputs()"
-                                                                step="0.00000001" 
-                                                                max="180"
-                                                                min="-180"
-                                                                required>
-                                                    </div>
-                                                </div>
-                                            </div>
-
+                                        <!-- Configuration Column -->
+                                        <div class="col-md-12">
                                             <!-- Force On -->
                                             <div class="mb-3">
                                                 <div class="form-check form-switch">
@@ -151,11 +119,6 @@
                                                     This is the duration the tracker will stay on after manually pressing the power button or reconnecting power.
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        <!-- Right Column (Map) -->
-                                        <div class="col-md-8">
-                                            <div id="map" class="map-container"></div>
                                         </div>
                                     </div>
                                 </div>
