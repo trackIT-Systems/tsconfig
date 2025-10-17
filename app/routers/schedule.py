@@ -3,15 +3,13 @@
 from typing import List, Optional
 
 from fastapi import Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.configs.schedule import ScheduleConfig, ScheduleEntry
 from app.routers.base import BaseConfigRouter
 
 
 class ScheduleConfigUpdate(BaseModel):
-    lat: float = Field(..., ge=-90, le=90)
-    lon: float = Field(..., ge=-180, le=180)
     force_on: bool
     button_delay: str
     schedule: List[ScheduleEntry]
@@ -30,7 +28,6 @@ async def update_schedule(
 ):
     config_dict = config.model_dump()
     return schedule_router.update_config_helper(config_dict, config_group)
-
 
 
 @router.post("/validate")

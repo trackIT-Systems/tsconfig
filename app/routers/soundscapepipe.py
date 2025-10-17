@@ -83,8 +83,6 @@ class SoundscapepipeConfigUpdate(BaseModel):
 
     # Input device section
     stream_port: int = Field(..., ge=1, le=65535)
-    lat: float = Field(..., ge=-90, le=90)
-    lon: float = Field(..., ge=-180, le=180)
     input_device_match: Optional[str] = None
     sample_rate: Optional[int] = Field(None, gt=0)
     input_length_s: Optional[float] = Field(None, gt=0)
