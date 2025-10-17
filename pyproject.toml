@@ -18,9 +18,6 @@ dependencies = [
 requires-python = ">=3.9"
 
 [project.optional-dependencies]
-audio = [
-    "sounddevice>=0.4.0",
-]
 
 [build-system]
 requires = ["pdm-backend"]

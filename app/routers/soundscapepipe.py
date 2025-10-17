@@ -6,15 +6,13 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Try to import sounddevice for hardware audio device detection
-# This is optional and only needed for tracker mode with hardware validation
-try:
-    import sounddevice as sd
+# Check if ALSA is available by checking for /proc/asound/cards
+# This is only needed for tracker mode with hardware validation
+def _check_alsa_available() -> bool:
+    """Check if /proc/asound/cards exists."""
+    return os.path.exists('/proc/asound/cards')
 
-    SOUNDDEVICE_AVAILABLE = True
-except ImportError:
-    SOUNDDEVICE_AVAILABLE = False
-    sd = None
+ALSA_AVAILABLE = _check_alsa_available()
 
 import yaml
 from fastapi import HTTPException, Query
@@ -158,13 +156,142 @@ def _load_audio_devices_config() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to load audio devices config: {str(e)}")
 
 
-def _match_device_name(config_name: str, actual_name: str) -> bool:
-    """Check if a configured device name matches an actual device name.
-
-    Matches if the config name appears at the start of the actual device name.
-    This allows matching "trackIT Analog Frontend" with "trackIT Analog Frontend: Audio (hw:2,0)"
+def _parse_alsa_cards() -> List[Dict[str, Any]]:
+    """Parse /proc/asound/cards to get card information.
+    
+    Returns list of cards with card_id, short_name, and full_name.
+    Example:
+    [
+        {'card_id': 0, 'short_name': 'Headphones', 'full_name': 'bcm2835 Headphones'},
+        {'card_id': 1, 'short_name': 'Microphone', 'full_name': '384kHz AudioMoth USB Microphone'},
+        {'card_id': 2, 'short_name': 'Frontend', 'full_name': 'trackIT Analog Frontend'}
+    ]
     """
-    return actual_name.startswith(config_name)
+    import re
+    
+    cards = []
+    try:
+        with open('/proc/asound/cards', 'r') as f:
+            content = f.read()
+            # Parse format like:
+            # 2 [Frontend       ]: USB-Audio - trackIT Analog Frontend
+            #                     trackIT Analog Frontend at usb-...
+            # Pattern to match card number, short name, and full name
+            pattern = r'^\s*(\d+)\s+\[([^\]]+)\s*\]\s*:\s*[^-]+-\s*(.+?)$'
+            for line in content.split('\n'):
+                match = re.match(pattern, line.strip())
+                if match:
+                    card_info = {
+                        'card_id': int(match.group(1)),
+                        'short_name': match.group(2).strip(),
+                        'full_name': match.group(3).strip()
+                    }
+                    cards.append(card_info)
+    except Exception as e:
+        print(f"Could not read /proc/asound/cards: {e}")
+    
+    return cards
+
+
+def _match_device_name(config_name: str, device_info: Dict[str, Any]) -> bool:
+    """Check if a configured device name matches a device.
+
+    Config names are like 'trackIT Analog Frontend' or '384kHz AudioMoth USB Microphone'
+    Device info contains 'name', 'card_short_name', and 'card_full_name'
+    
+    Matching priority:
+    1. Exact match or substring match with full card name
+    2. Card short name appears as a word in config name
+    """
+    import re
+    
+    config_lower = config_name.lower()
+    
+    # Get device information
+    card_full_name = device_info.get('card_full_name', '').lower()
+    card_short_name = device_info.get('card_short_name', '').lower()
+    
+    # Priority 1: Check if config matches the full card name
+    if card_full_name:
+        if config_lower == card_full_name or config_lower in card_full_name:
+            return True
+    
+    # Priority 2: Check if the card short name appears as a word in the config name
+    if card_short_name:
+        if re.search(r'\b' + re.escape(card_short_name) + r'\b', config_lower):
+            return True
+    
+    return False
+
+
+def _query_alsa_devices() -> Dict[str, Any]:
+    """Query ALSA devices by parsing /proc/asound/cards and generating device names.
+    
+    Returns a dictionary with 'input', 'output', and 'cards' keys.
+    """
+    input_devices = []
+    output_devices = []
+    
+    try:
+        # Parse /proc/asound/cards
+        cards = _parse_alsa_cards()
+        
+        # Generate common ALSA device names for each card
+        # These are the typical PCM device names that ALSA creates
+        for card in cards:
+            short_name = card['short_name']
+            card_id = card['card_id']
+            
+            # Common input device names (for capture)
+            input_device_names = [
+                f"hw:CARD={short_name},DEV=0",
+                f"plughw:CARD={short_name},DEV=0",
+                f"default:CARD={short_name}",
+                f"sysdefault:CARD={short_name}",
+            ]
+            
+            # Common output device names (for playback)
+            output_device_names = [
+                f"hw:CARD={short_name},DEV=0",
+                f"plughw:CARD={short_name},DEV=0",
+                f"default:CARD={short_name}",
+                f"sysdefault:CARD={short_name}",
+            ]
+            
+            # Add input devices
+            for idx, device_name in enumerate(input_device_names):
+                device_info = {
+                    "index": len(input_devices),
+                    "name": device_name,
+                    "card_id": card_id,
+                    "card_short_name": short_name,
+                    "card_full_name": card['full_name'],
+                    "max_input_channels": 2,
+                    "default_sample_rate": 48000,
+                }
+                input_devices.append(device_info)
+            
+            # Add output devices
+            for idx, device_name in enumerate(output_device_names):
+                device_info = {
+                    "index": len(output_devices),
+                    "name": device_name,
+                    "card_id": card_id,
+                    "card_short_name": short_name,
+                    "card_full_name": card['full_name'],
+                    "max_output_channels": 2,
+                    "default_sample_rate": 48000,
+                }
+                output_devices.append(device_info)
+                
+    except Exception as e:
+        print(f"Error querying ALSA devices: {e}")
+    
+    return {
+        "input": input_devices,
+        "output": output_devices,
+        "cards": cards if 'cards' in locals() else [],
+    }
 
 
 @router.get("/audio-devices")
@@ -180,8 +307,8 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
     # Load configuration file
     devices_config = _load_audio_devices_config()
 
-    # In server mode or when sounddevice is not available, return config as-is without hardware validation
-    if config_loader.is_server_mode() or not SOUNDDEVICE_AVAILABLE:
+    # In server mode or when ALSA tools are not available, return config as-is without hardware validation
+    if config_loader.is_server_mode() or not ALSA_AVAILABLE:
         input_devices = []
         output_devices = []
         default_input = None
@@ -214,35 +341,22 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
             "input_device_count": len(input_devices),
             "output_device_count": len(output_devices),
             "server_mode": config_loader.is_server_mode(),
-            "sounddevice_available": SOUNDDEVICE_AVAILABLE,
+            "alsa_available": ALSA_AVAILABLE,
         }
 
     # Tracker mode: Validate config against actual hardware
     try:
-        # Force sounddevice to reinitialize and refresh device list if requested
+        # Refresh ALSA device list if requested
         if refresh:
             try:
-                if hasattr(sd, "_terminate") and hasattr(sd, "_initialize"):
-                    sd._terminate()
-                    sd._initialize()
-                if hasattr(sd.default, "_device"):
-                    try:
-                        sd.default._device = None
-                    except Exception:
-                        pass
-                try:
-                    subprocess.run(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
-                except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-                    pass
-            except Exception as e:
-                print(f"Warning: Could not refresh audio device list: {e}")
+                subprocess.run(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                pass
 
         # Query all available devices from hardware
-        hardware_devices = sd.query_devices()
-
-        # Get default devices from hardware
-        hw_default_input = sd.default.device[0] if sd.default.device[0] is not None else None
-        hw_default_output = sd.default.device[1] if sd.default.device[1] is not None else None
+        alsa_devices = _query_alsa_devices()
+        hw_input_devices = alsa_devices["input"]
+        hw_output_devices = alsa_devices["output"]
 
         # Filter configured devices to only include those present on hardware
         input_devices = []
@@ -255,24 +369,24 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
         for config_device in devices_config.get("input", []):
             config_name = config_device.get("name", "")
 
-            # Find matching hardware device by name only
-            matched_hw_index = None
-            for i, hw_dev in enumerate(hardware_devices):
-                if _match_device_name(config_name, hw_dev["name"]):
-                    matched_hw_index = i
+            # Find matching hardware device
+            matched_hw_device = None
+            for hw_dev in hw_input_devices:
+                if _match_device_name(config_name, hw_dev):
+                    matched_hw_device = hw_dev
                     break
 
-            if matched_hw_index is not None:
+            if matched_hw_device is not None:
                 # Device exists on hardware, add it with actual hardware index
                 device_info = {
-                    "index": matched_hw_index,
+                    "index": matched_hw_device["index"],
                     "name": config_name,  # Use config name for consistency
                     "max_input_channels": config_device.get("max_input_channels"),
                     "default_sample_rate": config_device.get("default_sample_rate"),
-                    "is_default": matched_hw_index == hw_default_input or config_device.get("is_default", False),
+                    "is_default": config_device.get("is_default", False),
                 }
                 if device_info["is_default"]:
-                    default_input = matched_hw_index
+                    default_input = matched_hw_device["index"]
                 input_devices.append(device_info)
             else:
                 config_filtered += 1
@@ -281,24 +395,24 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
         for config_device in devices_config.get("output", []):
             config_name = config_device.get("name", "")
 
-            # Find matching hardware device by name only
-            matched_hw_index = None
-            for i, hw_dev in enumerate(hardware_devices):
-                if _match_device_name(config_name, hw_dev["name"]):
-                    matched_hw_index = i
+            # Find matching hardware device
+            matched_hw_device = None
+            for hw_dev in hw_output_devices:
+                if _match_device_name(config_name, hw_dev):
+                    matched_hw_device = hw_dev
                     break
 
-            if matched_hw_index is not None:
+            if matched_hw_device is not None:
                 # Device exists on hardware, add it with actual hardware index
                 device_info = {
-                    "index": matched_hw_index,
+                    "index": matched_hw_device["index"],
                     "name": config_name,  # Use config name for consistency
                     "max_output_channels": config_device.get("max_output_channels"),
                     "default_sample_rate": config_device.get("default_sample_rate"),
-                    "is_default": matched_hw_index == hw_default_output or config_device.get("is_default", False),
+                    "is_default": config_device.get("is_default", False),
                 }
                 if device_info["is_default"]:
-                    default_output = matched_hw_index
+                    default_output = matched_hw_device["index"]
                 output_devices.append(device_info)
             else:
                 config_filtered += 1
