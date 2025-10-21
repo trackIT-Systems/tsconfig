@@ -594,17 +594,21 @@ async def upload_config(
     # Special case: cmdline.txt requires reboot, not service restart
     if config_type == "cmdline" and restart_service:
         # Reboot the system instead of restarting a service
+        # Schedule reboot in 10 seconds to allow response to reach client
         response_data["reboot_initiated"] = False
+        response_data["reboot_delay_seconds"] = 10
         try:
-            subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
-            response_data["message"] += ". System reboot initiated (cmdline.txt requires reboot)"
-            response_data["reboot_initiated"] = True
-        except subprocess.TimeoutExpired:
-            # Timeout is expected as the system will be rebooting
-            response_data["message"] += ". System reboot initiated (cmdline.txt requires reboot)"
+            # Use systemd-run to schedule reboot in 10 seconds
+            subprocess.run(
+                ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            response_data["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt requires reboot)"
             response_data["reboot_initiated"] = True
         except Exception as e:
-            response_data["message"] += f" (Warning: Failed to initiate reboot: {str(e)})"
+            response_data["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
             response_data["reboot_initiated"] = False
     else:
         # Normal service restart for other config types
@@ -1182,42 +1186,46 @@ async def upload_config_zip(
     elif reboot_lower == "force":
         # Always reboot after successful upload
         response["reboot_policy"] = "force"
+        response["reboot_delay_seconds"] = 10
         # Reboot only works in tracker mode (not server mode)
         if config_loader.is_server_mode():
             response["message"] += " (System reboot is not available in server mode)"
             response["reboot_initiated"] = False
         else:
             try:
-                # Use systemctl to reboot the system
-                subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
-                response["message"] += ". System reboot initiated (forced)"
-                response["reboot_initiated"] = True
-            except subprocess.TimeoutExpired:
-                # Timeout is expected as the system will be rebooting
-                response["message"] += ". System reboot initiated (forced)"
+                # Use systemd-run to schedule reboot in 10 seconds
+                subprocess.run(
+                    ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                response["message"] += ". System reboot scheduled in 10 seconds (forced)"
                 response["reboot_initiated"] = True
             except Exception as e:
-                response["message"] += f" (Warning: Failed to initiate reboot: {str(e)})"
+                response["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
                 response["reboot_initiated"] = False
     elif reboot_lower == "allow" and cmdline_updated:
         # "allow" mode with cmdline.txt updated - automatically reboot
         response["reboot_policy"] = "allow"
+        response["reboot_delay_seconds"] = 10
         # Reboot only works in tracker mode (not server mode)
         if config_loader.is_server_mode():
             response["message"] += " (System reboot is not available in server mode, but cmdline.txt was updated)"
             response["reboot_initiated"] = False
         else:
             try:
-                # Use systemctl to reboot the system
-                subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
-                response["message"] += ". System reboot initiated (cmdline.txt updated)"
-                response["reboot_initiated"] = True
-            except subprocess.TimeoutExpired:
-                # Timeout is expected as the system will be rebooting
-                response["message"] += ". System reboot initiated (cmdline.txt updated)"
+                # Use systemd-run to schedule reboot in 10 seconds
+                subprocess.run(
+                    ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                response["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt updated)"
                 response["reboot_initiated"] = True
             except Exception as e:
-                response["message"] += f" (Warning: Failed to initiate reboot: {str(e)})"
+                response["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
                 response["reboot_initiated"] = False
     else:
         # "allow" mode but cmdline.txt was not updated - no reboot
