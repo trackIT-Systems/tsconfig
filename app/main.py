@@ -21,7 +21,7 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.logging_config import get_logger, setup_logging
-from app.routers import authorized_keys, radiotracking, schedule, shell, soundscapepipe, systemd, upload
+from app.routers import authorized_keys, configs, radiotracking, schedule, shell, soundscapepipe, systemd
 
 # Set up logging for the main application
 setup_logging()
@@ -58,8 +58,8 @@ tags_metadata = [
         "description": "SSH authorized keys management for secure remote access.",
     },
     {
-        "name": "upload",
-        "description": "Configuration file upload with validation.",
+        "name": "configs",
+        "description": "Configuration file upload and download with validation.",
     },
     {
         "name": "systemd",
@@ -117,7 +117,7 @@ app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
-app.include_router(upload.router)
+app.include_router(configs.router)
 
 # Only include system-specific routers in tracker mode (default mode)
 # These are disabled in server mode since they require direct hardware access

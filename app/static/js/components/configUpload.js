@@ -69,7 +69,8 @@ export function configUpload() {
                 formData.append('force', this.options.force.toString());
                 formData.append('pedantic', this.options.pedantic.toString());
                 formData.append('restart_services', this.options.restartServices.toString());
-                formData.append('reboot', this.options.reboot.toString());
+                // Convert boolean reboot to new format: true -> "force", false -> "allow"
+                formData.append('reboot', this.options.reboot ? 'force' : 'allow');
 
                 console.log('Uploading config with options:', {
                     file: this.selectedFile.name,
@@ -79,7 +80,7 @@ export function configUpload() {
                     reboot: this.options.reboot
                 });
 
-                const url = apiUrl('/api/upload/config-zip');
+                const url = apiUrl('/api/configs.zip');
                 const response = await fetch(url, {
                     method: 'POST',
                     body: formData

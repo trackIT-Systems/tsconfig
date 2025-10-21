@@ -476,7 +476,7 @@ class SystemdServiceLogsCharacteristic(WriteOnlyCharacteristic):
 
 
 class UploadConfigCharacteristic(WriteOnlyCharacteristic):
-    """Config Upload characteristic."""
+    """Config Upload characteristic (POST /api/configs/update)."""
 
     def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
         async def upload_handler(data: Dict[str, Any]):
@@ -495,7 +495,7 @@ class UploadConfigCharacteristic(WriteOnlyCharacteristic):
 
 
 class UploadZipCharacteristic(WriteOnlyCharacteristic):
-    """Zip Upload characteristic."""
+    """Zip Upload characteristic (POST /api/configs.zip)."""
 
     def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
         async def upload_zip_handler(data: Dict[str, Any]):
