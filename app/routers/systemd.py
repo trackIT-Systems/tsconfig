@@ -45,6 +45,7 @@ class ServiceInfo(BaseModel):
     status: str
     uptime: Optional[str] = None
     expert: bool = False
+    is_target: bool = False  # True if this is a systemd target (cannot be controlled)
 
 
 class ServiceAction(BaseModel):
@@ -150,14 +151,14 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
 def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
     """Get information about a systemd service."""
     try:
-        # Get service status including timestamps
+        # Get service status including timestamps and type
         result = subprocess.run(
             [
                 "systemctl",
                 "show",
                 service_config.name,
                 "--no-pager",
-                "--property=ActiveState,UnitFileState,Description,ActiveEnterTimestamp,InactiveEnterTimestamp,StateChangeTimestamp",
+                "--property=ActiveState,UnitFileState,Description,ActiveEnterTimestamp,InactiveEnterTimestamp,StateChangeTimestamp,Type",
             ],
             capture_output=True,
             text=True,
@@ -174,6 +175,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
                 status="not-found",
                 uptime=None,
                 expert=True,  # Force expert mode for unavailable services
+                is_target=False,
             )
 
         # Parse output
@@ -186,6 +188,9 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
         active_state = properties.get("ActiveState", "unknown")
         unit_file_state = properties.get("UnitFileState", "unknown")
         description = properties.get("Description", "No description available")
+        
+        # Check if this is a target unit (targets end with .target)
+        is_target = service_config.name.endswith(".target")
 
         # Check if service is not found (empty UnitFileState and inactive + generic description)
         service_not_found = unit_file_state == "" and active_state == "inactive" and description.endswith(".service")
@@ -199,6 +204,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
                 status="not-found",
                 uptime=None,
                 expert=True,  # Force expert mode for unavailable services
+                is_target=False,
             )
 
         # Calculate uptime/downtime
@@ -212,6 +218,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             status=active_state,
             uptime=uptime,
             expert=service_config.expert,
+            is_target=is_target,
         )
 
     except subprocess.TimeoutExpired:
@@ -223,6 +230,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             status="timeout",
             uptime=None,
             expert=True,  # Force expert mode for services with timeout
+            is_target=False,
         )
     except Exception as e:
         return ServiceInfo(
@@ -233,6 +241,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             status="error",
             uptime=None,
             expert=True,  # Force expert mode for services with errors
+            is_target=False,
         )
 
 

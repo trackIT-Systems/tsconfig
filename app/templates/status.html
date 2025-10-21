@@ -91,6 +91,10 @@
                                                 <h6 class="mb-0 fw-bold">
                                                     <code class="text-primary" x-text="service.name"></code>
                                                 </h6>
+                                                <!-- Target badge -->
+                                                <template x-if="service.is_target">
+                                                    <span class="badge bg-info text-dark" style="font-size: 0.7em;">TARGET</span>
+                                                </template>
                                             </div>
                                             <div class="d-flex align-items-center gap-3 mt-1">
                                                 <small class="text-muted" x-text="service.description"></small>
@@ -128,69 +132,72 @@
                                     </span>
                                 </div>
 
-                                <!-- Right section: Action buttons -->
-                                <div class="d-flex align-items-center gap-2">
-                                    <!-- Action buttons -->
-                                    <div class="d-flex gap-1">
-                                        <!-- Start/Stop button -->
-                                        <button class="btn btn-sm" 
-                                                :class="{
-                                                    'btn-outline-success': (!service.active && getServiceStartStopState(service.name) === 'idle') || getServiceStartStopState(service.name) === 'started',
-                                                    'btn-success': getServiceStartStopState(service.name) === 'starting',
-                                                    'btn-outline-danger': (service.active && getServiceStartStopState(service.name) === 'idle') || getServiceStartStopState(service.name) === 'stopped',
-                                                    'btn-danger': getServiceStartStopState(service.name) === 'stopping'
-                                                }"
-                                                @click="performStartStopAction(service.name, service.active ? 'stop' : 'start')"
-                                                :disabled="actionLoading || service.status === 'not-found' || getServiceStartStopState(service.name) === 'starting' || getServiceStartStopState(service.name) === 'stopping'"
-                                                :title="service.active ? 'Stop service' : 'Start service'">
-                                            <template x-if="!service.active && getServiceStartStopState(service.name) === 'idle'">
-                                                <i class="fas fa-play"></i>
-                                            </template>
-                                            <template x-if="service.active && getServiceStartStopState(service.name) === 'idle'">
-                                                <i class="fas fa-stop"></i>
-                                            </template>
-                                            <template x-if="getServiceStartStopState(service.name) === 'starting'">
-                                                <i class="fas fa-spinner fa-spin"></i>
-                                            </template>
-                                            <template x-if="getServiceStartStopState(service.name) === 'stopping'">
-                                                <i class="fas fa-spinner fa-spin"></i>
-                                            </template>
-                                            <template x-if="getServiceStartStopState(service.name) === 'started'">
-                                                <i class="fas fa-check"></i>
-                                            </template>
-                                            <template x-if="getServiceStartStopState(service.name) === 'stopped'">
-                                                <i class="fas fa-check"></i>
-                                            </template>
-                                        </button>
-                                        <!-- Restart button -->
-                                        <button class="btn btn-sm" 
-                                                :class="{
-                                                    'btn-outline-warning': getServiceRestartState(service.name) === 'idle',
-                                                    'btn-primary': getServiceRestartState(service.name) === 'restarting',
-                                                    'btn-outline-success': getServiceRestartState(service.name) === 'restarted'
-                                                }"
-                                                @click="performAction(service.name, 'restart')"
-                                                :disabled="actionLoading || service.status === 'not-found' || getServiceRestartState(service.name) === 'restarting'"
-                                                title="Restart service">
-                                            <template x-if="getServiceRestartState(service.name) === 'idle'">
-                                                <i class="fas fa-redo"></i>
-                                            </template>
-                                            <template x-if="getServiceRestartState(service.name) === 'restarting'">
-                                                <i class="fas fa-spinner fa-spin"></i>
-                                            </template>
-                                            <template x-if="getServiceRestartState(service.name) === 'restarted'">
-                                                <i class="fas fa-check"></i>
-                                            </template>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" 
-                                                @click="streamLogs(service.name)"
-                                                :disabled="service.status === 'not-found'"
-                                                title="View logs">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span class="d-none d-xl-inline ms-1">Logs</span>
-                                        </button>
+                                <!-- Right section: Action buttons (not shown for targets) -->
+                                <template x-if="!service.is_target">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <!-- Action buttons -->
+                                        <div class="d-flex gap-1">
+                                            <!-- Start/Stop button -->
+                                            <button class="btn btn-sm" 
+                                                    :class="{
+                                                        'btn-outline-success': (!service.active && getServiceStartStopState(service.name) === 'idle') || getServiceStartStopState(service.name) === 'started',
+                                                        'btn-success': getServiceStartStopState(service.name) === 'starting',
+                                                        'btn-outline-danger': (service.active && getServiceStartStopState(service.name) === 'idle') || getServiceStartStopState(service.name) === 'stopped',
+                                                        'btn-danger': getServiceStartStopState(service.name) === 'stopping'
+                                                    }"
+                                                    @click="performStartStopAction(service.name, service.active ? 'stop' : 'start')"
+                                                    :disabled="actionLoading || service.status === 'not-found' || getServiceStartStopState(service.name) === 'starting' || getServiceStartStopState(service.name) === 'stopping'"
+                                                    :title="service.active ? 'Stop service' : 'Start service'">
+                                                <template x-if="!service.active && getServiceStartStopState(service.name) === 'idle'">
+                                                    <i class="fas fa-play"></i>
+                                                </template>
+                                                <template x-if="service.active && getServiceStartStopState(service.name) === 'idle'">
+                                                    <i class="fas fa-stop"></i>
+                                                </template>
+                                                <template x-if="getServiceStartStopState(service.name) === 'starting'">
+                                                    <i class="fas fa-spinner fa-spin"></i>
+                                                </template>
+                                                <template x-if="getServiceStartStopState(service.name) === 'stopping'">
+                                                    <i class="fas fa-spinner fa-spin"></i>
+                                                </template>
+                                                <template x-if="getServiceStartStopState(service.name) === 'started'">
+                                                    <i class="fas fa-check"></i>
+                                                </template>
+                                                <template x-if="getServiceStartStopState(service.name) === 'stopped'">
+                                                    <i class="fas fa-check"></i>
+                                                </template>
+                                            </button>
+                                            <!-- Restart button -->
+                                            <button class="btn btn-sm" 
+                                                    :class="{
+                                                        'btn-outline-warning': getServiceRestartState(service.name) === 'idle',
+                                                        'btn-primary': getServiceRestartState(service.name) === 'restarting',
+                                                        'btn-outline-success': getServiceRestartState(service.name) === 'restarted'
+                                                    }"
+                                                    @click="performAction(service.name, 'restart')"
+                                                    :disabled="actionLoading || service.status === 'not-found' || getServiceRestartState(service.name) === 'restarting'"
+                                                    title="Restart service">
+                                                <template x-if="getServiceRestartState(service.name) === 'idle'">
+                                                    <i class="fas fa-redo"></i>
+                                                </template>
+                                                <template x-if="getServiceRestartState(service.name) === 'restarting'">
+                                                    <i class="fas fa-spinner fa-spin"></i>
+                                                </template>
+                                                <template x-if="getServiceRestartState(service.name) === 'restarted'">
+                                                    <i class="fas fa-check"></i>
+                                                </template>
+                                            </button>
+                                            <!-- Logs button -->
+                                            <button class="btn btn-outline-info btn-sm" 
+                                                    @click="streamLogs(service.name)"
+                                                    :disabled="service.status === 'not-found'"
+                                                    title="View logs">
+                                                <i class="fas fa-file-alt"></i>
+                                                <span class="d-none d-xl-inline ms-1">Logs</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                </template>
                             </div>
                         </div>
                     </template>
