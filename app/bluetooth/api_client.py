@@ -201,7 +201,7 @@ class TsConfigApiClient:
             logger.error(f"HTTP GET error for logs/{service}: {e}")
             raise
 
-    # Upload Service endpoints
+    # Config Service endpoints (upload and download)
 
     async def upload_config(
         self,
@@ -241,7 +241,7 @@ class TsConfigApiClient:
             if mtime is not None:
                 data["mtime"] = str(mtime)
 
-            response = await self.client.post("/api/upload/config", files=files, data=data)
+            response = await self.client.post("/api/configs/update", files=files, data=data)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:
@@ -265,7 +265,7 @@ class TsConfigApiClient:
             restart_services: Whether to restart services after upload
             pedantic: Reject upload if unknown files are present
             force: Force overwrite regardless of file modification time
-            reboot: Whether to reboot the system after successfully applying the config-zip
+            reboot: Whether to force reboot after upload (converted to 'force' or 'allow')
 
         Returns:
             Upload result
@@ -277,18 +277,83 @@ class TsConfigApiClient:
 
             # Create multipart form data
             files = {"file": (filename, file_content)}
+            # Convert boolean reboot to new format: True -> "force", False -> "allow"
             data = {
                 "restart_services": str(restart_services).lower(),
                 "pedantic": str(pedantic).lower(),
                 "force": str(force).lower(),
-                "reboot": str(reboot).lower(),
+                "reboot": "force" if reboot else "allow",
             }
 
-            response = await self.client.post("/api/upload/config-zip", files=files, data=data)
+            response = await self.client.post("/api/configs.zip", files=files, data=data)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:
             logger.error(f"HTTP POST error for upload/zip: {e}")
+            raise
+
+    async def download_config(self, filename: str) -> Dict[str, Any]:
+        """Download a configuration file.
+
+        Args:
+            filename: Name of the config file to download
+
+        Returns:
+            Dictionary with 'content' (file content) and 'last_modified' (if available)
+        """
+        await self._ensure_client()
+        try:
+            response = await self.client.get(f"/api/configs/{filename}")
+            response.raise_for_status()
+
+            result = {
+                "content": response.text,
+                "filename": filename,
+            }
+
+            # Extract Last-Modified header if present
+            if "Last-Modified" in response.headers:
+                result["last_modified"] = response.headers["Last-Modified"]
+
+            return result
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP GET error for download config: {e}")
+            raise
+
+    async def download_zip(self) -> Dict[str, Any]:
+        """Download a zip file containing all existing configuration files.
+
+        Returns:
+            Dictionary with 'content' (base64 encoded zip), 'filename', and 'last_modified' (if available)
+        """
+        await self._ensure_client()
+        try:
+            response = await self.client.get("/api/configs.zip")
+            response.raise_for_status()
+
+            # Extract filename from Content-Disposition header if present
+            filename = "tsconfig.zip"  # Default fallback
+            if "Content-Disposition" in response.headers:
+                import re
+
+                disposition = response.headers["Content-Disposition"]
+                match = re.search(r'filename="?([^"]+)"?', disposition)
+                if match:
+                    filename = match.group(1)
+
+            # Return base64 encoded content for binary zip file
+            result = {
+                "content": base64.b64encode(response.content).decode("utf-8"),
+                "filename": filename,
+            }
+
+            # Extract Last-Modified header if present
+            if "Last-Modified" in response.headers:
+                result["last_modified"] = response.headers["Last-Modified"]
+
+            return result
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP GET error for download zip: {e}")
             raise
 
     async def close(self):

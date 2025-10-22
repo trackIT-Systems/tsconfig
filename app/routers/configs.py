@@ -1,18 +1,21 @@
-"""Configuration file upload endpoints."""
+"""Configuration file upload and download endpoints."""
 
 import calendar
 import os
+import socket
 import subprocess
 import time
 import zipfile
 from configparser import ConfigParser
 from datetime import datetime, timedelta, timezone
+from email.utils import formatdate
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Path as PathParam, Response, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config_loader import config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
@@ -25,7 +28,7 @@ from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.configs.wireguard import WireguardConfig
 
-router = APIRouter(prefix="/api/upload", tags=["upload"])
+router = APIRouter(prefix="/api/configs", tags=["configs"])
 
 
 def round_mtime_for_fat32(dt: datetime) -> datetime:
@@ -345,7 +348,72 @@ def parse_yaml_file(content: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse YAML file: {str(e)}")
 
 
-@router.post("/config")
+@router.get("/")
+async def list_configs():
+    """List all existing configuration files with their modification times.
+
+    Returns metadata for all configuration files that exist on the system,
+    including their filenames and last modified timestamps.
+
+    This endpoint is disabled in server mode.
+
+    Returns:
+        JSON object with:
+        - files: List of config file metadata (filename, mtime)
+        - count: Number of existing config files
+        - most_recent_mtime: ISO timestamp of most recently modified file
+    """
+    # Check if server mode is enabled - disable endpoint if so
+    if config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=403,
+            detail="Config download endpoints are disabled in server mode",
+        )
+
+    files_metadata = []
+    most_recent_mtime_timestamp = None
+
+    for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
+        try:
+            config_instance = get_config_instance(config_type)
+            
+            if config_instance.config_file.exists():
+                file_stat = config_instance.config_file.stat()
+                mtime = datetime.utcfromtimestamp(file_stat.st_mtime)
+                
+                files_metadata.append({
+                    "filename": filename,
+                    "mtime": mtime.isoformat() + "Z",  # Add Z to indicate UTC
+                })
+                
+                # Track most recent mtime
+                if most_recent_mtime_timestamp is None or file_stat.st_mtime > most_recent_mtime_timestamp:
+                    most_recent_mtime_timestamp = file_stat.st_mtime
+        except Exception:
+            # Skip files that can't be accessed
+            continue
+
+    # Build response
+    response_data = {
+        "files": files_metadata,
+        "count": len(files_metadata),
+    }
+
+    # Add most recent mtime if any files exist
+    if most_recent_mtime_timestamp is not None:
+        most_recent_dt = datetime.utcfromtimestamp(most_recent_mtime_timestamp)
+        response_data["most_recent_mtime"] = most_recent_dt.isoformat() + "Z"
+
+    # Prepare response with Last-Modified header
+    response_headers = {}
+    if most_recent_mtime_timestamp is not None:
+        http_date = formatdate(most_recent_mtime_timestamp, usegmt=True)
+        response_headers["Last-Modified"] = http_date
+
+    return JSONResponse(content=response_data, headers=response_headers)
+
+
+@router.post("/update")
 async def upload_config(
     file: UploadFile = File(..., description="Configuration file to upload"),
     restart_service: bool = Form(False, description="Restart the respective service after upload"),
@@ -377,13 +445,17 @@ async def upload_config(
     - File is always overwritten regardless of timestamps
     - File mtime is set to current system time
     
-    Optionally, the respective systemd service can be restarted after upload.
+    Special Handling:
+    - If cmdline.txt is uploaded with restart_service=True, the system will reboot instead of 
+      attempting a service restart (since cmdline.txt changes require a reboot to take effect)
+    - For other config files, the respective systemd service can be restarted after upload
 
     This endpoint is disabled in server mode.
 
     Args:
         file: The configuration file to upload
-        restart_service: Whether to restart the respective service after successful upload (default: False)
+        restart_service: Whether to restart the respective service after successful upload (default: False). 
+                        For cmdline.txt, this triggers a system reboot instead.
         mtime: Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50) - REQUIRED when force=False, ignored when force=True
         force: Force overwrite regardless of file modification time (default: False)
 
@@ -518,15 +590,36 @@ async def upload_config(
     if existing_mtime:
         response_data["existing_mtime"] = existing_mtime.isoformat()
     
-    # Handle service restart
-    restart_result = handle_service_restart(config_type, restart_service)
-    response_data.update(restart_result)
-    
-    # Update message with restart info
-    if restart_result["service_restarted"]:
-        response_data["message"] += f" and service restarted"
-    elif restart_result["service_restart_error"]:
-        response_data["message"] += f" (Service restart failed: {restart_result['service_restart_error']})"
+    # Handle service restart or reboot
+    # Special case: cmdline.txt requires reboot, not service restart
+    if config_type == "cmdline" and restart_service:
+        # Reboot the system instead of restarting a service
+        # Schedule reboot in 10 seconds to allow response to reach client
+        response_data["reboot_initiated"] = False
+        response_data["reboot_delay_seconds"] = 10
+        try:
+            # Use systemd-run to schedule reboot in 10 seconds
+            subprocess.run(
+                ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            response_data["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt requires reboot)"
+            response_data["reboot_initiated"] = True
+        except Exception as e:
+            response_data["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
+            response_data["reboot_initiated"] = False
+    else:
+        # Normal service restart for other config types
+        restart_result = handle_service_restart(config_type, restart_service)
+        response_data.update(restart_result)
+        
+        # Update message with restart info
+        if restart_result["service_restarted"]:
+            response_data["message"] += f" and service restarted"
+        elif restart_result["service_restart_error"]:
+            response_data["message"] += f" (Service restart failed: {restart_result['service_restart_error']})"
 
     return build_standard_response(success=True, config_type=config_type, filename=file.filename, **response_data)
 
@@ -713,13 +806,13 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
         raise ValueError(f"Unsupported file type: {filename}")
 
 
-@router.post("/config-zip")
+@router.post(".zip")
 async def upload_config_zip(
     file: UploadFile = File(..., description="Zip file containing configuration files"),
     restart_services: bool = Form(False, description="Restart affected services after upload"),
     pedantic: bool = Form(False, description="Reject upload if unknown files are present or if any existing file is newer"),
     force: bool = Form(False, description="Force overwrite regardless of file modification time"),
-    reboot: bool = Form(False, description="Reboot the system after successfully applying the config-zip"),
+    reboot: str = Form("allow", description="Reboot policy: 'forbid' (no reboot), 'allow' (default, reboot if requested), 'force' (always reboot)"),
 ):
     """Upload and validate multiple configuration files from a zip archive.
 
@@ -742,18 +835,31 @@ async def upload_config_zip(
     - Default mode (force=False, pedantic=False): Only overwrites files newer than existing, preserves zip timestamps
     - Pedantic mode (force=False, pedantic=True): Rejects upload if any existing file is newer OR unknown files present
 
+    Reboot Modes:
+    - forbid: Never reboot, even if cmdline.txt is updated (user warned if changes require reboot)
+    - allow (default): Automatically reboot if cmdline.txt is updated (requires reboot to take effect), otherwise no reboot
+    - force: Always reboot after successful upload regardless of which files were updated
+
     This endpoint is disabled in server mode.
 
     Args:
         file: Zip file containing configuration files
-        restart_services: Whether to restart affected services after successful upload (default: False). Ignored if reboot=True.
+        restart_services: Whether to restart affected services after successful upload (default: False). Ignored if reboot is 'force'.
         pedantic: Reject upload if unknown files are present or if any existing file is newer (default: False)
         force: Force overwrite regardless of file modification time (default: False)
-        reboot: Whether to reboot the system after successfully applying the config-zip (default: False). When enabled, restart_services is ignored.
+        reboot: Reboot policy - 'forbid', 'allow' (default), or 'force'
 
     Returns:
         Detailed results including validation status, timestamp comparisons, files processed, and service restart status
     """
+    # Validate reboot parameter
+    reboot_lower = reboot.lower()
+    if reboot_lower not in ["forbid", "allow", "force"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid reboot parameter: '{reboot}'. Must be 'forbid', 'allow', or 'force'",
+        )
+    
     # Check if server mode is enabled - disable endpoint if so
     if config_loader.is_server_mode():
         raise HTTPException(
@@ -1040,8 +1146,8 @@ async def upload_config_zip(
     if save_metadata:
         response["save_metadata"] = save_metadata
 
-    # Optionally restart services (only if not rebooting, as reboot will restart everything)
-    if restart_services and not reboot:
+    # Optionally restart services (only if not force-rebooting, as reboot will restart everything)
+    if restart_services and reboot_lower != "force":
         # Service restart only works in tracker mode (not server mode)
         if config_loader.is_server_mode():
             response["message"] += " (Service restart is not available in server mode)"
@@ -1067,24 +1173,390 @@ async def upload_config_zip(
                 errors_msg = ", ".join([f"{svc}: {err}" for svc, err in response["service_restart_errors"].items()])
                 response["message"] += f" (Warning: Some services failed to restart: {errors_msg})"
 
-    # Optionally reboot the system
-    if reboot:
+    # Handle reboot based on policy
+    # Check if cmdline.txt was updated (requires reboot to take effect)
+    cmdline_updated = "cmdline.txt" in saved_files
+    
+    if reboot_lower == "forbid":
+        # Never reboot, even if cmdline.txt was updated
+        response["reboot_initiated"] = False
+        response["reboot_policy"] = "forbid"
+        if cmdline_updated:
+            response["message"] += " (Note: cmdline.txt updated but reboot forbidden - changes will not take effect until manual reboot)"
+    elif reboot_lower == "force":
+        # Always reboot after successful upload
+        response["reboot_policy"] = "force"
+        response["reboot_delay_seconds"] = 10
         # Reboot only works in tracker mode (not server mode)
         if config_loader.is_server_mode():
             response["message"] += " (System reboot is not available in server mode)"
             response["reboot_initiated"] = False
         else:
             try:
-                # Use systemctl to reboot the system
-                subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
-                response["message"] += ". System reboot initiated"
-                response["reboot_initiated"] = True
-            except subprocess.TimeoutExpired:
-                # Timeout is expected as the system will be rebooting
-                response["message"] += ". System reboot initiated"
+                # Use systemd-run to schedule reboot in 10 seconds
+                subprocess.run(
+                    ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                response["message"] += ". System reboot scheduled in 10 seconds (forced)"
                 response["reboot_initiated"] = True
             except Exception as e:
-                response["message"] += f" (Warning: Failed to initiate reboot: {str(e)})"
+                response["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
                 response["reboot_initiated"] = False
+    elif reboot_lower == "allow" and cmdline_updated:
+        # "allow" mode with cmdline.txt updated - automatically reboot
+        response["reboot_policy"] = "allow"
+        response["reboot_delay_seconds"] = 10
+        # Reboot only works in tracker mode (not server mode)
+        if config_loader.is_server_mode():
+            response["message"] += " (System reboot is not available in server mode, but cmdline.txt was updated)"
+            response["reboot_initiated"] = False
+        else:
+            try:
+                # Use systemd-run to schedule reboot in 10 seconds
+                subprocess.run(
+                    ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                response["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt updated)"
+                response["reboot_initiated"] = True
+            except Exception as e:
+                response["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
+                response["reboot_initiated"] = False
+    else:
+        # "allow" mode but cmdline.txt was not updated - no reboot
+        response["reboot_policy"] = "allow"
+        response["reboot_initiated"] = False
 
     return response
+
+
+def _validate_config_filename_and_get_instance(filename: str):
+    """Validate filename and return config instance.
+    
+    Args:
+        filename: Configuration filename
+        
+    Returns:
+        Tuple of (config_instance, response_headers)
+        
+    Raises:
+        HTTPException: If validation fails
+    """
+    # Check if server mode is enabled - disable endpoint if so
+    if config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=403,
+            detail="Config download endpoints are disabled in server mode",
+        )
+
+    # Validate filename
+    filename_lower = filename.lower()
+    if filename_lower not in RECOGNIZED_CONFIG_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported configuration file: {filename}. "
+            f"Supported files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}",
+        )
+
+    # Get config instance
+    config_type = RECOGNIZED_CONFIG_FILES[filename_lower]
+    try:
+        config_instance = get_config_instance(config_type)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Check if file exists
+    if not config_instance.config_file.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Configuration file '{filename}' not found",
+        )
+
+    # Prepare response headers with Last-Modified
+    response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    try:
+        file_stat = config_instance.config_file.stat()
+        http_date = formatdate(file_stat.st_mtime, usegmt=True)
+        response_headers["Last-Modified"] = http_date
+    except Exception:
+        pass
+
+    return config_instance, response_headers
+
+
+@router.get("/{filename}")
+async def download_config(
+    filename: str = PathParam(..., description="Configuration filename to download"),
+):
+    """Download a single configuration file.
+
+    Supported files:
+    - radiotracking.ini - Radio tracking configuration
+    - schedule.yml - Schedule configuration
+    - soundscapepipe.yml - Soundscapepipe configuration
+    - authorized_keys - SSH authorized keys
+    - cmdline.txt - Kernel boot parameters
+    - wireguard.conf - WireGuard VPN configuration
+    - server.crt - Mosquitto server certificate
+    - server.conf - Mosquitto server configuration
+    - geolocation - Geolocation file (geoclue format)
+
+    This endpoint is disabled in server mode.
+
+    Args:
+        filename: The configuration filename to download
+
+    Returns:
+        The configuration file content with Last-Modified header
+    """
+    config_instance, response_headers = _validate_config_filename_and_get_instance(filename)
+
+    # Read file content
+    try:
+        with open(config_instance.config_file, "r") as f:
+            content = f.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read configuration file: {str(e)}",
+        )
+
+    # Return file content
+    return Response(
+        content=content,
+        media_type="text/plain",
+        headers=response_headers,
+    )
+
+
+@router.head("/{filename}")
+async def head_config(
+    filename: str = PathParam(..., description="Configuration filename to check"),
+):
+    """Check if a configuration file exists and get metadata (HEAD request).
+
+    Returns the same headers as GET but without the body content.
+    Useful for checking file existence and Last-Modified timestamp efficiently.
+
+    Supported files:
+    - radiotracking.ini - Radio tracking configuration
+    - schedule.yml - Schedule configuration
+    - soundscapepipe.yml - Soundscapepipe configuration
+    - authorized_keys - SSH authorized keys
+    - cmdline.txt - Kernel boot parameters
+    - wireguard.conf - WireGuard VPN configuration
+    - server.crt - Mosquitto server certificate
+    - server.conf - Mosquitto server configuration
+    - geolocation - Geolocation file (geoclue format)
+
+    This endpoint is disabled in server mode.
+
+    Args:
+        filename: The configuration filename to check
+
+    Returns:
+        Headers only (no body) with Last-Modified header
+    """
+    config_instance, response_headers = _validate_config_filename_and_get_instance(filename)
+    
+    # Get file size for Content-Length header
+    try:
+        file_stat = config_instance.config_file.stat()
+        response_headers["Content-Length"] = str(file_stat.st_size)
+    except Exception:
+        pass
+
+    return Response(
+        content="",
+        media_type="text/plain",
+        headers=response_headers,
+    )
+
+
+def _check_existing_config_files():
+    """Check which config files exist and get metadata.
+    
+    Returns:
+        Tuple of (file_count, most_recent_mtime, total_size)
+        
+    Raises:
+        HTTPException: If server mode is enabled or no files found
+    """
+    # Check if server mode is enabled - disable endpoint if so
+    if config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=403,
+            detail="Config download endpoints are disabled in server mode",
+        )
+
+    file_count = 0
+    most_recent_mtime = None
+    total_size = 0
+
+    for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
+        try:
+            config_instance = get_config_instance(config_type)
+            
+            if config_instance.config_file.exists():
+                file_stat = config_instance.config_file.stat()
+                file_count += 1
+                total_size += file_stat.st_size
+                
+                # Track most recent mtime
+                if most_recent_mtime is None or file_stat.st_mtime > most_recent_mtime:
+                    most_recent_mtime = file_stat.st_mtime
+        except Exception:
+            # Skip files that can't be accessed
+            continue
+
+    # Check if any files were found
+    if file_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="No configuration files found on the system",
+        )
+
+    return file_count, most_recent_mtime, total_size
+
+
+@router.get(".zip")
+async def download_config_zip():
+    """Download a zip file containing all existing configuration files.
+
+    Creates a zip archive with all configuration files that currently exist on the system.
+    Each file's modification time in the zip is set to match the actual file's mtime.
+
+    This endpoint is disabled in server mode.
+
+    Returns:
+        Zip file containing existing configuration files with Last-Modified header
+    """
+    # Check if server mode is enabled - disable endpoint if so
+    if config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=403,
+            detail="Config download endpoints are disabled in server mode",
+        )
+
+    # Collect all existing config files
+    existing_files = {}
+    most_recent_mtime = None
+
+    for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
+        try:
+            config_instance = get_config_instance(config_type)
+            
+            if config_instance.config_file.exists():
+                # Read file content
+                with open(config_instance.config_file, "r") as f:
+                    content = f.read()
+                
+                # Get file mtime
+                file_stat = config_instance.config_file.stat()
+                mtime = datetime.utcfromtimestamp(file_stat.st_mtime)
+                
+                existing_files[filename] = {
+                    "content": content,
+                    "mtime": mtime,
+                }
+                
+                # Track most recent mtime for Last-Modified header
+                if most_recent_mtime is None or file_stat.st_mtime > most_recent_mtime:
+                    most_recent_mtime = file_stat.st_mtime
+        except Exception:
+            # Skip files that can't be read
+            continue
+
+    # Check if any files were found
+    if not existing_files:
+        raise HTTPException(
+            status_code=404,
+            detail="No configuration files found on the system",
+        )
+
+    # Create zip file in memory
+    zip_buffer = BytesIO()
+    try:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, file_data in existing_files.items():
+                # Create ZipInfo to set file timestamp
+                zip_info = zipfile.ZipInfo(filename)
+                # Convert datetime to zip timestamp format (year, month, day, hour, minute, second)
+                mtime = file_data["mtime"]
+                zip_info.date_time = (
+                    mtime.year,
+                    mtime.month,
+                    mtime.day,
+                    mtime.hour,
+                    mtime.minute,
+                    mtime.second,
+                )
+                # Write file to zip
+                zip_file.writestr(zip_info, file_data["content"])
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create zip file: {str(e)}",
+        )
+
+    # Get hostname for filename
+    hostname = socket.gethostname()
+    zip_filename = f"{hostname}_tsconfig.zip"
+
+    # Prepare response headers
+    response_headers = {"Content-Disposition": f'attachment; filename="{zip_filename}"'}
+    
+    # Add Last-Modified header to most recent file's mtime
+    if most_recent_mtime is not None:
+        http_date = formatdate(most_recent_mtime, usegmt=True)
+        response_headers["Last-Modified"] = http_date
+
+    # Return zip file
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers=response_headers,
+    )
+
+
+@router.head("/")
+async def head_config_zip():
+    """Check if config files exist and get metadata for zip archive (HEAD request).
+
+    Returns headers for the zip archive without creating or returning the zip file.
+    Useful for checking if configs exist and getting Last-Modified timestamp efficiently.
+
+    This endpoint is disabled in server mode.
+
+    Returns:
+        Headers only (no body) with Last-Modified header for zip archive
+    """
+    file_count, most_recent_mtime, total_size = _check_existing_config_files()
+
+    # Get hostname for filename
+    hostname = socket.gethostname()
+    zip_filename = f"{hostname}_tsconfig.zip"
+
+    # Prepare response headers
+    response_headers = {"Content-Disposition": f'attachment; filename="{zip_filename}"'}
+    
+    # Add Last-Modified header
+    if most_recent_mtime is not None:
+        http_date = formatdate(most_recent_mtime, usegmt=True)
+        response_headers["Last-Modified"] = http_date
+    
+    # Add approximate Content-Length (actual zip will be smaller due to compression)
+    # This is an estimate, real size would require creating the zip
+    response_headers["X-File-Count"] = str(file_count)
+
+    return Response(
+        content="",
+        media_type="application/zip",
+        headers=response_headers,
+    )

@@ -21,7 +21,7 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.logging_config import get_logger, setup_logging
-from app.routers import authorized_keys, radiotracking, schedule, shell, soundscapepipe, systemd, upload
+from app.routers import authorized_keys, configs, radiotracking, schedule, shell, soundscapepipe, systemd
 
 # Set up logging for the main application
 setup_logging()
@@ -58,8 +58,8 @@ tags_metadata = [
         "description": "SSH authorized keys management for secure remote access.",
     },
     {
-        "name": "upload",
-        "description": "Configuration file upload with validation.",
+        "name": "configs",
+        "description": "Configuration file upload and download with validation.",
     },
     {
         "name": "systemd",
@@ -117,7 +117,7 @@ app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
-app.include_router(upload.router)
+app.include_router(configs.router)
 
 # Only include system-specific routers in tracker mode (default mode)
 # These are disabled in server mode since they require direct hardware access
@@ -227,6 +227,32 @@ async def get_geolocation():
         return None
 
 
+def _beautify_sensor_name(name: str) -> str:
+    """
+    Convert a system sensor name to a more beautiful display string.
+    
+    Examples:
+    - cpu_thermal -> CPU Thermal
+    - rp1_adc -> RP1 ADC
+    - coretemp -> Coretemp
+    """
+    # Split by underscores and capitalize each word
+    words = name.split('_')
+    beautified_words = []
+    
+    for word in words:
+        # Special case: "cpu" should be all caps
+        if word.lower() == 'cpu':
+            beautified_words.append('CPU')
+        # Special case: short words (3 chars or less) or already uppercase words
+        elif word.isupper() or len(word) <= 3:
+            beautified_words.append(word.upper())
+        else:
+            beautified_words.append(word.capitalize())
+    
+    return ' '.join(beautified_words)
+
+
 @app.get(
     "/api/system-status",
     tags=["system"],
@@ -301,7 +327,7 @@ async def get_system_status():
                 for name, entries in temps.items():
                     temperatures[name] = [
                         {
-                            "label": entry.label or f"Sensor {i + 1}",
+                            "label": entry.label or _beautify_sensor_name(name),
                             "current": entry.current,
                             "high": entry.high,
                             "critical": entry.critical,

@@ -12,8 +12,6 @@ system:
 services:
   - name: wittypid
     expert: false
-  - name: time-sync.target
-    expert: false
   - name: radiotracking
     expert: false 
   - name: soundscapepipe
@@ -30,3 +28,9 @@ services:
     expert: true
   - name: mqttutil
     expert: true 
+  - name: multi-user.target
+    expert: true
+  - name: network-online.target
+    expert: true
+  - name: time-sync.target
+    expert: true

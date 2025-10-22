@@ -217,7 +217,7 @@ The BLE gateway provides wireless access to the tsconfig API via Bluetooth GATT,
 
 ### Features
 
-- **Wireless Access**: All system, systemd, and upload endpoints accessible via BLE
+- **Wireless Access**: All system, systemd, and config endpoints accessible via BLE
 - **Mobile Ready**: Perfect for field configuration from smartphones/tablets
 - **Standalone**: Runs independently from the main web application
 - **Secure**: Optional pairing requirement for write operations
@@ -290,14 +290,16 @@ Service management with pairing required for writes:
 | System Reboot | `00002003-...` | POST /api/systemd/reboot |
 | Service Logs | `00002004-...` | GET /api/systemd/logs/{service} |
 
-#### Upload Service (`00003000-7473-4f53-636f-6e6669672121`)
+#### Config Service (`00003000-7473-4f53-636f-6e6669672121`)
 
-Configuration file uploads (pairing required):
+Configuration file upload and download (pairing required):
 
 | Characteristic | UUID | REST Endpoint |
 |----------------|------|---------------|
-| Config Upload | `00003001-...` | POST /api/upload |
-| Zip Upload | `00003002-...` | POST /api/upload/zip |
+| Config Upload | `00003001-...` | POST /api/configs/update |
+| Zip Upload | `00003002-...` | POST /api/configs.zip |
+
+**Note**: Download endpoints (`GET /api/configs/{filename}` and `GET /api/configs.zip`) are available via the REST API but not exposed as BLE characteristics.
 
 ### Usage Examples
 
