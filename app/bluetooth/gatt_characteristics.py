@@ -506,6 +506,7 @@ class UploadZipCharacteristic(WriteOnlyCharacteristic):
                 content=data["content"],
                 restart_services=data.get("restart_services", False),
                 pedantic=data.get("pedantic", False),
+                force=data.get("force", False),
                 reboot=data.get("reboot", False),
             )
 

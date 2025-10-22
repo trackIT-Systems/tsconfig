@@ -254,6 +254,7 @@ class TsConfigApiClient:
         content: str,
         restart_services: bool = False,
         pedantic: bool = False,
+        force: bool = False,
         reboot: bool = False,
     ) -> Dict[str, Any]:
         """Upload a zip file containing multiple configuration files.
@@ -263,6 +264,7 @@ class TsConfigApiClient:
             content: File content (base64 encoded)
             restart_services: Whether to restart services after upload
             pedantic: Reject upload if unknown files are present
+            force: Force overwrite regardless of file modification time
             reboot: Whether to reboot the system after successfully applying the config-zip
 
         Returns:
@@ -278,6 +280,7 @@ class TsConfigApiClient:
             data = {
                 "restart_services": str(restart_services).lower(),
                 "pedantic": str(pedantic).lower(),
+                "force": str(force).lower(),
                 "reboot": str(reboot).lower(),
             }
 
