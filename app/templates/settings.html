@@ -617,7 +617,7 @@
                                         </div>
                                         <div class="form-text ms-4">
                                             Automatically restart affected services after successfully applying the configuration. 
-                                            This option is ignored if System Reboot is enabled.
+                                            This option is ignored if Force Reboot is enabled.
                                         </div>
                                     </div>
 
@@ -630,13 +630,14 @@
                                                    id="systemReboot"
                                                    :disabled="uploading">
                                             <label class="form-check-label" for="systemReboot">
-                                                <strong>System Reboot</strong>
+                                                <strong>Force Reboot</strong>
                                                 <i class="fas fa-exclamation-triangle text-warning ms-1"></i>
                                             </label>
                                         </div>
                                         <div class="form-text ms-4">
-                                            Automatically reboot the system after successfully applying the configuration. 
-                                            This will restart all services and temporarily interrupt connectivity.
+                                            <strong>OFF (default):</strong> Reboot only if cmdline.txt is updated (smart mode).<br>
+                                            <strong>ON:</strong> Always reboot after successfully applying any configuration.
+                                            Reboot will restart all services and temporarily interrupt connectivity.
                                         </div>
                                     </div>
                                 </div>
