@@ -114,36 +114,29 @@ def parse_ini_file(content: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse INI file: {str(e)}")
 
 
-def parse_mtime_and_validate(mtime: Optional[str], force: bool) -> Optional[datetime]:
+def parse_mtime_and_validate(mtime: str, force: bool) -> datetime:
     """Parse and validate mtime parameter.
     
     Args:
-        mtime: ISO timestamp string or None (interpreted as UTC if no timezone specified)
+        mtime: ISO timestamp string (interpreted as UTC if no timezone specified)
         force: Whether force flag is set
         
     Returns:
-        Parsed datetime (naive, in UTC) or None
+        Parsed datetime (naive, in UTC)
         
     Raises:
         HTTPException: If validation fails
     """
-    if not force and mtime is None:
-        raise HTTPException(
-            status_code=400,
-            detail="mtime parameter is required when force=False",
-        )
-    
-    if mtime is not None:
-        try:
-            dt = datetime.fromisoformat(mtime)
-            # If naive (no timezone), interpret as UTC
-            if dt.tzinfo is None:
-                # Already naive, just treating it as UTC implicitly
-                return dt
-            else:
-                # Convert to UTC and make naive
-                return dt.astimezone(timezone.utc).replace(tzinfo=None)
-        except ValueError:
+    try:
+        dt = datetime.fromisoformat(mtime)
+        # If naive (no timezone), interpret as UTC
+        if dt.tzinfo is None:
+            # Already naive, just treating it as UTC implicitly
+            return dt
+        else:
+            # Convert to UTC and make naive
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    except ValueError:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid mtime format '{mtime}'. Expected ISO format like '2025-10-17T08:59:50' or '2025-10-17T08:59:50+00:00'",
@@ -417,7 +410,7 @@ async def list_configs():
 async def upload_config(
     file: UploadFile = File(..., description="Configuration file to upload"),
     restart_service: bool = Form(False, description="Restart the respective service after upload"),
-    mtime: Optional[str] = Form(None, description="Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50)"),
+    mtime: str = Form(..., description="File modification time in ISO format (e.g., 2025-10-17T08:59:50)"),
     force: bool = Form(False, description="Force overwrite regardless of file modification time"),
 ):
     """Upload and validate a configuration file.
@@ -435,15 +428,10 @@ async def upload_config(
 
     The file will be validated and if valid, will replace the existing configuration.
     
-    When force=False:
-    - mtime parameter is REQUIRED
-    - File is only overwritten if uploaded mtime is newer than existing file
-    - File mtime is set to the uploaded mtime (rounded for FAT32 compatibility)
-    
-    When force=True:
-    - mtime parameter is optional (ignored if provided)
-    - File is always overwritten regardless of timestamps
-    - File mtime is set to current system time
+    mtime parameter:
+    - When force=False: File is only overwritten if uploaded mtime is newer than existing file
+    - When force=True: File is always overwritten regardless of timestamps
+    - The uploaded file's mtime is preserved and set on the target file
     
     Special Handling:
     - If cmdline.txt is uploaded with restart_service=True, the system will reboot instead of 
@@ -456,7 +444,7 @@ async def upload_config(
         file: The configuration file to upload
         restart_service: Whether to restart the respective service after successful upload (default: False). 
                         For cmdline.txt, this triggers a system reboot instead.
-        mtime: Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50) - REQUIRED when force=False, ignored when force=True
+        mtime: File modification time in ISO format (e.g., 2025-10-17T08:59:50)
         force: Force overwrite regardless of file modification time (default: False)
 
     Returns:
@@ -520,7 +508,7 @@ async def upload_config(
 
     # Check mtime comparison when not forced
     existing_mtime = None
-    if not force and upload_mtime:
+    if not force:
         upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
         
         if config_instance.config_file.exists():
@@ -550,29 +538,27 @@ async def upload_config(
         if save_result and isinstance(save_result, dict):
             save_metadata = save_result
         
-        # Set file mtime if provided and not forced
-        if upload_mtime and not force:
-            upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
-            # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-            timestamp = calendar.timegm(upload_mtime_rounded.timetuple())
-            os.utime(config_instance.config_file, (timestamp, timestamp))
+        # Set file mtime from uploaded mtime
+        upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+        # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
+        timestamp = calendar.timegm(upload_mtime_rounded.timetuple())
+        os.utime(config_instance.config_file, (timestamp, timestamp))
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
 
     # Build success response
-    mtime_set = upload_mtime is not None and not force
     message = f"Configuration file '{file.filename}' uploaded successfully"
     if force:
-        message += " (forced - using current system time)"
-    elif mtime_set:
+        message += " (forced - mtime preserved)"
+    else:
         message += " (mtime preserved)"
     
     response_data = {
         "valid": True,
         "message": message,
         "config_path": str(config_instance.config_file),
-        "mtime_set": mtime_set,
+        "mtime_set": True,
         "force_used": force,
     }
     
@@ -580,13 +566,12 @@ async def upload_config(
     if save_metadata:
         response_data.update(save_metadata)
     
-    # Add mtime info if provided
-    if upload_mtime:
-        upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
-        response_data.update({
-            "upload_mtime": upload_mtime.isoformat(),
-            "upload_mtime_rounded": upload_mtime_rounded.isoformat(),
-        })
+    # Add mtime info
+    upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+    response_data.update({
+        "upload_mtime": upload_mtime.isoformat(),
+        "upload_mtime_rounded": upload_mtime_rounded.isoformat(),
+    })
     if existing_mtime:
         response_data["existing_mtime"] = existing_mtime.isoformat()
     
@@ -831,9 +816,11 @@ async def upload_config_zip(
     no files will be modified. If all files are valid, they will be saved based on the mode.
 
     Upload Modes:
-    - Force mode (force=True): Overwrites all files regardless of timestamps, sets current time as mtime
-    - Default mode (force=False, pedantic=False): Only overwrites files newer than existing, preserves zip timestamps
+    - Force mode (force=True): Overwrites all files regardless of timestamps
+    - Default mode (force=False, pedantic=False): Only overwrites files newer than existing
     - Pedantic mode (force=False, pedantic=True): Rejects upload if any existing file is newer OR unknown files present
+    
+    Note: Zip file timestamps are always preserved and set on the target files (regardless of mode)
 
     Reboot Modes:
     - forbid: Never reboot, even if cmdline.txt is updated (user warned if changes require reboot)
@@ -1091,19 +1078,15 @@ async def upload_config_zip(
             if save_result and isinstance(save_result, dict):
                 save_metadata[filename] = save_result
             
-            # Set appropriate mtime based on mode
-            if force:
-                # Force mode: use current time (default behavior of save())
-                pass
-            else:
-                # Default/pedantic mode: preserve zip timestamp
-                zip_timestamp = zip_timestamps.get(filename)
-                if zip_timestamp:
-                    zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
-                    config_file_path = config_instances[filename].config_file
-                    # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-                    timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
-                    os.utime(config_file_path, (timestamp, timestamp))
+            # Set mtime from zip timestamp (regardless of mode)
+            # This matches the behavior in /api/config/update where uploaded mtime is always preserved
+            zip_timestamp = zip_timestamps.get(filename)
+            if zip_timestamp:
+                zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+                config_file_path = config_instances[filename].config_file
+                # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
+                timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
+                os.utime(config_file_path, (timestamp, timestamp))
             
             saved_files.append(filename)
         except Exception as e:
