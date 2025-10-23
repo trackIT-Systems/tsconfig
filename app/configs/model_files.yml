@@ -1,0 +1,13 @@
+# Static model file list for server mode
+# This file defines available model files that will be shown in the UI
+# when tsconfig runs in server mode (where actual filesystem cannot be scanned)
+
+birdedge:
+  - /home/pi/pybirdedge/birdedge/models/ger/MarBird_EFLO_GER.onnx
+  - /home/pi/pybirdedge/birdedge/models/ger/MarBird_R26d_GER.onnx
+
+yolobat:
+  - /home/pi/yolobat/models/yolobat11_2025.4.1.nor/model.xml
+  - /home/pi/yolobat/models/yolobat11_2025.3.2/model.xml
+  - /home/pi/yolobat/models/yolobat11_2025.6.2/model.xml
+

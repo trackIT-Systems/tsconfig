@@ -6,11 +6,13 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+
 # Check if ALSA is available by checking for /proc/asound/cards
 # This is only needed for tracker mode with hardware validation
 def _check_alsa_available() -> bool:
     """Check if /proc/asound/cards exists."""
-    return os.path.exists('/proc/asound/cards')
+    return os.path.exists("/proc/asound/cards")
+
 
 ALSA_AVAILABLE = _check_alsa_available()
 
@@ -156,9 +158,21 @@ def _load_audio_devices_config() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to load audio devices config: {str(e)}")
 
 
+def _load_model_files_config() -> Dict[str, Any]:
+    """Load model files configuration from YAML file."""
+    config_file = Path(__file__).parent.parent / "configs" / "model_files.yml"
+    try:
+        with open(config_file, "r") as f:
+            return yaml.safe_load(f) or {"birdedge": [], "yolobat": []}
+    except FileNotFoundError:
+        return {"birdedge": [], "yolobat": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load model files config: {str(e)}")
+
+
 def _parse_alsa_cards() -> List[Dict[str, Any]]:
     """Parse /proc/asound/cards to get card information.
-    
+
     Returns list of cards with card_id, short_name, and full_name.
     Example:
     [
@@ -168,28 +182,28 @@ def _parse_alsa_cards() -> List[Dict[str, Any]]:
     ]
     """
     import re
-    
+
     cards = []
     try:
-        with open('/proc/asound/cards', 'r') as f:
+        with open("/proc/asound/cards", "r") as f:
             content = f.read()
             # Parse format like:
             # 2 [Frontend       ]: USB-Audio - trackIT Analog Frontend
             #                     trackIT Analog Frontend at usb-...
             # Pattern to match card number, short name, and full name
-            pattern = r'^\s*(\d+)\s+\[([^\]]+)\s*\]\s*:\s*[^-]+-\s*(.+?)$'
-            for line in content.split('\n'):
+            pattern = r"^\s*(\d+)\s+\[([^\]]+)\s*\]\s*:\s*[^-]+-\s*(.+?)$"
+            for line in content.split("\n"):
                 match = re.match(pattern, line.strip())
                 if match:
                     card_info = {
-                        'card_id': int(match.group(1)),
-                        'short_name': match.group(2).strip(),
-                        'full_name': match.group(3).strip()
+                        "card_id": int(match.group(1)),
+                        "short_name": match.group(2).strip(),
+                        "full_name": match.group(3).strip(),
                     }
                     cards.append(card_info)
     except Exception as e:
         print(f"Could not read /proc/asound/cards: {e}")
-    
+
     return cards
 
 
@@ -198,50 +212,50 @@ def _match_device_name(config_name: str, device_info: Dict[str, Any]) -> bool:
 
     Config names are like 'trackIT Analog Frontend' or '384kHz AudioMoth USB Microphone'
     Device info contains 'name', 'card_short_name', and 'card_full_name'
-    
+
     Matching priority:
     1. Exact match or substring match with full card name
     2. Card short name appears as a word in config name
     """
     import re
-    
+
     config_lower = config_name.lower()
-    
+
     # Get device information
-    card_full_name = device_info.get('card_full_name', '').lower()
-    card_short_name = device_info.get('card_short_name', '').lower()
-    
+    card_full_name = device_info.get("card_full_name", "").lower()
+    card_short_name = device_info.get("card_short_name", "").lower()
+
     # Priority 1: Check if config matches the full card name
     if card_full_name:
         if config_lower == card_full_name or config_lower in card_full_name:
             return True
-    
+
     # Priority 2: Check if the card short name appears as a word in the config name
     if card_short_name:
-        if re.search(r'\b' + re.escape(card_short_name) + r'\b', config_lower):
+        if re.search(r"\b" + re.escape(card_short_name) + r"\b", config_lower):
             return True
-    
+
     return False
 
 
 def _query_alsa_devices() -> Dict[str, Any]:
     """Query ALSA devices by parsing /proc/asound/cards and generating device names.
-    
+
     Returns a dictionary with 'input', 'output', and 'cards' keys.
     """
     input_devices = []
     output_devices = []
-    
+
     try:
         # Parse /proc/asound/cards
         cards = _parse_alsa_cards()
-        
+
         # Generate common ALSA device names for each card
         # These are the typical PCM device names that ALSA creates
         for card in cards:
-            short_name = card['short_name']
-            card_id = card['card_id']
-            
+            short_name = card["short_name"]
+            card_id = card["card_id"]
+
             # Common input device names (for capture)
             input_device_names = [
                 f"hw:CARD={short_name},DEV=0",
@@ -249,7 +263,7 @@ def _query_alsa_devices() -> Dict[str, Any]:
                 f"default:CARD={short_name}",
                 f"sysdefault:CARD={short_name}",
             ]
-            
+
             # Common output device names (for playback)
             output_device_names = [
                 f"hw:CARD={short_name},DEV=0",
@@ -257,7 +271,7 @@ def _query_alsa_devices() -> Dict[str, Any]:
                 f"default:CARD={short_name}",
                 f"sysdefault:CARD={short_name}",
             ]
-            
+
             # Add input devices
             for idx, device_name in enumerate(input_device_names):
                 device_info = {
@@ -265,12 +279,12 @@ def _query_alsa_devices() -> Dict[str, Any]:
                     "name": device_name,
                     "card_id": card_id,
                     "card_short_name": short_name,
-                    "card_full_name": card['full_name'],
+                    "card_full_name": card["full_name"],
                     "max_input_channels": 2,
                     "default_sample_rate": 48000,
                 }
                 input_devices.append(device_info)
-            
+
             # Add output devices
             for idx, device_name in enumerate(output_device_names):
                 device_info = {
@@ -278,19 +292,19 @@ def _query_alsa_devices() -> Dict[str, Any]:
                     "name": device_name,
                     "card_id": card_id,
                     "card_short_name": short_name,
-                    "card_full_name": card['full_name'],
+                    "card_full_name": card["full_name"],
                     "max_output_channels": 2,
                     "default_sample_rate": 48000,
                 }
                 output_devices.append(device_info)
-                
+
     except Exception as e:
         print(f"Error querying ALSA devices: {e}")
-    
+
     return {
         "input": input_devices,
         "output": output_devices,
-        "cards": cards if 'cards' in locals() else [],
+        "cards": cards if "cards" in locals() else [],
     }
 
 
@@ -437,6 +451,12 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
 @router.get("/model-files")
 async def get_model_files() -> Dict[str, List[str]]:
     """Get available model files for BirdEdge and YoloBat."""
+
+    # In server mode, return pre-populated list from config file
+    if config_loader.is_server_mode():
+        return _load_model_files_config()
+
+    # Tracker mode: scan filesystem for model files
     model_files = {"birdedge": [], "yolobat": []}
 
     # Look for BirdEdge models (only in subfolders, not root models directory)
