@@ -170,39 +170,19 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
             parsed_config = parse_yaml_file(content_str)
             config_instance = SoundscapepipeConfig()
         elif config_type == "authorized_keys":
-            config_instance = AuthorizedKeysConfig()
-            existing_config = config_instance.load()
-            existing_keys = existing_config.get("keys", [])
+            # Use config upload mode to write to /boot/firmware/authorized_keys
+            config_instance = AuthorizedKeysConfig(is_config_upload=True)
             
-            # Parse and filter out duplicate keys
+            # Parse keys from uploaded content (no merging with existing)
             new_keys = []
             for line in content_str.strip().split("\n"):
-                parsed = config_instance._parse_key_line(line, 0)
+                parsed = config_instance._parse_key_line(line, len(new_keys))
                 if parsed:
-                    # Check if this key already exists
-                    new_key_data = parsed.get("key_data", "")
-                    is_duplicate = False
-                    
-                    for existing_key in existing_keys:
-                        existing_key_data = existing_key.get("key_data", "")
-                        # For complex keys (with options), compare the full line
-                        if parsed.get("is_complex") or existing_key.get("is_complex"):
-                            if parsed["full_line"].strip() == existing_key["full_line"].strip():
-                                is_duplicate = True
-                                break
-                        elif new_key_data and new_key_data == existing_key_data:
-                            is_duplicate = True
-                            break
-                    
-                    # Only add if not a duplicate
-                    if not is_duplicate:
-                        new_keys.append(parsed)
+                    # Mark as server key
+                    parsed["source"] = "server"
+                    new_keys.append(parsed)
             
-            # Re-index all keys
-            for idx, key in enumerate(new_keys):
-                key["index"] = len(existing_keys) + idx
-            
-            parsed_config = {"keys": existing_keys + new_keys}
+            parsed_config = {"keys": new_keys}
         elif config_type in ["cmdline", "wireguard", "mosquitto_cert", "mosquitto_conf"]:
             parsed_config = {"content": content_str}
             if config_type == "cmdline":
@@ -633,12 +613,13 @@ SERVICE_MAPPING = {
 }
 
 
-def get_config_instance(config_type: str):
+def get_config_instance(config_type: str, is_config_upload: bool = False):
     """Get appropriate config instance for the given type.
 
     Args:
         config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys,
                      cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
+        is_config_upload: Whether this is for config upload (affects authorized_keys behavior)
 
     Returns:
         Config instance for the specified type
@@ -650,7 +631,7 @@ def get_config_instance(config_type: str):
     elif config_type == "soundscapepipe":
         return SoundscapepipeConfig()
     elif config_type == "authorized_keys":
-        return AuthorizedKeysConfig()
+        return AuthorizedKeysConfig(is_config_upload=is_config_upload)
     elif config_type == "cmdline":
         return CmdlineConfig()
     elif config_type == "wireguard":
@@ -759,12 +740,14 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
         return parse_yaml_file(content)
     elif filename == "authorized_keys":
         # For authorized_keys, parse each line
-        # Note: This returns new keys only, merging and duplicate checking happens in the caller
+        # Use config upload mode to target /boot/firmware/authorized_keys
         keys = []
-        temp_config = AuthorizedKeysConfig()
+        temp_config = AuthorizedKeysConfig(is_config_upload=True)
         for idx, line in enumerate(content.strip().split("\n")):
             parsed = temp_config._parse_key_line(line, idx)
             if parsed:
+                # Mark as server key
+                parsed["source"] = "server"
                 keys.append(parsed)
         return {"keys": keys}
     elif filename in ["cmdline.txt", "wireguard.conf", "server.crt", "server.conf"]:
@@ -938,46 +921,15 @@ async def upload_config_zip(
         config_type = RECOGNIZED_CONFIG_FILES[filename]
 
         try:
-            # Get config instance
-            config_instance = get_config_instance(config_type)
+            # Get config instance (with config upload flag for authorized_keys)
+            config_instance = get_config_instance(config_type, is_config_upload=True)
             config_instances[filename] = config_instance
 
             # Parse the file
             parsed_config = parse_config_file(filename, content)
 
-            # Special handling for authorized_keys: append to existing keys, filtering duplicates
-            if filename == "authorized_keys":
-                existing_config = config_instance.load()
-                existing_keys = existing_config.get("keys", [])
-                new_keys = parsed_config.get("keys", [])
-
-                # Filter out duplicate keys
-                unique_new_keys = []
-                for new_key in new_keys:
-                    new_key_data = new_key.get("key_data", "")
-                    is_duplicate = False
-                    
-                    for existing_key in existing_keys:
-                        existing_key_data = existing_key.get("key_data", "")
-                        # For complex keys (with options), compare the full line
-                        if new_key.get("is_complex") or existing_key.get("is_complex"):
-                            if new_key["full_line"].strip() == existing_key["full_line"].strip():
-                                is_duplicate = True
-                                break
-                        elif new_key_data and new_key_data == existing_key_data:
-                            is_duplicate = True
-                            break
-                    
-                    # Only add if not a duplicate
-                    if not is_duplicate:
-                        unique_new_keys.append(new_key)
-
-                # Re-index unique new keys
-                for idx, key in enumerate(unique_new_keys):
-                    key["index"] = len(existing_keys) + idx
-
-                # Combine existing and unique new keys
-                parsed_config = {"keys": existing_keys + unique_new_keys}
+            # No special handling needed for authorized_keys - it writes to /boot/firmware/authorized_keys
+            # which is then synced to authorized_keys2 by systemd. User keys remain separate.
 
             parsed_configs[filename] = parsed_config
 

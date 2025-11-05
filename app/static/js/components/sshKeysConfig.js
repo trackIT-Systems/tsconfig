@@ -4,11 +4,20 @@ export function sshKeysConfig() {
     return {
         keys: [],
         newKey: '',
+        githubUsername: '',
+        launchpadUsername: '',
         loading: false,
 
         // Server mode helper
         get serverMode() {
             return window.serverModeManager?.isEnabled() || false;
+        },
+
+        // Sorted keys: server keys first, then user keys
+        get sortedKeys() {
+            const serverKeys = this.keys.filter(key => key.source === 'server');
+            const userKeys = this.keys.filter(key => key.source !== 'server');
+            return [...serverKeys, ...userKeys];
         },
 
         async init() {
@@ -89,8 +98,19 @@ export function sshKeysConfig() {
             }
         },
 
-        async removeKey(index) {
+        async removeKey(key) {
             if (!confirm('Are you sure you want to remove this SSH key? This will prevent access using this key.')) {
+                return;
+            }
+
+            // Find the index of the key in the original keys array
+            const index = this.keys.findIndex(k => 
+                k.key_data === key.key_data && k.source === key.source
+            );
+
+            if (index === -1) {
+                console.error('Could not find key in keys array');
+                this.showMessage('Failed to remove SSH key: key not found', 'error');
                 return;
             }
 
@@ -117,6 +137,61 @@ export function sshKeysConfig() {
             } catch (error) {
                 console.error('Error removing SSH key:', error);
                 this.showMessage(error.message || 'Failed to remove SSH key', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async importFromGitHub() {
+            await this.importKeys('github', this.githubUsername);
+            this.githubUsername = '';
+        },
+
+        async importFromLaunchpad() {
+            await this.importKeys('launchpad', this.launchpadUsername);
+            this.launchpadUsername = '';
+        },
+
+        async importKeys(platform, username) {
+            if (!username.trim()) {
+                this.showMessage(`Please enter a ${platform} username`, 'error');
+                return;
+            }
+
+            this.loading = true;
+
+            try {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys/import') 
+                            || '/api/authorized-keys/import';
+                console.log(`Importing SSH keys from ${platform}:`, url);
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        platform: platform,
+                        username: username.trim()
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error(`Failed to import SSH keys from ${platform}:`, response.status, errorData);
+                    throw new Error(errorData.detail?.message || errorData.detail || `Failed to import SSH keys from ${platform}`);
+                }
+
+                const data = await response.json();
+                console.log('SSH keys imported successfully:', data);
+                this.keys = data.keys || [];
+                
+                // Show detailed message with counts
+                this.showMessage(data.message || 'SSH keys imported successfully', 'success');
+            } catch (error) {
+                console.error(`Error importing SSH keys from ${platform}:`, error);
+                this.showMessage(error.message || `Failed to import SSH keys from ${platform}`, 'error');
             } finally {
                 this.loading = false;
             }

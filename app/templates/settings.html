@@ -440,16 +440,24 @@
                                         <table class="table table-sm table-hover">
                                             <thead>
                                                 <tr>
-                                                    <th style="width: 100px;">Type</th>
+                                                    <th style="width: 120px;">Type</th>
+                                                    <th style="width: 100px;">Source</th>
                                                     <th>Key Preview / Comment</th>
                                                     <th style="width: 100px;" class="text-end">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <template x-for="(key, index) in keys" :key="index">
-                                                    <tr>
+                                                <template x-for="(key, index) in sortedKeys" :key="index">
+                                                    <tr :class="key.source === 'server' ? 'table-secondary' : ''">
                                                         <td>
                                                             <span class="badge bg-secondary" x-text="key.key_type"></span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge" 
+                                                                  :class="key.source === 'server' ? 'bg-info' : 'bg-success'"
+                                                                  :title="key.source === 'server' ? 'Managed via config upload' : 'Managed via this UI'"
+                                                                  x-text="key.source === 'server' ? 'Server' : 'User'">
+                                                            </span>
                                                         </td>
                                                         <td>
                                                             <div class="d-flex flex-column">
@@ -460,7 +468,8 @@
                                                         <td class="text-end">
                                                             <button type="button" 
                                                                     class="btn btn-outline-danger btn-sm" 
-                                                                    @click="removeKey(index)"
+                                                                    @click="removeKey(key)"
+                                                                    x-show="key.source !== 'server'"
                                                                     title="Remove this key">
                                                                 <i class="fas fa-trash"></i>
                                                             </button>
@@ -510,6 +519,80 @@
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+
+                            <!-- Import Keys from Platform -->
+                            <div class="mt-4">
+                                <h6 class="border-bottom pb-2">
+                                    <i class="fas fa-download me-2"></i>
+                                    Import SSH Keys from Platform
+                                </h6>
+                                
+                                <!-- GitHub Import -->
+                                <div class="row mb-3">
+                                    <div class="col-md-8">
+                                        <label class="form-label">GitHub Username</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               x-model="githubUsername" 
+                                               placeholder="Enter GitHub username"
+                                               @keydown.enter="importFromGitHub()">
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-end">
+                                        <button type="button" 
+                                                class="btn btn-success w-100"
+                                                @click="importFromGitHub()"
+                                                :disabled="!githubUsername.trim() || loading">
+                                            <template x-if="!loading">
+                                                <span>
+                                                    <i class="fab fa-github me-1"></i>
+                                                    Import from GitHub
+                                                </span>
+                                            </template>
+                                            <template x-if="loading">
+                                                <span>
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Importing...
+                                                </span>
+                                            </template>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Launchpad Import -->
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <label class="form-label">Launchpad Username</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               x-model="launchpadUsername" 
+                                               placeholder="Enter Launchpad username"
+                                               @keydown.enter="importFromLaunchpad()">
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-end">
+                                        <button type="button" 
+                                                class="btn btn-success w-100"
+                                                @click="importFromLaunchpad()"
+                                                :disabled="!launchpadUsername.trim() || loading">
+                                            <template x-if="!loading">
+                                                <span>
+                                                    <i class="fas fa-rocket me-1"></i>
+                                                    Import from Launchpad
+                                                </span>
+                                            </template>
+                                            <template x-if="loading">
+                                                <span>
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Importing...
+                                                </span>
+                                            </template>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-text">
+                                    Import public SSH keys from GitHub or Launchpad user profiles.
+                                </div>
                             </div>
 
                             <!-- Toast notifications appear in top-right corner -->
