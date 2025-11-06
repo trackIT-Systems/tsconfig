@@ -19,7 +19,6 @@ export function configUpload() {
 
         init() {
             // Initialize component
-            console.log('Config Upload component initialized');
         },
 
         handleFileChange(event) {

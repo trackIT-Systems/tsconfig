@@ -28,26 +28,20 @@ export function sshKeysConfig() {
             try {
                 // Build API URL with config_group parameter if in server mode
                 const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys') || '/api/authorized-keys';
-                console.log('Loading SSH keys from:', url);
                 const response = await fetch(url);
                 
                 if (!response.ok) {
                     // If file doesn't exist, that's okay - start with empty list
                     if (response.status === 404) {
-                        console.log('No authorized_keys file found, starting with empty list');
                         this.keys = [];
                         return;
                     }
-                    const errorText = await response.text();
-                    console.error('Failed to load SSH keys:', response.status, errorText);
                     throw new Error(`Failed to load SSH keys: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                console.log('Loaded SSH keys:', data);
                 this.keys = data.keys || [];
             } catch (error) {
-                console.error('Error loading SSH keys:', error);
                 // Don't show error message if it's just a missing file
                 if (!error.message.includes('404')) {
                     this.showMessage('Failed to load SSH keys: ' + error.message, 'error');
@@ -67,7 +61,6 @@ export function sshKeysConfig() {
             try {
                 // Build API URL with config_group parameter if in server mode
                 const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys') || '/api/authorized-keys';
-                console.log('Adding SSH key to:', url);
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -81,17 +74,14 @@ export function sshKeysConfig() {
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    console.error('Failed to add SSH key:', response.status, errorData);
                     throw new Error(errorData.detail?.message || errorData.detail || 'Failed to add SSH key');
                 }
 
                 const data = await response.json();
-                console.log('SSH key added successfully:', data);
                 this.keys = data.keys || [];
                 this.newKey = '';
                 this.showMessage('SSH key added and saved successfully', 'success');
             } catch (error) {
-                console.error('Error adding SSH key:', error);
                 this.showMessage(error.message || 'Failed to add SSH key', 'error');
             } finally {
                 this.loading = false;
@@ -109,7 +99,6 @@ export function sshKeysConfig() {
             );
 
             if (index === -1) {
-                console.error('Could not find key in keys array');
                 this.showMessage('Failed to remove SSH key: key not found', 'error');
                 return;
             }
@@ -120,7 +109,6 @@ export function sshKeysConfig() {
                 // Build API URL with config_group parameter if in server mode
                 // Use buildApiUrl with the full path including the index
                 const url = window.serverModeManager?.buildApiUrl(`/api/authorized-keys/${index}`) || `/api/authorized-keys/${index}`;
-                console.log('Removing SSH key from:', url);
                 
                 const response = await fetch(url, {
                     method: 'DELETE'
@@ -135,7 +123,6 @@ export function sshKeysConfig() {
                 this.keys = data.keys || [];
                 this.showMessage('SSH key removed successfully', 'success');
             } catch (error) {
-                console.error('Error removing SSH key:', error);
                 this.showMessage(error.message || 'Failed to remove SSH key', 'error');
             } finally {
                 this.loading = false;
@@ -164,7 +151,6 @@ export function sshKeysConfig() {
                 // Build API URL with config_group parameter if in server mode
                 const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys/import') 
                             || '/api/authorized-keys/import';
-                console.log(`Importing SSH keys from ${platform}:`, url);
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -179,18 +165,15 @@ export function sshKeysConfig() {
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    console.error(`Failed to import SSH keys from ${platform}:`, response.status, errorData);
                     throw new Error(errorData.detail?.message || errorData.detail || `Failed to import SSH keys from ${platform}`);
                 }
 
                 const data = await response.json();
-                console.log('SSH keys imported successfully:', data);
                 this.keys = data.keys || [];
                 
                 // Show detailed message with counts
                 this.showMessage(data.message || 'SSH keys imported successfully', 'success');
             } catch (error) {
-                console.error(`Error importing SSH keys from ${platform}:`, error);
                 this.showMessage(error.message || `Failed to import SSH keys from ${platform}`, 'error');
             } finally {
                 this.loading = false;
@@ -203,9 +186,6 @@ export function sshKeysConfig() {
                 const title = type === 'success' ? 'SSH Keys - Success' : 
                              type === 'error' ? 'SSH Keys - Error' : 'SSH Keys';
                 window.toastManager.show(msg, type, { title });
-            } else {
-                // Fallback to console if toast manager not available
-                console.log(`[SSH ${type.toUpperCase()}] ${msg}`);
             }
         }
     };

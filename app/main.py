@@ -21,7 +21,7 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.logging_config import get_logger, setup_logging
-from app.routers import authorized_keys, configs, radiotracking, schedule, shell, soundscapepipe, systemd
+from app.routers import authorized_keys, configs, network, radiotracking, schedule, shell, soundscapepipe, systemd
 
 # Set up logging for the main application
 setup_logging()
@@ -64,6 +64,10 @@ tags_metadata = [
     {
         "name": "systemd",
         "description": "Systemd service management including status monitoring, control, and log streaming.",
+    },
+    {
+        "name": "network",
+        "description": "Network configuration management for NetworkManager connections.",
     },
 ]
 
@@ -124,6 +128,7 @@ app.include_router(configs.router)
 if not config_loader.is_server_mode():
     app.include_router(systemd.router)
     app.include_router(shell.router)
+    app.include_router(network.router)
 
 # Mount static files (must be after all route definitions to avoid conflicts)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

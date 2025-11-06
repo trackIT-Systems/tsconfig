@@ -9,7 +9,7 @@
             const parts = hash.split('/');
             if (parts[0] === 'settings' && parts.length > 1) {
                 const subtab = parts[1];
-                if (['schedule', 'sshkeys', 'configupload'].includes(subtab)) {
+                if (['schedule', 'sshkeys', 'configupload', 'network'].includes(subtab)) {
                     return subtab;
                 }
             }
@@ -58,7 +58,16 @@
                         SSH Keys
                     </button>
                 </li>
-                <li class="nav-item" role="presentation">
+                <li class="nav-item" role="presentation" x-show="!serverMode">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'network' }"
+                            @click="systemTab = 'network'"
+                            type="button">
+                        <i class="fas fa-network-wired me-1"></i>
+                        Network
+                    </button>
+                </li>
+                <li class="nav-item ms-auto" role="presentation">
                     <button class="nav-link" 
                             :class="{ 'active': systemTab === 'configupload' }"
                             @click="systemTab = 'configupload'"
@@ -596,6 +605,297 @@
                             </div>
 
                             <!-- Toast notifications appear in top-right corner -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Tab -->
+                <div x-show="systemTab === 'network'">
+                    <div class="card" x-data="networkConfig()" x-init="init()" x-destroy="cleanup()">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-network-wired me-2"></i>
+                                Network Configuration
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Connection Status Section -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-list me-2"></i>
+                                        Network Connections
+                                    </h6>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-primary" 
+                                            @click="refreshConnections()"
+                                            :disabled="refreshing"
+                                            title="Refresh network connections">
+                                        <i class="fas" :class="refreshing ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+                                        <span class="d-none d-sm-inline ms-1">Refresh</span>
+                                    </button>
+                                </div>
+                                
+                                <template x-if="connections.length === 0">
+                                    <div class="text-muted text-center py-4">
+                                        <i class="fas fa-network-wired fa-3x mb-3 opacity-25"></i>
+                                        <p>No network connections found.</p>
+                                    </div>
+                                </template>
+
+                                <template x-if="connections.length > 0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 150px;">Name</th>
+                                                    <th style="width: 80px;">Type</th>
+                                                    <th style="width: 100px;">Device</th>
+                                                    <th style="width: 150px;" class="text-end">IPv4 Address</th>
+                                                    <th style="width: 120px;" class="text-end">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="connection in connections" :key="connection.name">
+                                                    <tr>
+                                                        <td>
+                                                            <i :class="getConnectionTypeIcon(connection.type)" class="fa-fw me-1"></i>
+                                                            <span x-text="connection.name"></span>
+                                                        </td>
+                                                        <td>
+                                                            <small class="text-muted" x-text="connection.type"></small>
+                                                        </td>
+                                                        <td>
+                                                            <code class="small" x-text="connection.device || '-'"></code>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <code class="small" x-text="connection.ipv4_address || '-'"></code>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <span class="badge" 
+                                                                  :class="getConnectionStatusBadgeClass(connection.state)"
+                                                                  x-text="getConnectionStatusText(connection.state)">
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Hotspot Configuration Section -->
+                            <div class="mb-4">
+                                <h6 class="border-bottom pb-2">
+                                    <i class="fas fa-wifi me-2"></i>
+                                    Hotspot Configuration
+                                </h6>
+                                <p class="text-muted small mb-3">
+                                    The SSID is configured from the hostname on boot. Only the password can be changed.
+                                </p>
+                                
+                                <form @submit.prevent="saveHotspotConfig">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">SSID (Network Name)</label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   :value="hotspot.ssid"
+                                                   readonly
+                                                   disabled>
+                                            <div class="form-text">
+                                                Read-only. Configured from hostname on boot.
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Password</label>
+                                            <div class="input-group">
+                                                <input :type="showPassword ? 'text' : 'password'" 
+                                                       class="form-control" 
+                                                       x-model="hotspot.password"
+                                                       placeholder="Enter hotspot password"
+                                                       minlength="8"
+                                                       maxlength="63"
+                                                       autocomplete="off"
+                                                       required>
+                                                <button class="btn btn-outline-secondary" 
+                                                        type="button"
+                                                        @click="togglePasswordVisibility()"
+                                                        :title="showPassword ? 'Hide password' : 'Show password'">
+                                                    <i :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text">
+                                                8-63 characters. Required for WPA2 security. Default: <code>BirdsAndBats</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Form Actions -->
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div class="d-flex gap-2">
+                                            <button type="button" 
+                                                    class="btn btn-outline-secondary" 
+                                                    @click="resetHotspotConfig()"
+                                                    :disabled="!isModified">
+                                                Reset
+                                            </button>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="submit" 
+                                                    class="btn"
+                                                    :class="{
+                                                        'btn-success': saveState === 'idle',
+                                                        'btn-primary': saveState === 'saving',
+                                                        'btn-outline-success': saveState === 'saved'
+                                                    }"
+                                                    :disabled="saveState === 'saving' || !isModified">
+                                                <template x-if="saveState === 'idle'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-save me-1"></i>
+                                                        Save
+                                                    </div>
+                                                </template>
+                                                <template x-if="saveState === 'saving'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                                        Saving...
+                                                    </div>
+                                                </template>
+                                                <template x-if="saveState === 'saved'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-check me-1"></i>
+                                                        Saved!
+                                                    </div>
+                                                </template>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Cellular Configuration Section -->
+                            <div class="mb-4">
+                                <h6 class="border-bottom pb-2">
+                                    <i class="fas fa-signal me-2"></i>
+                                    Cellular Configuration
+                                </h6>
+                                <p class="text-muted small mb-3">
+                                    Configure GSM/cellular network settings. All fields are optional.
+                                </p>
+                                
+                                <form @submit.prevent="saveCellularConfig">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">APN (Access Point Name)</label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   x-model="cellular.apn"
+                                                   placeholder="e.g., internet, iot.melita.io">
+                                            <div class="form-text">
+                                                Optional. The APN provided by your cellular carrier.
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Username</label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   x-model="cellular.username"
+                                                   placeholder="Enter username if required">
+                                            <div class="form-text">
+                                                Optional. Authentication username for your carrier.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Password</label>
+                                            <div class="input-group">
+                                                <input :type="showCellularPassword ? 'text' : 'password'" 
+                                                       class="form-control" 
+                                                       x-model="cellular.password"
+                                                       placeholder="Enter password if required"
+                                                       autocomplete="off">
+                                                <button class="btn btn-outline-secondary" 
+                                                        type="button"
+                                                        @click="toggleCellularPasswordVisibility()"
+                                                        :title="showCellularPassword ? 'Hide password' : 'Show password'">
+                                                    <i :class="showCellularPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text">
+                                                Optional. Authentication password for your carrier.
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">SIM PIN</label>
+                                            <div class="input-group">
+                                                <input :type="showCellularPin ? 'text' : 'password'" 
+                                                       class="form-control" 
+                                                       x-model="cellular.pin"
+                                                       placeholder="Enter 4-8 digit PIN"
+                                                       pattern="\d{4,8}"
+                                                       autocomplete="off">
+                                                <button class="btn btn-outline-secondary" 
+                                                        type="button"
+                                                        @click="toggleCellularPinVisibility()"
+                                                        :title="showCellularPin ? 'Hide PIN' : 'Show PIN'">
+                                                    <i :class="showCellularPin ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text">
+                                                Optional. 4-8 digit SIM card PIN code.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Form Actions -->
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div class="d-flex gap-2">
+                                            <button type="button" 
+                                                    class="btn btn-outline-secondary" 
+                                                    @click="resetCellularConfig()"
+                                                    :disabled="!isCellularModified">
+                                                Reset
+                                            </button>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="submit" 
+                                                    class="btn"
+                                                    :class="{
+                                                        'btn-success': cellularSaveState === 'idle',
+                                                        'btn-primary': cellularSaveState === 'saving',
+                                                        'btn-outline-success': cellularSaveState === 'saved'
+                                                    }"
+                                                    :disabled="cellularSaveState === 'saving' || !isCellularModified">
+                                                <template x-if="cellularSaveState === 'idle'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-save me-1"></i>
+                                                        Save
+                                                    </div>
+                                                </template>
+                                                <template x-if="cellularSaveState === 'saving'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                                        Saving...
+                                                    </div>
+                                                </template>
+                                                <template x-if="cellularSaveState === 'saved'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-check me-1"></i>
+                                                        Saved!
+                                                    </div>
+                                                </template>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
