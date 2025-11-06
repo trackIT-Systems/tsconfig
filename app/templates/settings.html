@@ -973,6 +973,151 @@
                                     </div>
                                 </form>
                             </div>
+
+                            <!-- Modem Details Section -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-mobile-alt me-2"></i>
+                                        Modem Details
+                                    </h6>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-primary" 
+                                            @click="refreshModemDetails()"
+                                            :disabled="modemLoading"
+                                            title="Refresh modem details">
+                                        <i class="fas" :class="modemLoading ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+                                        <span class="d-none d-sm-inline ms-1">Refresh</span>
+                                    </button>
+                                </div>
+                                
+                                <!-- No modem message -->
+                                <template x-if="!modem && !modemError">
+                                    <div class="text-muted text-center py-4">
+                                        <i class="fas fa-mobile-alt fa-3x mb-3 opacity-25"></i>
+                                        <p>No modem detected</p>
+                                    </div>
+                                </template>
+
+                                <!-- Error message -->
+                                <template x-if="modemError">
+                                    <div class="alert alert-warning" role="alert">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <span x-text="modemError"></span>
+                                    </div>
+                                </template>
+
+                                <!-- Modem information -->
+                                <template x-if="modem">
+                                    <div>
+                                        <!-- General Information -->
+                                        <div class="mb-3">
+                                            <h6 class="text-muted small fw-semibold mb-2">General Information</h6>
+                                            <div class="row g-2">
+                                                <div class="col-md-6">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Manufacturer</small>
+                                                        <span x-text="modem.manufacturer || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Model</small>
+                                                        <span x-text="modem.model || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Hardware Revision</small>
+                                                        <span x-text="modem.hardware_revision || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">IMEI</small>
+                                                        <code class="small" x-text="modem.imei || '-'"></code>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Signal Information -->
+                                        <div class="mb-3">
+                                            <h6 class="text-muted small fw-semibold mb-2">Signal Information</h6>
+                                            <div class="row g-2">
+                                                <div class="col-md-3">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Operator</small>
+                                                        <span x-text="modem.operator_name || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Technology</small>
+                                                        <span x-text="modem.access_technology || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">State</small>
+                                                        <span class="badge" 
+                                                              :class="getModemStateBadgeClass(modem.state)"
+                                                              x-text="modem.state || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Signal Strength</small>
+                                                        <template x-if="modem.signal_strength_percent !== null && modem.signal_strength_percent !== undefined">
+                                                            <div>
+                                                                <div class="progress" style="height: 8px;">
+                                                                    <div class="progress-bar" 
+                                                                            :style="`width: ${modem.signal_strength_percent}%`" 
+                                                                            :class="{
+                                                                                'bg-success': modem.signal_strength_percent >= 60,
+                                                                                'bg-warning': modem.signal_strength_percent >= 40 && modem.signal_strength_percent < 60,
+                                                                                'bg-danger': modem.signal_strength_percent < 40
+                                                                            }">
+                                                                    </div>
+                                                                </div>
+                                                                <small class="text-muted" x-text="formatSignalStrength(modem.signal_strength_dbm, modem.signal_strength_percent)"></small>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="modem.signal_strength_percent === null || modem.signal_strength_percent === undefined">
+                                                            <span>-</span>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- SIM Card Information -->
+                                        <div>
+                                            <h6 class="text-muted small fw-semibold mb-2">SIM Card</h6>
+                                            <div class="row g-2">
+                                                <div class="col-md-4">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">Operator</small>
+                                                        <span x-text="modem.sim_operator || '-'"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">ICCID</small>
+                                                        <code class="small" x-text="modem.sim_iccid || '-'"></code>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="bg-light rounded p-2">
+                                                        <small class="text-muted d-block">IMSI</small>
+                                                        <code class="small" x-text="modem.sim_imsi || '-'"></code>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
                 </div>

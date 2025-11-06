@@ -1,5 +1,6 @@
 """Network management router for NetworkManager connections."""
 
+import json
 import subprocess
 from typing import Any, Dict, List
 
@@ -50,6 +51,31 @@ class CellularUpdate(BaseModel):
     pin: str | None = Field(None, description="New SIM PIN code", min_length=4, max_length=8)
 
 
+class ModemInfo(BaseModel):
+    """Modem information model."""
+
+    # Basic info
+    manufacturer: str | None = Field(None, description="Modem manufacturer")
+    model: str | None = Field(None, description="Modem model")
+    hardware_revision: str | None = Field(None, description="Hardware revision")
+    imei: str | None = Field(None, description="IMEI number")
+
+    # Signal info
+    signal_strength_dbm: int | None = Field(None, description="Signal strength in dBm")
+    signal_strength_percent: int | None = Field(None, description="Signal strength as percentage")
+    access_technology: str | None = Field(None, description="Current access technology (e.g., LTE, 5G)")
+
+    # Connection info
+    state: str | None = Field(None, description="Modem state")
+    operator_name: str | None = Field(None, description="Network operator name")
+    ip_addresses: List[str] | None = Field(None, description="IP addresses")
+
+    # SIM info
+    sim_iccid: str | None = Field(None, description="SIM ICCID")
+    sim_operator: str | None = Field(None, description="SIM operator name")
+    sim_imsi: str | None = Field(None, description="SIM IMSI")
+
+
 def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Run nmcli command with proper error handling.
 
@@ -74,6 +100,32 @@ def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.Complet
         raise HTTPException(status_code=504, detail="NetworkManager command timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="NetworkManager (nmcli) not available")
+
+
+def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+    """Run mmcli command with proper error handling.
+
+    Args:
+        args: Command arguments to pass to mmcli
+        check: Whether to check return code and raise exception on failure
+
+    Returns:
+        CompletedProcess instance
+
+    Raises:
+        HTTPException: If command fails and check=True
+    """
+    try:
+        result = subprocess.run(["mmcli"] + args, capture_output=True, text=True, check=check, timeout=10)
+        return result
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500, detail=f"ModemManager command failed: {e.stderr.strip() or e.stdout.strip() or str(e)}"
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="ModemManager command timed out")
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="ModemManager (mmcli) not available")
 
 
 def get_device_ipv4_address(device: str) -> str | None:
@@ -318,3 +370,150 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update cellular configuration: {str(e)}")
+
+
+@router.get("/modem", summary="Get modem information", response_model=ModemInfo | None)
+async def get_modem_info() -> ModemInfo | None:
+    """Get information about the first available modem from ModemManager.
+
+    Returns:
+        Modem information including basic info, signal strength, and connection status, or None if no modem found
+    """
+    try:
+        # First, list available modems
+        list_result = run_mmcli_command(["-L", "--output-json"], check=False)
+
+        if list_result.returncode != 0:
+            # ModemManager not available or no modems
+            return None
+
+        # Parse the modem list
+        try:
+            modem_list = json.loads(list_result.stdout)
+        except json.JSONDecodeError:
+            return None
+
+        # Extract modem IDs from the list
+        # Format is like: {"modem-list": ["/org/freedesktop/ModemManager1/Modem/0", ...]}
+        modem_paths = modem_list.get("modem-list", [])
+        if not modem_paths:
+            # No modems found
+            return None
+
+        # Get the first modem ID from the path (e.g., "/org/freedesktop/ModemManager1/Modem/0" -> "0")
+        first_modem_path = modem_paths[0]
+        modem_id = first_modem_path.split("/")[-1]
+
+        # Get detailed modem information
+        detail_result = run_mmcli_command(["-m", modem_id, "--output-json"], check=False)
+
+        if detail_result.returncode != 0:
+            return None
+
+        # Parse modem details
+        try:
+            modem_data = json.loads(detail_result.stdout)
+        except json.JSONDecodeError:
+            return None
+
+        # Extract relevant information from the modem data
+        modem = modem_data.get("modem", {})
+        generic = modem.get("generic", {})
+        signal = modem.get("signal", {})
+        three_gpp = modem.get("3gpp", {})
+        sim = modem.get("sim", {})
+        bearer_paths = modem.get("bearers", [])
+
+        # Extract basic info
+        manufacturer = generic.get("manufacturer")
+        model = generic.get("model")
+        hardware_revision = generic.get("revision")
+        equipment_id = generic.get("equipment-identifier")  # IMEI
+
+        # Extract signal info
+        signal_strength_percent = None
+        if generic.get("signal-quality"):
+            signal_strength_percent = generic["signal-quality"].get("value")
+
+        # Get signal strength in dBm if available
+        signal_strength_dbm = None
+        if signal and "lte" in signal:
+            signal_strength_dbm = signal["lte"].get("rssi")
+        elif signal and "cdma1x" in signal:
+            signal_strength_dbm = signal["cdma1x"].get("rssi")
+        elif signal and "evdo" in signal:
+            signal_strength_dbm = signal["evdo"].get("rssi")
+        elif signal and "gsm" in signal:
+            signal_strength_dbm = signal["gsm"].get("rssi")
+        elif signal and "umts" in signal:
+            signal_strength_dbm = signal["umts"].get("rssi")
+
+        # Extract access technology
+        access_tech = generic.get("access-technologies", [])
+        access_technology = access_tech[0] if access_tech else None
+
+        # Extract connection info
+        state = generic.get("state")
+        operator_name = three_gpp.get("operator-name")
+
+        # Extract IP addresses from bearers
+        ip_addresses = []
+        for bearer_path in bearer_paths:
+            bearer_id = bearer_path.split("/")[-1]
+            bearer_result = run_mmcli_command(["-b", bearer_id, "--output-json"], check=False)
+            if bearer_result.returncode == 0:
+                try:
+                    bearer_data = json.loads(bearer_result.stdout)
+                    bearer_info = bearer_data.get("bearer", {})
+                    ipv4_config = bearer_info.get("ipv4-config", {})
+                    ipv6_config = bearer_info.get("ipv6-config", {})
+
+                    if ipv4_config.get("address"):
+                        ip_addresses.append(ipv4_config["address"])
+                    if ipv6_config.get("address"):
+                        ip_addresses.append(ipv6_config["address"])
+                except json.JSONDecodeError:
+                    pass
+
+        # Extract SIM info
+        sim_path = generic.get("sim")
+        sim_iccid = None
+        sim_operator = None
+        sim_imsi = None
+
+        if sim_path:
+            sim_id = sim_path.split("/")[-1]
+            sim_result = run_mmcli_command(["-i", sim_id, "--output-json"], check=False)
+            if sim_result.returncode == 0:
+                try:
+                    sim_data = json.loads(sim_result.stdout)
+                    sim_info = sim_data.get("sim", {})
+                    sim_properties = sim_info.get("properties", {})
+                    sim_iccid = sim_properties.get("iccid")
+                    sim_operator = sim_properties.get("operator-name")
+                    sim_imsi = sim_properties.get("imsi")
+                except json.JSONDecodeError:
+                    pass
+
+        return ModemInfo(
+            manufacturer=manufacturer,
+            model=model,
+            hardware_revision=hardware_revision,
+            imei=equipment_id,
+            signal_strength_dbm=signal_strength_dbm,
+            signal_strength_percent=signal_strength_percent,
+            access_technology=access_technology,
+            state=state,
+            operator_name=operator_name,
+            ip_addresses=ip_addresses if ip_addresses else None,
+            sim_iccid=sim_iccid,
+            sim_operator=sim_operator,
+            sim_imsi=sim_imsi,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log the error but don't raise - return None for graceful degradation
+        print(f"Error getting modem information: {str(e)}")
+        return None

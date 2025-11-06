@@ -37,6 +37,9 @@ export function networkConfig() {
             password: '',
             pin: ''
         },
+        modem: null,
+        modemLoading: false,
+        modemError: null,
         loading: false,
         refreshing: false,
         statusInterval: null,
@@ -79,6 +82,7 @@ export function networkConfig() {
             await this.loadConnections();
             await this.loadHotspotConfig();
             await this.loadCellularConfig();
+            await this.loadModemDetails();
             await this.startAutoRefresh();
         },
         
@@ -311,6 +315,41 @@ export function networkConfig() {
             }
         },
         
+        async loadModemDetails(showLoading = false) {
+            if (showLoading) {
+                this.modemLoading = true;
+            }
+            
+            try {
+                const response = await fetch(apiUrl('/api/network/modem'));
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load modem details: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Only update modem state with the new data
+                this.modem = data;
+                
+                // Clear any previous errors on successful fetch
+                this.modemError = null;
+            } catch (error) {
+                console.error('Error loading modem details:', error);
+                this.modemError = error.message || 'Failed to load modem details';
+                // Only clear modem data on actual error
+                this.modem = null;
+            } finally {
+                if (showLoading) {
+                    this.modemLoading = false;
+                }
+            }
+        },
+        
+        async refreshModemDetails() {
+            await this.loadModemDetails(true);
+        },
+        
         async saveCellularConfig() {
             if (!this.isCellularModified) {
                 this.dispatchMessage('No changes to save', false);
@@ -411,6 +450,7 @@ export function networkConfig() {
                 if (isNetworkTabActive && !this.refreshing) {
                     this.loadServiceStatus();
                     this.loadConnections(false);
+                    this.loadModemDetails(false);
                 }
             }, interval * 1000);
         },
@@ -470,6 +510,39 @@ export function networkConfig() {
                 default:
                     return 'fas fa-network-wired';
             }
+        },
+        
+        getModemStateBadgeClass(state) {
+            if (!state) return 'bg-secondary';
+            
+            const stateLower = state.toLowerCase();
+            if (stateLower.includes('connected') || stateLower.includes('registered')) {
+                return 'bg-success';
+            } else if (stateLower.includes('connecting') || stateLower.includes('searching')) {
+                return 'bg-warning';
+            } else if (stateLower.includes('disabled') || stateLower.includes('failed')) {
+                return 'bg-danger';
+            }
+            return 'bg-secondary';
+        },
+        
+        formatSignalStrength(dbm, percent) {
+            if (dbm !== null && dbm !== undefined) {
+                return `${dbm} dBm`;
+            } else if (percent !== null && percent !== undefined) {
+                return `${percent}%`;
+            }
+            return '-';
+        },
+        
+        getSignalBars(percent) {
+            if (percent === null || percent === undefined) return 0;
+            if (percent >= 80) return 5;
+            if (percent >= 60) return 4;
+            if (percent >= 40) return 3;
+            if (percent >= 20) return 2;
+            if (percent > 0) return 1;
+            return 0;
         },
         
         dispatchMessage(message, isError) {
