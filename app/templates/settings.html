@@ -730,6 +730,7 @@
                                                     <th style="width: 100px;">Device</th>
                                                     <th style="width: 150px;" class="text-end">IPv4 Address</th>
                                                     <th style="width: 120px;" class="text-end">Status</th>
+                                                    <th style="width: 80px;" class="text-end">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -753,6 +754,28 @@
                                                                   :class="getConnectionStatusBadgeClass(connection.state)"
                                                                   x-text="getConnectionStatusText(connection.state)">
                                                             </span>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <button type="button" 
+                                                                    class="btn btn-sm" 
+                                                                    :class="{
+                                                                        'btn-outline-success': getConnectionUpState(connection.name) === 'idle',
+                                                                        'btn-success': getConnectionUpState(connection.name) === 'activating',
+                                                                        'btn-outline-primary': getConnectionUpState(connection.name) === 'activated'
+                                                                    }"
+                                                                    @click="bringConnectionUp(connection.name)"
+                                                                    :disabled="getConnectionUpState(connection.name) === 'activating'"
+                                                                    :title="'Bring connection up'">
+                                                                <template x-if="getConnectionUpState(connection.name) === 'idle'">
+                                                                    <i class="fas fa-play"></i>
+                                                                </template>
+                                                                <template x-if="getConnectionUpState(connection.name) === 'activating'">
+                                                                    <i class="fas fa-spinner fa-spin"></i>
+                                                                </template>
+                                                                <template x-if="getConnectionUpState(connection.name) === 'activated'">
+                                                                    <i class="fas fa-check"></i>
+                                                                </template>
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 </template>

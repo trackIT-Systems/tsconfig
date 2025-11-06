@@ -76,12 +76,13 @@ class ModemInfo(BaseModel):
     sim_imsi: str | None = Field(None, description="SIM IMSI")
 
 
-def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+def run_nmcli_command(args: List[str], check: bool = True, sudo: bool = False) -> subprocess.CompletedProcess:
     """Run nmcli command with proper error handling.
 
     Args:
         args: Command arguments to pass to nmcli
         check: Whether to check return code and raise exception on failure
+        sudo: Whether to run the command with sudo privileges
 
     Returns:
         CompletedProcess instance
@@ -90,7 +91,8 @@ def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.Complet
         HTTPException: If command fails and check=True
     """
     try:
-        result = subprocess.run(["nmcli"] + args, capture_output=True, text=True, check=check, timeout=10)
+        cmd = ["sudo", "nmcli"] + args if sudo else ["nmcli"] + args
+        result = subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=10)
         return result
     except subprocess.CalledProcessError as e:
         raise HTTPException(
@@ -209,7 +211,8 @@ async def get_hotspot_config() -> HotspotConfig:
 
         # Get hotspot password (requires --show-secrets to reveal the actual password)
         result_psk = run_nmcli_command(
-            ["-t", "-f", "802-11-wireless-security.psk", "connection", "show", "hotspot", "--show-secrets"]
+            ["-t", "-f", "802-11-wireless-security.psk", "connection", "show", "hotspot", "--show-secrets"],
+            sudo=True
         )
         psk_line = result_psk.stdout.strip()
         # Output format is "802-11-wireless-security.psk:value"
@@ -247,7 +250,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
             raise HTTPException(status_code=400, detail="Password must be 63 characters or less")
 
         # Update password
-        run_nmcli_command(["connection", "modify", "hotspot", "802-11-wireless-security.psk", update.password])
+        run_nmcli_command(["connection", "modify", "hotspot", "802-11-wireless-security.psk", update.password], sudo=True)
 
         # Get updated configuration
         updated_config = await get_hotspot_config()
@@ -278,7 +281,8 @@ async def get_cellular_config() -> CellularConfig:
                 "show",
                 "cellular",
                 "--show-secrets",
-            ]
+            ],
+            sudo=True
         )
 
         # Parse the output - format is "field:value" per line
@@ -344,22 +348,22 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         # Update APN if provided
         if update.apn is not None:
             value = update.apn if update.apn else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.apn", value])
+            run_nmcli_command(["connection", "modify", "cellular", "gsm.apn", value], sudo=True)
 
         # Update username if provided
         if update.username is not None:
             value = update.username if update.username else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.username", value])
+            run_nmcli_command(["connection", "modify", "cellular", "gsm.username", value], sudo=True)
 
         # Update password if provided
         if update.password is not None:
             value = update.password if update.password else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.password", value])
+            run_nmcli_command(["connection", "modify", "cellular", "gsm.password", value], sudo=True)
 
         # Update PIN if provided
         if update.pin is not None:
             value = update.pin if update.pin else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.pin", value])
+            run_nmcli_command(["connection", "modify", "cellular", "gsm.pin", value], sudo=True)
 
         # Get updated configuration
         updated_config = await get_cellular_config()
@@ -370,6 +374,42 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update cellular configuration: {str(e)}")
+
+
+@router.post("/connections/{connection_name}/up", summary="Bring a connection up")
+async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
+    """Bring a network connection up using nmcli connection up.
+
+    Args:
+        connection_name: Name of the connection to bring up
+
+    Returns:
+        Success message with connection information
+    """
+    try:
+        # Try to bring the connection up
+        result = run_nmcli_command(["connection", "up", connection_name], check=False, sudo=True)
+
+        if result.returncode == 0:
+            return {"message": f"Connection '{connection_name}' activated successfully", "connection_name": connection_name}
+        else:
+            # Parse error message from nmcli
+            error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+            
+            # Check if already active
+            if "already active" in error_msg.lower() or "is already active" in error_msg.lower():
+                return {
+                    "message": f"Connection '{connection_name}' is already active",
+                    "connection_name": connection_name,
+                    "already_active": True,
+                }
+            
+            raise HTTPException(status_code=500, detail=f"Failed to activate connection: {error_msg}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to bring connection up: {str(e)}")
 
 
 @router.get("/modem", summary="Get modem information", response_model=ModemInfo | None)

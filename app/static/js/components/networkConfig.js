@@ -47,6 +47,7 @@ export function networkConfig() {
         showCellularPassword: false,
         showCellularPin: false,
         cellularSaveState: 'idle',
+        connectionUpStates: {},
         
         // Server mode helper
         get serverMode() {
@@ -533,6 +534,56 @@ export function networkConfig() {
                 return `${percent}%`;
             }
             return '-';
+        },
+        
+        getConnectionUpState(connectionName) {
+            return this.connectionUpStates[connectionName] || 'idle';
+        },
+        
+        async bringConnectionUp(connectionName) {
+            // Prevent multiple simultaneous requests for the same connection
+            if (this.connectionUpStates[connectionName] === 'activating') {
+                return;
+            }
+            
+            // Set state to activating
+            this.connectionUpStates[connectionName] = 'activating';
+            
+            try {
+                const response = await fetch(apiUrl(`/api/network/connections/${encodeURIComponent(connectionName)}/up`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to bring connection up');
+                }
+                
+                const data = await response.json();
+                
+                // Set state to activated briefly
+                this.connectionUpStates[connectionName] = 'activated';
+                
+                // Show success message
+                this.dispatchMessage(data.message || `Connection '${connectionName}' activated successfully`, false);
+                
+                // Refresh connections list to show updated status
+                await this.loadConnections(false);
+                
+                // Reset state after delay
+                setTimeout(() => {
+                    if (this.connectionUpStates[connectionName] === 'activated') {
+                        this.connectionUpStates[connectionName] = 'idle';
+                    }
+                }, 2000);
+            } catch (error) {
+                console.error('Error bringing connection up:', error);
+                this.connectionUpStates[connectionName] = 'idle';
+                this.dispatchMessage(error.message || `Failed to bring connection '${connectionName}' up`, true);
+            }
         },
         
         getSignalBars(percent) {
