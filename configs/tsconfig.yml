@@ -10,27 +10,25 @@ system:
   status_refresh_interval: 5  # Default system status refresh interval in seconds
 
 services:
-  - name: wittypid
-    expert: false
+  - name: multi-user.target
+    expert: true
   - name: radiotracking
     expert: false 
   - name: soundscapepipe
     expert: false
-  - name: tsconfig
+  - name: time-sync.target
     expert: true
-  - name: tsconfig-ble
-    expert: true
+  - name: wittypid
+    expert: false
   - name: chrony
-    expert: true
-  - name: wg-quick@wireguard
     expert: true
   - name: mosquitto
     expert: true
   - name: mqttutil
     expert: true 
-  - name: multi-user.target
+  - name: wg-quick@wireguard
     expert: true
-  - name: network-online.target
+  - name: tsconfig
     expert: true
-  - name: time-sync.target
+  - name: tsconfig-ble
     expert: true
