@@ -22,13 +22,19 @@ services:
     expert: false
   - name: chrony
     expert: true
-  - name: mosquitto
-    expert: true
   - name: mqttutil
     expert: true 
-  - name: wg-quick@wireguard
+  - name: mosquitto
     expert: true
   - name: tsconfig
     expert: true
   - name: tsconfig-ble
+    expert: true
+  - name: bluetooth.service
+    expert: true
+  - name: network-online.target
+    expert: true
+  - name: wg-quick@wireguard
+    expert: true
+  - name: NetworkManager.service
     expert: true

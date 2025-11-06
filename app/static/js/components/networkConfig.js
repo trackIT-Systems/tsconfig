@@ -1,12 +1,22 @@
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
+import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 import { apiUrl } from '../utils/apiUtils.js';
 
 export function networkConfig() {
     return {
         ...saveStateMixin(),
+        ...serviceActionMixin(),
         
+        _initialized: false,
+        _loadingServiceStatus: false,
         connections: [],
+        serviceStatus: {
+            active: false,
+            status: 'unknown',
+            uptime: '-'
+        },
+        actionLoading: false,
         hotspot: {
             ssid: '',
             password: ''
@@ -55,17 +65,91 @@ export function networkConfig() {
         
         async init() {
             // Prevent multiple initializations
+            if (this._initialized) {
+                return;
+            }
+            
             if (this.statusInterval) {
                 this.stopAutoRefresh();
             }
             
+            this._initialized = true;
+            
+            await this.loadServiceStatus();
             await this.loadConnections();
             await this.loadHotspotConfig();
             await this.loadCellularConfig();
+            await this.startAutoRefresh();
         },
         
         cleanup() {
             this.stopAutoRefresh();
+            this._initialized = false;
+        },
+        
+        async loadServiceStatus() {
+            // Prevent multiple simultaneous requests
+            if (this._loadingServiceStatus) {
+                return;
+            }
+            
+            this._loadingServiceStatus = true;
+            
+            try {
+                const response = await fetch(apiUrl('/api/systemd/services'));
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load service status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Find NetworkManager service
+                const nmService = data.find(s => s.name === 'NetworkManager.service');
+                
+                if (nmService) {
+                    this.serviceStatus = {
+                        active: nmService.active,
+                        status: nmService.status || 'unknown',
+                        uptime: nmService.uptime || '-'
+                    };
+                } else {
+                    this.serviceStatus = {
+                        active: false,
+                        status: 'not-found',
+                        uptime: '-'
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading NetworkManager service status:', error);
+                this.serviceStatus = {
+                    active: false,
+                    status: 'error',
+                    uptime: '-'
+                };
+            } finally {
+                this._loadingServiceStatus = false;
+            }
+        },
+        
+        streamLogs(serviceName) {
+            // Show the log modal
+            const modal = new bootstrap.Modal(document.getElementById('logModal'));
+            // Get the log viewer instance and start streaming
+            const logViewerEl = document.getElementById('logModal');
+            if (logViewerEl && logViewerEl._x_dataStack) {
+                const logViewerInstance = logViewerEl._x_dataStack[0];
+                logViewerInstance.startStreaming(serviceName);
+            }
+            modal.show();
+            
+            // Scroll to bottom after modal is shown and content is rendered
+            setTimeout(() => {
+                const container = document.getElementById('logContainer');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, 250);
         },
         
         async loadConnections(showRefreshing = false) {
@@ -312,12 +396,12 @@ export function networkConfig() {
             this.showCellularPin = !this.showCellularPin;
         },
         
-        startAutoRefresh() {
+        async startAutoRefresh() {
             // Clear any existing interval first
             this.stopAutoRefresh();
             
-            // Refresh connection status periodically (without showing refreshing state)
-            const interval = getSystemRefreshInterval();
+            // Refresh connection and service status periodically (without showing refreshing state)
+            const interval = await getSystemRefreshInterval();
             
             this.statusInterval = setInterval(() => {
                 // Only refresh if network tab is active and not already refreshing
@@ -325,6 +409,7 @@ export function networkConfig() {
                 const isNetworkTabActive = currentHash === 'settings/network';
                 
                 if (isNetworkTabActive && !this.refreshing) {
+                    this.loadServiceStatus();
                     this.loadConnections(false);
                 }
             }, interval * 1000);

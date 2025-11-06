@@ -612,11 +612,88 @@
                 <!-- Network Tab -->
                 <div x-show="systemTab === 'network'">
                     <div class="card" x-data="networkConfig()" x-init="init()" x-destroy="cleanup()">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="fas fa-network-wired me-2"></i>
-                                Network Configuration
-                            </h5>
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <h5 class="card-title mb-0 me-2">NetworkManager</h5>
+                                <!-- Service Status Indicator -->
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge d-flex align-items-center gap-1" 
+                                            :class="{
+                                                'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                            }">
+                                        <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                                        <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
+                                    </span>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        <span x-text="serviceStatus.uptime"></span>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <!-- Start/Stop button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle') || getServiceStartStopState('NetworkManager.service') === 'started',
+                                            'btn-success': getServiceStartStopState('NetworkManager.service') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle') || getServiceStartStopState('NetworkManager.service') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('NetworkManager.service') === 'stopping'
+                                        }"
+                                        @click="performStartStopAction('NetworkManager.service', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('NetworkManager.service') === 'starting' || getServiceStartStopState('NetworkManager.service') === 'stopping'"
+                                        :title="serviceStatus.active ? 'Stop service' : 'Start service'">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle'">
+                                        <i class="fas fa-play"></i>
+                                    </template>
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle'">
+                                        <i class="fas fa-stop"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'starting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'stopping'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'started'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'stopped'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <!-- Restart button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-warning': getServiceRestartState('NetworkManager.service') === 'idle',
+                                            'btn-primary': getServiceRestartState('NetworkManager.service') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('NetworkManager.service') === 'restarted'
+                                        }"
+                                        @click="performAction('NetworkManager.service', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('NetworkManager.service') === 'restarting'"
+                                        title="Restart service">
+                                    <template x-if="getServiceRestartState('NetworkManager.service') === 'idle'">
+                                        <i class="fas fa-redo"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('NetworkManager.service') === 'restarting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('NetworkManager.service') === 'restarted'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm" 
+                                        @click="streamLogs('NetworkManager.service')"
+                                        title="View NetworkManager service logs">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Logs
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <!-- Connection Status Section -->
