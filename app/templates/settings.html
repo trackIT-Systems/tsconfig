@@ -1068,42 +1068,42 @@
                                         <div class="mb-3">
                                             <h6 class="text-muted small fw-semibold mb-2">Signal Information</h6>
                                             <div class="row g-2">
-                                                <div class="col-md-3">
-                                                    <div class="bg-light rounded p-2">
+                                                <div class="col-md-3 d-flex">
+                                                    <div class="bg-light rounded p-2 flex-fill">
                                                         <small class="text-muted d-block">Operator</small>
                                                         <span x-text="modem.operator_name || '-'"></span>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <div class="bg-light rounded p-2">
+                                                <div class="col-md-3 d-flex">
+                                                    <div class="bg-light rounded p-2 flex-fill">
                                                         <small class="text-muted d-block">Technology</small>
                                                         <span x-text="modem.access_technology || '-'"></span>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <div class="bg-light rounded p-2">
+                                                <div class="col-md-3 d-flex">
+                                                    <div class="bg-light rounded p-2 flex-fill">
                                                         <small class="text-muted d-block">State</small>
                                                         <span class="badge" 
                                                               :class="getModemStateBadgeClass(modem.state)"
                                                               x-text="modem.state || '-'"></span>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <div class="bg-light rounded p-2">
-                                                        <small class="text-muted d-block">Signal Strength</small>
+                                                <div class="col-md-3 d-flex">
+                                                    <div class="bg-light rounded p-2 flex-fill">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <small class="text-muted">Signal Strength</small>
+                                                            <small class="fw-semibold" x-text="modem.signal_strength_percent !== null && modem.signal_strength_percent !== undefined ? modem.signal_strength_percent + '%' : '-'"></small>
+                                                        </div>
                                                         <template x-if="modem.signal_strength_percent !== null && modem.signal_strength_percent !== undefined">
-                                                            <div>
-                                                                <div class="progress" style="height: 8px;">
-                                                                    <div class="progress-bar" 
-                                                                            :style="`width: ${modem.signal_strength_percent}%`" 
-                                                                            :class="{
-                                                                                'bg-success': modem.signal_strength_percent >= 60,
-                                                                                'bg-warning': modem.signal_strength_percent >= 40 && modem.signal_strength_percent < 60,
-                                                                                'bg-danger': modem.signal_strength_percent < 40
-                                                                            }">
-                                                                    </div>
+                                                            <div class="progress mt-2">
+                                                                <div class="progress-bar" 
+                                                                        :style="`width: ${modem.signal_strength_percent}%`" 
+                                                                        :class="{
+                                                                            'bg-success': modem.signal_strength_percent >= 60,
+                                                                            'bg-warning': modem.signal_strength_percent >= 40 && modem.signal_strength_percent < 60,
+                                                                            'bg-danger': modem.signal_strength_percent < 40
+                                                                        }">
                                                                 </div>
-                                                                <small class="text-muted" x-text="formatSignalStrength(modem.signal_strength_dbm, modem.signal_strength_percent)"></small>
                                                             </div>
                                                         </template>
                                                         <template x-if="modem.signal_strength_percent === null || modem.signal_strength_percent === undefined">
