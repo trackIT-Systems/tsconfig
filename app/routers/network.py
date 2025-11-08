@@ -1,7 +1,9 @@
 """Network management router for NetworkManager connections."""
 
 import json
+import os
 import subprocess
+import yaml
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
@@ -130,6 +132,77 @@ def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.Complet
         raise HTTPException(status_code=503, detail="ModemManager (mmcli) not available")
 
 
+NETPLAN_WIFI_FILE = "/etc/netplan/20-hotspot.yaml"
+NETPLAN_CELLULAR_FILE = "/etc/netplan/60-cellular.yaml"
+
+
+def read_netplan_file(file_path: str) -> Dict[str, Any]:
+    """Read and parse a netplan YAML file.
+
+    Args:
+        file_path: Path to the netplan YAML file
+
+    Returns:
+        Parsed YAML configuration as dictionary
+
+    Raises:
+        HTTPException: If file cannot be read or parsed
+    """
+    try:
+        with open(file_path, 'r') as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Netplan file not found: {file_path}"
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied reading netplan file: {file_path}"
+        )
+    except yaml.YAMLError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse netplan file {file_path}: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error reading netplan file {file_path}: {str(e)}"
+        )
+
+
+def write_netplan_file(file_path: str, config: Dict[str, Any]) -> None:
+    """Write a netplan YAML configuration to file.
+
+    Args:
+        file_path: Path to the netplan YAML file
+        config: Configuration dictionary to write
+
+    Raises:
+        HTTPException: If file cannot be written
+    """
+    try:
+        # Write config to YAML file with proper formatting
+        with open(file_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        # Set proper permissions (root:root, 0600)
+        os.chmod(file_path, 0o600)
+        
+    except PermissionError:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied writing netplan file: {file_path}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error writing netplan file {file_path}: {str(e)}"
+        )
+
+
 def get_device_ipv4_address(device: str) -> str | None:
     """Get IPv4 address for a network device using NetworkManager.
 
@@ -197,29 +270,35 @@ async def get_connections() -> List[ConnectionInfo]:
 
 @router.get("/connections/hotspot", summary="Get hotspot configuration", response_model=HotspotConfig)
 async def get_hotspot_config() -> HotspotConfig:
-    """Get current hotspot SSID and password.
+    """Get current hotspot SSID and password from netplan configuration.
 
     Returns:
         Current hotspot configuration
     """
     try:
-        # Get hotspot SSID
-        result_ssid = run_nmcli_command(["-t", "-f", "802-11-wireless.ssid", "connection", "show", "hotspot"])
-        ssid_line = result_ssid.stdout.strip()
-        # Output format is "802-11-wireless.ssid:value"
-        ssid = ssid_line.split(":", 1)[1] if ":" in ssid_line else ""
-
-        # Get hotspot password (requires --show-secrets to reveal the actual password)
-        result_psk = run_nmcli_command(
-            ["-t", "-f", "802-11-wireless-security.psk", "connection", "show", "hotspot", "--show-secrets"],
-            sudo=True
-        )
-        psk_line = result_psk.stdout.strip()
-        # Output format is "802-11-wireless-security.psk:value"
-        password = psk_line.split(":", 1)[1] if ":" in psk_line else ""
-
-        if not ssid:
+        # Read the wifi netplan configuration file
+        config = read_netplan_file(NETPLAN_WIFI_FILE)
+        
+        # Navigate to the hotspot access points
+        network = config.get("network", {})
+        wifis = network.get("wifis", {})
+        hotspot = wifis.get("hotspot", {})
+        access_points = hotspot.get("access-points", {})
+        
+        if not access_points or not isinstance(access_points, dict):
+            raise HTTPException(status_code=404, detail="Hotspot access points not found in netplan configuration")
+        
+        # Get the first (and typically only) SSID
+        ssid_key = next(iter(access_points.keys()))
+        if not ssid_key:
             raise HTTPException(status_code=404, detail="Hotspot SSID not found")
+        
+        # The SSID is the key itself (no need to strip quotes, YAML parser handles that)
+        ssid = ssid_key
+        
+        # Get the password for this SSID
+        ap_config = access_points[ssid_key]
+        password = ap_config.get("auth", {}).get("password", "")
 
         return HotspotConfig(ssid=ssid, password=password)
 
@@ -249,13 +328,46 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         if len(update.password) > 63:
             raise HTTPException(status_code=400, detail="Password must be 63 characters or less")
 
-        # Update password
-        run_nmcli_command(["connection", "modify", "hotspot", "802-11-wireless-security.psk", update.password], sudo=True)
+        # Read the wifi netplan configuration file
+        config = read_netplan_file(NETPLAN_WIFI_FILE)
+        
+        # Navigate to the hotspot access points
+        network = config.get("network", {})
+        wifis = network.get("wifis", {})
+        hotspot = wifis.get("hotspot", {})
+        access_points = hotspot.get("access-points", {})
+        
+        if not access_points or not isinstance(access_points, dict):
+            raise HTTPException(status_code=404, detail="Hotspot access points not found in netplan configuration")
+        
+        # Get the first (and typically only) SSID
+        ssid_key = next(iter(access_points.keys()))
+        if not ssid_key:
+            raise HTTPException(status_code=404, detail="Hotspot SSID not found")
+        
+        # Get the current access point config
+        ap_config = access_points[ssid_key]
+        
+        # Preserve existing auth config and update only the password
+        if "auth" not in ap_config:
+            ap_config["auth"] = {}
+        
+        # Update password while preserving all other auth fields
+        ap_config["auth"]["password"] = update.password
+        
+        # Ensure key-management is set to psk (preserve it if it exists, add it if not)
+        if "key-management" not in ap_config["auth"]:
+            ap_config["auth"]["key-management"] = "psk"
+        
+        # Write the modified configuration back to the file
+        write_netplan_file(NETPLAN_WIFI_FILE, config)
+
+        # Note: netplan apply is not called here - configuration changes will be applied later
 
         # Get updated configuration
         updated_config = await get_hotspot_config()
 
-        return {"message": "Hotspot password updated successfully", "config": updated_config}
+        return {"message": "Hotspot password updated successfully (not yet applied)", "config": updated_config}
 
     except HTTPException:
         raise
@@ -265,51 +377,30 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
 
 @router.get("/connections/cellular", summary="Get cellular configuration", response_model=CellularConfig)
 async def get_cellular_config() -> CellularConfig:
-    """Get current cellular/GSM configuration including APN, username, password, and PIN.
+    """Get current cellular/GSM configuration from netplan including APN, username, password, and PIN.
 
     Returns:
         Current cellular configuration
     """
     try:
-        # Get cellular configuration with secrets
-        result = run_nmcli_command(
-            [
-                "-t",
-                "-f",
-                "gsm.apn,gsm.username,gsm.password,gsm.pin",
-                "connection",
-                "show",
-                "cellular",
-                "--show-secrets",
-            ],
-            sudo=True
-        )
+        # Read the cellular netplan configuration file
+        config = read_netplan_file(NETPLAN_CELLULAR_FILE)
+        
+        # Navigate to the cellular configuration
+        network = config.get("network", {})
+        modems = network.get("modems", {})
+        cellular_config = modems.get("cellular", {})
+        
+        if not cellular_config or not isinstance(cellular_config, dict):
+            raise HTTPException(status_code=404, detail="Cellular configuration not found in netplan")
+        
+        # Extract values, treating empty strings as None
+        apn = cellular_config.get("apn") or None
+        username = cellular_config.get("username") or None
+        password = cellular_config.get("password") or None
+        pin = cellular_config.get("pin") or None
 
-        # Parse the output - format is "field:value" per line
-        config = {"apn": None, "username": None, "password": None, "pin": None}
-
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-
-            if ":" in line:
-                key, value = line.split(":", 1)
-                value = value.strip()
-
-                # Empty values or special markers should be treated as None
-                if not value or value in ["--", "<hidden>"]:
-                    value = None
-
-                if key == "gsm.apn":
-                    config["apn"] = value
-                elif key == "gsm.username":
-                    config["username"] = value
-                elif key == "gsm.password":
-                    config["password"] = value
-                elif key == "gsm.pin":
-                    config["pin"] = value
-
-        return CellularConfig(**config)
+        return CellularConfig(apn=apn, username=username, password=password, pin=pin)
 
     except HTTPException:
         raise
@@ -345,30 +436,39 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
             if update.pin and (len(update.pin) < 4 or len(update.pin) > 8):
                 raise HTTPException(status_code=400, detail="PIN must be 4-8 digits")
 
-        # Update APN if provided
+        # Read the cellular netplan configuration file
+        config = read_netplan_file(NETPLAN_CELLULAR_FILE)
+        
+        # Navigate to the cellular configuration
+        network = config.get("network", {})
+        modems = network.get("modems", {})
+        cellular_config = modems.get("cellular", {})
+        
+        if not isinstance(cellular_config, dict):
+            raise HTTPException(status_code=404, detail="Cellular configuration not found in netplan")
+
+        # Update fields if provided (preserve existing fields)
         if update.apn is not None:
-            value = update.apn if update.apn else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.apn", value], sudo=True)
-
-        # Update username if provided
+            cellular_config["apn"] = update.apn if update.apn else ""
+        
         if update.username is not None:
-            value = update.username if update.username else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.username", value], sudo=True)
-
-        # Update password if provided
+            cellular_config["username"] = update.username if update.username else ""
+        
         if update.password is not None:
-            value = update.password if update.password else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.password", value], sudo=True)
-
-        # Update PIN if provided
+            cellular_config["password"] = update.password if update.password else ""
+        
         if update.pin is not None:
-            value = update.pin if update.pin else ""
-            run_nmcli_command(["connection", "modify", "cellular", "gsm.pin", value], sudo=True)
+            cellular_config["pin"] = update.pin if update.pin else ""
+
+        # Write the modified configuration back to the file
+        write_netplan_file(NETPLAN_CELLULAR_FILE, config)
+
+        # Note: netplan apply is not called here - configuration changes will be applied later
 
         # Get updated configuration
         updated_config = await get_cellular_config()
 
-        return {"message": "Cellular configuration updated successfully", "config": updated_config}
+        return {"message": "Cellular configuration updated successfully (not yet applied)", "config": updated_config}
 
     except HTTPException:
         raise
