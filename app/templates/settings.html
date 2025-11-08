@@ -833,6 +833,58 @@
                                         </div>
                                     </div>
                                     
+                                    <!-- Expert Mode WiFi Settings -->
+                                    <div class="row" x-show="expertMode" x-transition>
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">Band <small class="text-muted">(Expert)</small></label>
+                                            <select class="form-select" 
+                                                    x-model="hotspot.band"
+                                                    @change="onBandChange()">
+                                                <option value="">Auto</option>
+                                                <template x-for="bandInfo in wifiCapabilities.bands" :key="bandInfo.band">
+                                                    <option :value="bandInfo.band" x-text="bandInfo.band"></option>
+                                                </template>
+                                            </select>
+                                            <div class="form-text">WiFi frequency band</div>
+                                        </div>
+                                        
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">Channel <small class="text-muted">(Expert)</small></label>
+                                            <select class="form-select" x-model.number="hotspot.channel">
+                                                <option value="">Auto</option>
+                                                <template x-for="channel in availableChannels" :key="channel">
+                                                    <option :value="channel" x-text="channel"></option>
+                                                </template>
+                                            </select>
+                                            <div class="form-text">WiFi channel (auto recommended)</div>
+                                        </div>
+                                        
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">Channel Width <small class="text-muted">(Expert)</small></label>
+                                            <select class="form-select" x-model="hotspot.channel_width">
+                                                <option value="">Auto</option>
+                                                <template x-for="width in wifiCapabilities.channel_widths" :key="width">
+                                                    <option :value="width" x-text="width + ' MHz'"></option>
+                                                </template>
+                                            </select>
+                                            <div class="form-text">Channel bandwidth</div>
+                                        </div>
+                                        
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">Hidden SSID <small class="text-muted">(Expert)</small></label>
+                                            <div class="form-check form-switch mt-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       x-model="hotspot.hidden"
+                                                       id="hotspotHidden">
+                                                <label class="form-check-label" for="hotspotHidden">
+                                                    Hide network name
+                                                </label>
+                                            </div>
+                                            <div class="form-text">Network won't appear in WiFi lists</div>
+                                        </div>
+                                    </div>
+                                    
                                     <!-- Form Actions -->
                                     <div class="d-flex justify-content-between gap-2">
                                         <div class="d-flex gap-2">

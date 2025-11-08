@@ -19,11 +19,23 @@ export function networkConfig() {
         actionLoading: false,
         hotspot: {
             ssid: '',
-            password: ''
+            password: '',
+            band: '',
+            channel: '',
+            channel_width: '',
+            hidden: false
         },
         originalHotspot: {
             ssid: '',
-            password: ''
+            password: '',
+            band: '',
+            channel: '',
+            channel_width: '',
+            hidden: false
+        },
+        wifiCapabilities: {
+            bands: [],
+            channel_widths: []
         },
         cellular: {
             apn: '',
@@ -56,7 +68,29 @@ export function networkConfig() {
         
         // Check if hotspot config has been modified
         get isModified() {
-            return this.hotspot.password !== this.originalHotspot.password;
+            // Helper to normalize null and empty string for comparison
+            const normalize = (val) => val || null;
+            
+            return this.hotspot.password !== this.originalHotspot.password ||
+                   normalize(this.hotspot.band) !== normalize(this.originalHotspot.band) ||
+                   normalize(this.hotspot.channel) !== normalize(this.originalHotspot.channel) ||
+                   normalize(this.hotspot.channel_width) !== normalize(this.originalHotspot.channel_width) ||
+                   this.hotspot.hidden !== this.originalHotspot.hidden;
+        },
+        
+        // Get available channels for the selected band
+        get availableChannels() {
+            if (!this.hotspot.band || !this.wifiCapabilities.bands || this.hotspot.band === '') {
+                // If no band selected or Auto, show all channels from all bands
+                if (!this.wifiCapabilities.bands || this.wifiCapabilities.bands.length === 0) {
+                    return [];
+                }
+                // Get default band (2.4GHz) channels
+                const defaultBand = this.wifiCapabilities.bands.find(b => b.band === '2.4GHz');
+                return defaultBand ? defaultBand.channels : [];
+            }
+            const band = this.wifiCapabilities.bands.find(b => b.band === this.hotspot.band);
+            return band ? band.channels : [];
         },
         
         // Check if cellular config has been modified
@@ -81,6 +115,7 @@ export function networkConfig() {
             
             await this.loadServiceStatus();
             await this.loadConnections();
+            await this.loadWifiCapabilities();
             await this.loadHotspotConfig();
             await this.loadCellularConfig();
             await this.loadModemDetails();
@@ -192,6 +227,29 @@ export function networkConfig() {
             await this.loadConnections(true);
         },
         
+        async loadWifiCapabilities() {
+            try {
+                const response = await fetch(apiUrl('/api/network/wifi/capabilities'));
+                
+                if (!response.ok) {
+                    if (response.status === 503) {
+                        console.warn('WiFi device not available');
+                        return;
+                    }
+                    throw new Error(`Failed to load WiFi capabilities: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                this.wifiCapabilities = {
+                    bands: data.bands || [],
+                    channel_widths: data.channel_widths || []
+                };
+            } catch (error) {
+                console.error('Error loading WiFi capabilities:', error);
+                // Don't show error message to user - WiFi capabilities are optional
+            }
+        },
+        
         async loadHotspotConfig() {
             try {
                 const response = await fetch(apiUrl('/api/network/connections/hotspot'));
@@ -205,13 +263,22 @@ export function networkConfig() {
                 }
                 
                 const data = await response.json();
+                // Convert null to empty string for select dropdowns
                 this.hotspot = {
                     ssid: data.ssid || '',
-                    password: data.password || ''
+                    password: data.password || '',
+                    band: data.band || '',
+                    channel: data.channel || '',
+                    channel_width: data.channel_width || '',
+                    hidden: data.hidden || false
                 };
                 this.originalHotspot = {
                     ssid: data.ssid || '',
-                    password: data.password || ''
+                    password: data.password || '',
+                    band: data.band || '',
+                    channel: data.channel || '',
+                    channel_width: data.channel_width || '',
+                    hidden: data.hidden || false
                 };
             } catch (error) {
                 console.error('Error loading hotspot configuration:', error);
@@ -234,14 +301,21 @@ export function networkConfig() {
             this.saveState = 'saving';
             
             try {
+                // Convert empty strings to null for proper API handling
+                const payload = {
+                    password: this.hotspot.password,
+                    band: this.hotspot.band || null,
+                    channel: this.hotspot.channel || null,
+                    channel_width: this.hotspot.channel_width || null,
+                    hidden: this.hotspot.hidden
+                };
+                
                 const response = await fetch(apiUrl('/api/network/connections/hotspot'), {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        password: this.hotspot.password
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
                 if (!response.ok) {
@@ -251,18 +325,26 @@ export function networkConfig() {
                 
                 const data = await response.json();
                 
-                // Update local state with confirmed values
+                // Update local state with confirmed values (convert null to empty string)
                 this.hotspot = {
                     ssid: data.config.ssid || '',
-                    password: data.config.password || ''
+                    password: data.config.password || '',
+                    band: data.config.band || '',
+                    channel: data.config.channel || '',
+                    channel_width: data.config.channel_width || '',
+                    hidden: data.config.hidden || false
                 };
                 this.originalHotspot = {
                     ssid: data.config.ssid || '',
-                    password: data.config.password || ''
+                    password: data.config.password || '',
+                    band: data.config.band || '',
+                    channel: data.config.channel || '',
+                    channel_width: data.config.channel_width || '',
+                    hidden: data.config.hidden || false
                 };
                 
                 this.saveState = 'saved';
-                this.dispatchMessage('Hotspot password updated successfully', false);
+                this.dispatchMessage('Hotspot configuration updated successfully', false);
                 
                 // Reset save state after delay
                 setTimeout(() => {
@@ -279,6 +361,19 @@ export function networkConfig() {
         
         resetHotspotConfig() {
             this.hotspot.password = this.originalHotspot.password;
+            this.hotspot.band = this.originalHotspot.band || '';
+            this.hotspot.channel = this.originalHotspot.channel || '';
+            this.hotspot.channel_width = this.originalHotspot.channel_width || '';
+            this.hotspot.hidden = this.originalHotspot.hidden;
+        },
+        
+        onBandChange() {
+            // When band changes, reset channel if it's not valid for the new band
+            if (this.hotspot.channel && this.hotspot.channel !== '' && this.availableChannels.length > 0) {
+                if (!this.availableChannels.includes(parseInt(this.hotspot.channel))) {
+                    this.hotspot.channel = '';
+                }
+            }
         },
         
         togglePasswordVisibility() {

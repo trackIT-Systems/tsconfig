@@ -27,12 +27,20 @@ class HotspotConfig(BaseModel):
 
     ssid: str = Field(..., description="Hotspot SSID (network name)")
     password: str = Field(..., description="Hotspot password")
+    band: str | None = Field(None, description="WiFi band (2.4GHz, 5GHz, 6GHz)")
+    channel: int | None = Field(None, description="WiFi channel number (null for auto)")
+    channel_width: str | None = Field(None, description="Channel width in MHz (20, 40, 80, 160)")
+    hidden: bool | None = Field(None, description="Hide SSID (true/false)")
 
 
 class HotspotUpdate(BaseModel):
     """Hotspot update request model."""
 
-    password: str = Field(..., description="New hotspot password", min_length=8, max_length=63)
+    password: str | None = Field(None, description="New hotspot password", min_length=8, max_length=63)
+    band: str | None = Field(None, description="WiFi band (2.4GHz, 5GHz, 6GHz)")
+    channel: int | None = Field(None, description="WiFi channel number (null for auto)")
+    channel_width: str | None = Field(None, description="Channel width in MHz (20, 40, 80, 160)")
+    hidden: bool | None = Field(None, description="Hide SSID (true/false)")
 
 
 class CellularConfig(BaseModel):
@@ -76,6 +84,20 @@ class ModemInfo(BaseModel):
     sim_iccid: str | None = Field(None, description="SIM ICCID")
     sim_operator: str | None = Field(None, description="SIM operator name")
     sim_imsi: str | None = Field(None, description="SIM IMSI")
+
+
+class WiFiBandChannels(BaseModel):
+    """WiFi band with available channels."""
+
+    band: str = Field(..., description="Band name (2.4GHz, 5GHz, 6GHz)")
+    channels: List[int] = Field(..., description="Available channels in this band")
+
+
+class WiFiCapabilities(BaseModel):
+    """WiFi device capabilities model."""
+
+    bands: List[WiFiBandChannels] = Field(..., description="Supported bands and their channels")
+    channel_widths: List[str] = Field(..., description="Supported channel widths (20, 40, 80, 160)")
 
 
 def run_nmcli_command(args: List[str], check: bool = True, sudo: bool = False) -> subprocess.CompletedProcess:
@@ -130,6 +152,105 @@ def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.Complet
         raise HTTPException(status_code=504, detail="ModemManager command timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="ModemManager (mmcli) not available")
+
+
+def parse_wifi_capabilities() -> WiFiCapabilities:
+    """Parse WiFi capabilities from iw list command.
+
+    Returns:
+        WiFiCapabilities with supported bands, channels, and widths
+
+    Raises:
+        HTTPException: If command fails or capabilities cannot be determined
+    """
+    try:
+        # Run iw list to get device capabilities
+        result = subprocess.run(["iw", "list"], capture_output=True, text=True, timeout=10)
+        
+        if result.returncode != 0:
+            raise HTTPException(status_code=503, detail="WiFi device not available or iw command failed")
+        
+        output = result.stdout
+        bands_data = []
+        channel_widths = set()
+        
+        # Parse bands and channels
+        current_band = None
+        current_channels = []
+        
+        for line in output.split("\n"):
+            line = line.strip()
+            
+            # Detect band sections (e.g., "Band 1:", "Band 2:")
+            if line.startswith("Band "):
+                # Save previous band if exists
+                if current_band and current_channels:
+                    bands_data.append(WiFiBandChannels(band=current_band, channels=current_channels))
+                
+                current_channels = []
+                # Band 1 is 2.4GHz, Band 2 is 5GHz, Band 3+ would be 6GHz
+                band_num = line.split()[1].rstrip(":")
+                if band_num == "1":
+                    current_band = "2.4GHz"
+                elif band_num == "2":
+                    current_band = "5GHz"
+                elif band_num == "3":
+                    current_band = "6GHz"
+                else:
+                    current_band = None
+            
+            # Parse frequency/channel lines
+            # Format: "* 2412.0 MHz [1] (20.0 dBm)" or "* 5180.0 MHz [36] (20.0 dBm) (no IR)"
+            elif line.startswith("* ") and "MHz [" in line and current_band:
+                # Check if channel is disabled
+                if "(disabled)" in line:
+                    continue
+                
+                # Extract channel number from [N]
+                try:
+                    channel_start = line.index("[") + 1
+                    channel_end = line.index("]", channel_start)
+                    channel = int(line[channel_start:channel_end])
+                    current_channels.append(channel)
+                except (ValueError, IndexError):
+                    continue
+            
+            # Parse channel width capabilities
+            # Format: "Capabilities: 0x1062" followed by capability flags like "HT20/HT40"
+            elif "HT20" in line or "HT40" in line or "VHT80" in line or "VHT160" in line:
+                if "HT20" in line or "HT40" in line:
+                    channel_widths.add("20")
+                if "HT40" in line:
+                    channel_widths.add("40")
+                if "VHT80" in line or "80MHz" in line:
+                    channel_widths.add("80")
+                if "VHT160" in line or "160MHz" in line:
+                    channel_widths.add("160")
+        
+        # Save last band
+        if current_band and current_channels:
+            bands_data.append(WiFiBandChannels(band=current_band, channels=current_channels))
+        
+        # Default to 20MHz if no widths detected
+        if not channel_widths:
+            channel_widths.add("20")
+        
+        # Sort channel widths
+        sorted_widths = sorted(list(channel_widths), key=lambda x: int(x))
+        
+        if not bands_data:
+            raise HTTPException(status_code=503, detail="No WiFi bands detected")
+        
+        return WiFiCapabilities(bands=bands_data, channel_widths=sorted_widths)
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="WiFi capability detection timed out")
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="iw command not available")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse WiFi capabilities: {str(e)}")
 
 
 NETPLAN_WIFI_FILE = "/etc/netplan/20-hotspot.yaml"
@@ -232,6 +353,21 @@ def get_device_ipv4_address(device: str) -> str | None:
         return None
 
 
+@router.get("/wifi/capabilities", summary="Get WiFi device capabilities", response_model=WiFiCapabilities)
+async def get_wifi_capabilities() -> WiFiCapabilities:
+    """Get WiFi device capabilities including supported bands, channels, and channel widths.
+
+    Returns:
+        WiFi capabilities with bands, channels, and widths
+    """
+    try:
+        return parse_wifi_capabilities()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get WiFi capabilities: {str(e)}")
+
+
 @router.get("/connections", summary="List all network connections", response_model=List[ConnectionInfo])
 async def get_connections() -> List[ConnectionInfo]:
     """Get list of all NetworkManager connections with their status and IPv4 addresses.
@@ -270,10 +406,10 @@ async def get_connections() -> List[ConnectionInfo]:
 
 @router.get("/connections/hotspot", summary="Get hotspot configuration", response_model=HotspotConfig)
 async def get_hotspot_config() -> HotspotConfig:
-    """Get current hotspot SSID and password from netplan configuration.
+    """Get current hotspot SSID, password, and expert settings from netplan configuration.
 
     Returns:
-        Current hotspot configuration
+        Current hotspot configuration including band, channel, channel_width, and hidden
     """
     try:
         # Read the wifi netplan configuration file
@@ -296,11 +432,33 @@ async def get_hotspot_config() -> HotspotConfig:
         # The SSID is the key itself (no need to strip quotes, YAML parser handles that)
         ssid = ssid_key
         
-        # Get the password for this SSID
+        # Get the access point configuration
         ap_config = access_points[ssid_key]
         password = ap_config.get("auth", {}).get("password", "")
+        
+        # Get expert settings
+        band = ap_config.get("band", None)
+        channel = ap_config.get("channel", None)
+        
+        # Channel width and hidden are in NetworkManager passthrough
+        nm_config = ap_config.get("networkmanager", {})
+        passthrough = nm_config.get("passthrough", {})
+        
+        # Channel width from 802-11-wireless.channel-width
+        channel_width = passthrough.get("802-11-wireless.channel-width", None)
+        
+        # Hidden SSID from 802-11-wireless.hidden-ssid
+        hidden_ssid = passthrough.get("802-11-wireless.hidden-ssid", None)
+        hidden = hidden_ssid == "yes" if hidden_ssid else None
 
-        return HotspotConfig(ssid=ssid, password=password)
+        return HotspotConfig(
+            ssid=ssid, 
+            password=password,
+            band=band,
+            channel=channel,
+            channel_width=channel_width,
+            hidden=hidden
+        )
 
     except HTTPException:
         raise
@@ -310,23 +468,85 @@ async def get_hotspot_config() -> HotspotConfig:
 
 @router.patch("/connections/hotspot", summary="Update hotspot configuration")
 async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
-    """Update hotspot password.
+    """Update hotspot password and expert settings.
 
-    Only the hotspot password can be modified. The SSID is configured from the hostname on boot.
-    Other system connections are read-only.
+    The SSID is configured from the hostname on boot and cannot be changed here.
+    Expert settings include band, channel, channel width, and hidden SSID.
 
     Args:
-        update: Hotspot update with new password
+        update: Hotspot update with optional password and expert settings
 
     Returns:
         Success message with updated configuration
     """
     try:
-        # Validate password
-        if len(update.password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-        if len(update.password) > 63:
-            raise HTTPException(status_code=400, detail="Password must be 63 characters or less")
+        # Check that at least one field is provided
+        if not any([
+            update.password is not None,
+            update.band is not None,
+            update.channel is not None,
+            update.channel_width is not None,
+            update.hidden is not None
+        ]):
+            raise HTTPException(status_code=400, detail="At least one field must be provided")
+        
+        # Validate password if provided
+        if update.password is not None:
+            if len(update.password) < 8:
+                raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+            if len(update.password) > 63:
+                raise HTTPException(status_code=400, detail="Password must be 63 characters or less")
+        
+        # Validate band and channel if provided
+        if update.band is not None or update.channel is not None:
+            try:
+                capabilities = parse_wifi_capabilities()
+                
+                # Validate band
+                if update.band is not None:
+                    valid_bands = [b.band for b in capabilities.bands]
+                    if update.band not in valid_bands:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Invalid band '{update.band}'. Valid options: {', '.join(valid_bands)}"
+                        )
+                
+                # Validate channel against band
+                if update.channel is not None:
+                    # Need to know which band to validate against
+                    if update.band is not None:
+                        target_band = update.band
+                    else:
+                        # Use current band from config
+                        current_config = await get_hotspot_config()
+                        target_band = current_config.band or "2.4GHz"  # Default to 2.4GHz
+                    
+                    # Find the band and its valid channels
+                    band_channels = None
+                    for b in capabilities.bands:
+                        if b.band == target_band:
+                            band_channels = b.channels
+                            break
+                    
+                    if band_channels and update.channel not in band_channels:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid channel {update.channel} for band {target_band}. Valid channels: {', '.join(map(str, band_channels))}"
+                        )
+            except HTTPException:
+                raise
+            except Exception as e:
+                # If capabilities check fails, log but don't block the update
+                print(f"Warning: Could not validate WiFi capabilities: {e}")
+        
+        # Validate channel width if provided
+        if update.channel_width is not None:
+            valid_widths = ["20", "40", "80", "160"]
+            if update.channel_width not in valid_widths:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid channel width '{update.channel_width}'. Valid options: {', '.join(valid_widths)}"
+                )
 
         # Read the wifi netplan configuration file
         config = read_netplan_file(NETPLAN_WIFI_FILE)
@@ -348,16 +568,47 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         # Get the current access point config
         ap_config = access_points[ssid_key]
         
-        # Preserve existing auth config and update only the password
-        if "auth" not in ap_config:
-            ap_config["auth"] = {}
+        # Update password if provided
+        if update.password is not None:
+            if "auth" not in ap_config:
+                ap_config["auth"] = {}
+            
+            ap_config["auth"]["password"] = update.password
+            
+            # Ensure key-management is set to psk
+            if "key-management" not in ap_config["auth"]:
+                ap_config["auth"]["key-management"] = "psk"
         
-        # Update password while preserving all other auth fields
-        ap_config["auth"]["password"] = update.password
+        # Update band if provided
+        if update.band is not None:
+            ap_config["band"] = update.band
         
-        # Ensure key-management is set to psk (preserve it if it exists, add it if not)
-        if "key-management" not in ap_config["auth"]:
-            ap_config["auth"]["key-management"] = "psk"
+        # Update channel if provided (null means auto)
+        if update.channel is not None:
+            ap_config["channel"] = update.channel
+        elif "channel" in update.__fields_set__:  # Explicitly set to None
+            # Remove channel to use auto
+            ap_config.pop("channel", None)
+        
+        # Ensure networkmanager section exists for passthrough settings
+        if "networkmanager" not in ap_config:
+            ap_config["networkmanager"] = {}
+        if "passthrough" not in ap_config["networkmanager"]:
+            ap_config["networkmanager"]["passthrough"] = {}
+        
+        passthrough = ap_config["networkmanager"]["passthrough"]
+        
+        # Update channel width if provided (via NetworkManager passthrough)
+        if update.channel_width is not None:
+            passthrough["802-11-wireless.channel-width"] = update.channel_width
+        elif "channel_width" in update.__fields_set__:  # Explicitly set to None
+            passthrough.pop("802-11-wireless.channel-width", None)
+        
+        # Update hidden if provided (via NetworkManager passthrough)
+        if update.hidden is not None:
+            passthrough["802-11-wireless.hidden-ssid"] = "yes" if update.hidden else "no"
+        elif "hidden" in update.__fields_set__:  # Explicitly set to None
+            passthrough.pop("802-11-wireless.hidden-ssid", None)
         
         # Write the modified configuration back to the file
         write_netplan_file(NETPLAN_WIFI_FILE, config)
@@ -367,12 +618,12 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         # Get updated configuration
         updated_config = await get_hotspot_config()
 
-        return {"message": "Hotspot password updated successfully (not yet applied)", "config": updated_config}
+        return {"message": "Hotspot configuration updated successfully (not yet applied)", "config": updated_config}
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update hotspot password: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update hotspot configuration: {str(e)}")
 
 
 @router.get("/connections/cellular", summary="Get cellular configuration", response_model=CellularConfig)
