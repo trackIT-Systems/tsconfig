@@ -5,7 +5,7 @@ This script connects to the BLE GATT gateway running on a Raspberry Pi
 and tests various operations. Works on macOS, Linux, and Windows.
 
 Requirements:
-    pip install bleak
+    pip install bleak cbor2
 
 Usage:
     python3 test_ble_client.py [--device DEVICE_NAME] [--write] [--timeout SECONDS] [--retries N]
@@ -33,16 +33,18 @@ from typing import Optional
 try:
     from bleak import BleakClient, BleakScanner
     from bleak.backends.device import BLEDevice
-except ImportError:
+    import cbor2
+except ImportError as e:
     # Only fail if not just showing help
     if "--help" not in sys.argv and "-h" not in sys.argv:
-        print("Error: bleak library not found!")
-        print("Install with: pip install bleak")
+        print(f"Error: Required library not found! {e}")
+        print("Install with: pip install bleak cbor2")
         sys.exit(1)
     # Dummy types for help display
     BleakClient = None
     BleakScanner = None
     BLEDevice = None
+    cbor2 = None
 
 # GATT Service UUIDs
 SYSTEM_SERVICE_UUID = "00001000-7473-4f53-636f-6e6669672121"
@@ -116,115 +118,106 @@ def format_json(data: str) -> str:
         return data
 
 
-async def write_large_data(client: BleakClient, char, data: str, chunk_size: int = 450):
-    """Write large data to a characteristic using chunked write protocol.
-
-    Uses the BLE chunk protocol: {"seq": N, "total": X, "data": "...", "complete": bool}
+async def write_large_data(client: BleakClient, char, data: str, mtu: int = None):
+    """Write large data to a characteristic using MTU-aware chunking.
 
     Args:
         client: Connected BleakClient
         char: Characteristic to write to
-        data: Data to write (will be chunked if needed)
-        chunk_size: Size of each data chunk (not including JSON overhead)
+        data: JSON string to write (will be chunked if needed)
+        mtu: MTU size (uses client.mtu_size if not provided)
 
     Returns:
         True if successful, False otherwise
     """
-    total_size = len(data)
+    # Get MTU from client if not provided
+    if mtu is None:
+        mtu = client.mtu_size
+    
+    # Calculate chunk size (MTU - 3 bytes for ATT header)
+    chunk_size = max(mtu - 3, 20)
+    
+    data_bytes = data.encode("utf-8")
+    total_size = len(data_bytes)
 
     if total_size <= chunk_size:
-        # Small enough for single write (no chunking needed)
+        # Small enough for single write
         print_info(f"Writing {total_size} bytes in single operation...")
         try:
-            data_bytes = data.encode("utf-8")
             await client.write_gatt_char(char, data_bytes)
             return True
         except Exception as e:
             print_error(f"Write failed: {e}")
             return False
 
-    # Large data - use chunked write protocol
+    # Large data - split into MTU-sized chunks
     num_chunks = (total_size + chunk_size - 1) // chunk_size
-    print_info(f"Writing {total_size} bytes in {num_chunks} chunks using protocol...")
+    print_info(f"Writing {total_size} bytes in {num_chunks} chunks (MTU: {mtu}, chunk size: {chunk_size})...")
 
     try:
-        for i in range(num_chunks):
-            start = i * chunk_size
-            end = min((i + 1) * chunk_size, total_size)
-            chunk_data = data[start:end]
-
-            # Create chunk in protocol format
-            chunk = {"seq": i, "total": num_chunks, "data": chunk_data, "complete": (i == num_chunks - 1)}
-
-            chunk_json = json.dumps(chunk)
-            chunk_bytes = chunk_json.encode("utf-8")
-
-            print_info(
-                f"  Writing chunk {i + 1}/{num_chunks} ({len(chunk_data)} data bytes, {len(chunk_bytes)} total)..."
-            )
-            await client.write_gatt_char(char, chunk_bytes)
-
-            # Small delay between chunks to let server process
-            if i < num_chunks - 1:
-                await asyncio.sleep(0.1)
+        offset = 0
+        chunk_num = 0
+        while offset < total_size:
+            chunk = data_bytes[offset:offset + chunk_size]
+            chunk_num += 1
+            
+            print_info(f"  Writing chunk {chunk_num}/{num_chunks} ({len(chunk)} bytes)...")
+            await client.write_gatt_char(char, chunk)
+            
+            offset += chunk_size
 
         print_success(f"All {num_chunks} chunks written successfully")
         return True
 
     except Exception as e:
-        print_error(f"Chunked write failed on chunk {i + 1}: {e}")
+        print_error(f"Chunked write failed on chunk {chunk_num}: {e}")
         return False
 
 
 class ChunkedReader:
-    """Handle chunked BLE read responses via notifications."""
+    """Handle chunked BLE read responses via notifications with raw byte accumulation."""
 
     def __init__(self):
-        self.chunks = {}
+        self.buffer = bytearray()
         self.complete_data = None
-        self.total_size = 0
+        self.expected_length = 0
+        self.expected_chunks = 0
+
+    def set_metadata(self, content_length: int, chunk_count: int):
+        """Set expected metadata from CBOR read response.
+        
+        Args:
+            content_length: Total bytes expected
+            chunk_count: Number of notification chunks expected
+        """
+        self.expected_length = content_length
+        self.expected_chunks = chunk_count
+        self.buffer.clear()
+        self.complete_data = None
 
     def handle_notification(self, sender, data: bytearray):
-        """Handle incoming notification chunks."""
+        """Handle incoming notification chunks - raw byte accumulation."""
         try:
-            chunk_str = data.decode("utf-8")
-            chunk = json.loads(chunk_str)
-
-            if "seq" in chunk and "total" in chunk:
-                # This is a chunk
-                seq = chunk["seq"]
-                total = chunk["total"]
-                chunk_data = chunk["data"]
-                complete = chunk.get("complete", False)
-
-                self.chunks[seq] = chunk_data
-                self.total_size = total
-
-                if complete and len(self.chunks) == total:
-                    # Reassemble chunks in order
-                    self.complete_data = "".join(self.chunks[i] for i in range(total))
+            # Accumulate raw bytes
+            self.buffer.extend(data)
+            
+            # Check if we've received all expected data
+            if self.expected_length > 0 and len(self.buffer) >= self.expected_length:
+                # Decode UTF-8 JSON (read responses with metadata)
+                self.complete_data = self.buffer[:self.expected_length].decode("utf-8")
+            elif self.expected_length == 0:
+                # Write responses without metadata - try to parse as complete JSON
+                try:
+                    decoded = self.buffer.decode("utf-8")
+                    # Try to parse - if successful, we have complete JSON
+                    json.loads(decoded)
+                    self.complete_data = decoded
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    # Not complete yet, keep accumulating
+                    pass
         except Exception as e:
             print_error(f"Error handling notification: {e}")
 
-    def reset(self):
-        """Reset for next read."""
-        self.chunks = {}
-        self.complete_data = None
-        self.total_size = 0
-
-
-async def scan_for_devices(timeout: float = 5.0) -> list:
-    """Scan for BLE devices.
-
-    Args:
-        timeout: Scan timeout in seconds
-
-    Returns:
-        List of discovered devices
-    """
-    print_info(f"Scanning for BLE devices ({timeout}s)...")
-    devices = await BleakScanner.discover(timeout=timeout)
-    return devices
 
 
 def get_device_uuids(device) -> list:
@@ -307,19 +300,6 @@ async def find_device_by_name(name: str, timeout: float = 10.0, retries: int = 3
     return await retry_scan(_find_device_single, name, timeout, retries=retries, delay=1.0, return_single=True)
 
 
-async def find_device_by_service(service_uuid: str, timeout: float = 10.0) -> Optional[BLEDevice]:
-    """Find a BLE device by service UUID."""
-    print_info(f"Searching for device with service {service_uuid}...")
-    devices = await BleakScanner.discover(timeout=timeout)
-
-    for device in devices:
-        uuids = get_device_uuids(device)
-        if service_uuid.lower() in [u.lower() for u in uuids]:
-            return device
-
-    return None
-
-
 def find_characteristic(client: BleakClient, uuid: str):
     """Find a characteristic by UUID.
 
@@ -363,18 +343,30 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
         await asyncio.sleep(0.5)
 
         data = await client.read_gatt_char(char)
-        metadata = json.loads(data.decode("utf-8"))
+        
+        # Parse CBOR metadata
+        try:
+            metadata = cbor2.loads(bytes(data))
+            # Metadata uses integer keys: 1=content_length, 2=chunk_count, 3=content_type, 4=status, 5=error_message
+            content_length = metadata.get(1, 0)
+            chunk_count = metadata.get(2, 0)
+            content_type = metadata.get(3, 0)  # 0=json, 1=text, 2=binary
+            status = metadata.get(4, 0)  # 0=ready, 1=error
+            error_message = metadata.get(5, None)
+            
+            # Handle error response
+            if status == 1:  # STATUS_ERROR
+                print_error(f"  {error_message or 'Unknown error'}")
+                return None
 
-        # Handle error response
-        if metadata.get("status") == "error":
-            print_error(f"  {metadata.get('error', 'Unknown error')}")
-            return None
-
-        # Display metadata if present
-        if metadata.get("metadata"):
-            info = f"  {metadata.get('content_length', 0)} bytes, {metadata.get('chunks_expected', 0)} chunks"
+            # Display metadata
+            content_type_str = {0: "JSON", 1: "text", 2: "binary"}.get(content_type, "unknown")
+            info = f"  {content_length} bytes, {chunk_count} chunks, type: {content_type_str}"
             print_success(info)
             print_info("  Waiting for notification data...")
+
+            # Set metadata in reader
+            reader.set_metadata(content_length, chunk_count)
 
             # Wait for chunks
             for _ in range(int(timeout * 10)):
@@ -386,15 +378,13 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
                 print_success(f"{name} received ({len(reader.complete_data)} bytes)")
                 return reader.complete_data
             else:
-                print_error(f"Timeout waiting for {name} data")
+                print_error(f"Timeout waiting for {name} data (received {len(reader.buffer)}/{content_length} bytes)")
                 return None
-        else:
-            # Direct response
-            return data.decode("utf-8")
 
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON response: {e}")
-        return None
+        except Exception as e:
+            print_error(f"Invalid CBOR metadata: {e}")
+            return None
+
     except Exception as e:
         print_error(f"Failed to read {name}: {e}")
         return None
@@ -406,7 +396,7 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
 
 
 async def write_with_notifications(
-    client: BleakClient, uuid: str, name: str, data: dict, chunk_size: int = 450, timeout: float = 2.0
+    client: BleakClient, uuid: str, name: str, data: dict, timeout: float = 2.0
 ) -> Optional[str]:
     """Write data to a characteristic and wait for response via notifications.
 
@@ -415,7 +405,6 @@ async def write_with_notifications(
         uuid: Characteristic UUID
         name: Human-readable name for display
         data: Dictionary to write (will be JSON encoded)
-        chunk_size: Size of chunks for large data
         timeout: Timeout in seconds for waiting for response
 
     Returns:
@@ -436,14 +425,19 @@ async def write_with_notifications(
 
         # Write data (with chunking if needed)
         json_data = json.dumps(data)
-        success = await write_large_data(client, char, json_data, chunk_size)
+        success = await write_large_data(client, char, json_data)
 
         if not success:
             return None
 
         print_success(f"{name} sent successfully")
         print_info("Waiting for response...")
-        await asyncio.sleep(timeout)
+        
+        # Wait for response notifications
+        for _ in range(int(timeout * 10)):
+            await asyncio.sleep(0.1)
+            if reader.complete_data:
+                break
 
         if reader.complete_data:
             print_success("Response received:")

@@ -19,6 +19,7 @@ UUID Scheme:
 
 import json
 from typing import Any, Dict, List, Optional
+import cbor2
 
 # Base UUID pattern
 BASE_UUID = "0000{:04x}-7473-4f53-636f-6e6669672121"
@@ -45,74 +46,71 @@ UPLOAD_CONFIG_UUID = BASE_UUID.format(0x3001)
 UPLOAD_ZIP_UUID = BASE_UUID.format(0x3002)
 
 # BLE GATT MTU constraints
-MAX_CHARACTERISTIC_LENGTH = 512  # Maximum size for a single characteristic value
+DEFAULT_MTU = 23  # BLE 4.0 minimum MTU
+ATT_HEADER_SIZE = 3  # ATT protocol header overhead
 
 
-class DataChunker:
-    """Handle chunking of large data for BLE notifications."""
+class BinaryChunker:
+    """Handle MTU-aware chunking of data for BLE notifications.
+    
+    This chunker splits raw bytes into MTU-sized chunks without any
+    framing overhead, relying on BLE's ordered delivery guarantee.
+    """
 
-    def __init__(self, max_chunk_size: int = MAX_CHARACTERISTIC_LENGTH):
-        """Initialize the chunker with a maximum chunk size.
-
-        The chunk size accounts for JSON overhead:
-        - JSON structure: {"seq": X, "total": Y, "data": "...", "complete": false}
-        - Overhead is ~60 bytes, so we use max_chunk_size - 200 to be safe
-        """
-        self.max_chunk_size = max_chunk_size - 200  # Reserve space for JSON encoding overhead
-
-    def chunk_data(self, data: str) -> List[Dict[str, Any]]:
-        """Split data into chunks for BLE transmission.
+    def __init__(self, mtu: int = DEFAULT_MTU):
+        """Initialize the chunker with negotiated MTU.
 
         Args:
-            data: String data to chunk
+            mtu: Negotiated MTU size (defaults to BLE 4.0 minimum of 23)
+        """
+        self.mtu = mtu
+        # Usable payload size: MTU - ATT header
+        self.chunk_size = max(mtu - ATT_HEADER_SIZE, 20)  # Minimum 20 bytes
+
+    def chunk_data(self, data: bytes) -> List[bytes]:
+        """Split data into MTU-sized chunks for BLE transmission.
+
+        Args:
+            data: Raw bytes to chunk
 
         Returns:
-            List of chunk dictionaries with seq, total, data, and complete fields
+            List of byte chunks ready for BLE transmission
         """
-        if len(data) <= self.max_chunk_size:
+        if len(data) <= self.chunk_size:
             # Small enough to send in one chunk
-            return [{"seq": 0, "total": 1, "data": data, "complete": True}]
+            return [data]
 
         chunks = []
-        total_chunks = (len(data) + self.max_chunk_size - 1) // self.max_chunk_size
-
-        for i in range(total_chunks):
-            start = i * self.max_chunk_size
-            end = min((i + 1) * self.max_chunk_size, len(data))
-            chunk_data = data[start:end]
-
-            chunk = {
-                "seq": i,
-                "total": total_chunks,
-                "data": chunk_data,
-                "complete": (i == total_chunks - 1),
-            }
+        offset = 0
+        while offset < len(data):
+            chunk = data[offset:offset + self.chunk_size]
             chunks.append(chunk)
+            offset += self.chunk_size
 
         return chunks
 
-    def encode_chunk(self, chunk: Dict[str, Any]) -> bytes:
-        """Encode a chunk dictionary to bytes for BLE transmission.
+    def get_chunk_count(self, data: bytes) -> int:
+        """Calculate number of chunks needed for data.
 
         Args:
-            chunk: Chunk dictionary with seq, total, data, complete
+            data: Raw bytes to be chunked
 
         Returns:
-            UTF-8 encoded JSON bytes
+            Number of chunks required
         """
-        return json.dumps(chunk).encode("utf-8")
+        if len(data) <= self.chunk_size:
+            return 1
+        return (len(data) + self.chunk_size - 1) // self.chunk_size
 
-    def chunk_and_encode(self, data: str) -> List[bytes]:
-        """Convenience method to chunk and encode data in one step.
 
-        Args:
-            data: String data to chunk and encode
+# Content type enumeration for CBOR metadata
+CONTENT_TYPE_JSON = 0
+CONTENT_TYPE_TEXT = 1
+CONTENT_TYPE_BINARY = 2
 
-        Returns:
-            List of encoded chunks ready for BLE transmission
-        """
-        chunks = self.chunk_data(data)
-        return [self.encode_chunk(chunk) for chunk in chunks]
+# Status enumeration for CBOR metadata
+STATUS_READY = 0
+STATUS_ERROR = 1
 
 
 class ResponseFormatter:
@@ -155,31 +153,40 @@ class ResponseFormatter:
         return json.dumps({"error": "Pairing required", "code": 403})
 
     @staticmethod
-    def metadata(
-        content_length: int, chunks_expected: int, content_type: str = "application/json", status: str = "ready"
-    ) -> str:
-        """Format a metadata response for read operations.
+    def metadata_cbor(
+        content_length: int,
+        chunk_count: int,
+        content_type: int = CONTENT_TYPE_JSON,
+        status: int = STATUS_READY,
+        error_message: Optional[str] = None
+    ) -> bytes:
+        """Format a metadata response using CBOR for read operations.
 
-        In the notification-only protocol, read operations return metadata about
-        the data that will be sent via notifications.
+        In the notification-only protocol, read operations return compact binary
+        metadata about the data that will be sent via notifications.
 
         Args:
             content_length: Size of the actual data in bytes
-            chunks_expected: Number of notification chunks that will be sent
-            content_type: MIME type of the content (default: application/json)
-            status: Status of the data (ready, pending, error)
+            chunk_count: Number of notification chunks that will be sent
+            content_type: Content type enum (0=json, 1=text, 2=binary)
+            status: Status enum (0=ready, 1=error)
+            error_message: Optional error message if status is ERROR
 
         Returns:
-            JSON string with metadata information
+            CBOR-encoded binary metadata (~8-12 bytes for success, more with error)
         """
-        return json.dumps({
-            "metadata": True,
-            "content_length": content_length,
-            "chunks_expected": chunks_expected,
-            "content_type": content_type,
-            "status": status,
-            "hint": "Data will be delivered via notifications",
-        })
+        metadata = {
+            1: content_length,  # Using integer keys for compactness
+            2: chunk_count,
+            3: content_type,
+            4: status,
+        }
+        
+        # Add error message if present
+        if error_message:
+            metadata[5] = error_message
+        
+        return cbor2.dumps(metadata)
 
 
 class RequestParser:
@@ -200,38 +207,6 @@ class RequestParser:
             return json.loads(json_str)
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
-
-    @staticmethod
-    def is_chunk(data: Dict[str, Any]) -> bool:
-        """Check if parsed data is a chunk in the chunked write protocol.
-
-        Args:
-            data: Parsed dictionary
-
-        Returns:
-            True if data is a chunk (has seq, total, data fields)
-        """
-        required_fields = ["seq", "total", "data"]
-        return all(field in data for field in required_fields)
-
-    @staticmethod
-    def parse_chunked_write(data: bytes) -> tuple[bool, Optional[Dict[str, Any]]]:
-        """Parse data and determine if it's a chunk or direct JSON.
-
-        Args:
-            data: Raw bytes from BLE write
-
-        Returns:
-            Tuple of (is_chunk, parsed_data)
-            - is_chunk: True if this is a chunk, False if direct JSON
-            - parsed_data: The parsed dictionary or None if parsing fails
-        """
-        parsed = RequestParser.parse_json(data)
-        if parsed is None:
-            return False, None
-
-        is_chunk = RequestParser.is_chunk(parsed)
-        return is_chunk, parsed
 
     @staticmethod
     def validate_service_action(data: Dict[str, Any]) -> bool:
@@ -273,6 +248,6 @@ class RequestParser:
 
 
 # Convenience instances
-chunker = DataChunker()
+# Note: chunker should be instantiated per-characteristic with negotiated MTU
 formatter = ResponseFormatter()
 parser = RequestParser()

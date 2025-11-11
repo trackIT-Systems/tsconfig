@@ -12,7 +12,16 @@ import dbus
 import dbus.service
 
 from app.bluetooth.api_client import TsConfigApiClient
-from app.bluetooth.protocol import chunker, formatter, parser
+from app.bluetooth.protocol import (
+    BinaryChunker,
+    formatter,
+    parser,
+    CONTENT_TYPE_JSON,
+    CONTENT_TYPE_TEXT,
+    STATUS_READY,
+    STATUS_ERROR,
+    DEFAULT_MTU,
+)
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -54,7 +63,8 @@ class Characteristic(dbus.service.Object):
         self.api_client = api_client
         self.require_pairing = require_pairing
         self.notifying = False
-        self.notification_callbacks: List[Callable] = []
+        self._mtu = DEFAULT_MTU  # Will be updated when device connects
+        self._chunker = BinaryChunker(self._mtu)
 
         dbus.service.Object.__init__(self, bus, self.path)
 
@@ -71,6 +81,41 @@ class Characteristic(dbus.service.Object):
     def get_path(self) -> str:
         """Get the D-Bus object path."""
         return dbus.ObjectPath(self.path)
+
+    def get_mtu(self, options: Dict[str, Any]) -> int:
+        """Get the negotiated MTU for the connected device.
+
+        Args:
+            options: Options dictionary from D-Bus call (contains device path)
+
+        Returns:
+            Negotiated MTU or default if unavailable
+        """
+        try:
+            device_path = options.get("device")
+            if not device_path:
+                return DEFAULT_MTU
+
+            # Query the device's MTU from BlueZ
+            device_obj = self.bus.get_object("org.bluez", device_path)
+            device_props = dbus.Interface(device_obj, "org.freedesktop.DBus.Properties")
+            mtu = device_props.Get("org.bluez.Device1", "MTU")
+            logger.debug(f"Negotiated MTU for {device_path}: {mtu}")
+            return int(mtu)
+        except Exception as e:
+            logger.debug(f"Could not get MTU from device, using default: {e}")
+            return DEFAULT_MTU
+
+    def update_mtu(self, mtu: int):
+        """Update MTU and recreate chunker.
+
+        Args:
+            mtu: New MTU value
+        """
+        if mtu != self._mtu:
+            self._mtu = mtu
+            self._chunker = BinaryChunker(mtu)
+            logger.debug(f"Updated MTU to {mtu} for {self.uuid}, chunk size: {self._chunker.chunk_size}")
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
@@ -134,9 +179,16 @@ class Characteristic(dbus.service.Object):
             logger.warning(f"Cannot send chunked response on {self.uuid}: not notifying")
             return
 
-        chunks = chunker.chunk_and_encode(data)
-        for chunk in chunks:
+        # Convert string to bytes and chunk
+        data_bytes = data.encode("utf-8")
+        chunks = self._chunker.chunk_data(data_bytes)
+        
+        logger.debug(f"Sending {len(data_bytes)} bytes in {len(chunks)} chunks for {self.uuid}")
+        
+        # Send chunks sequentially (no delays - rely on BlueZ queuing)
+        for i, chunk in enumerate(chunks):
             self.send_notification(chunk)
+            logger.debug(f"Sent chunk {i+1}/{len(chunks)} ({len(chunk)} bytes)")
 
     def check_pairing(self, options: Dict[str, Any]) -> bool:
         """Check if the requesting device is paired.
@@ -184,17 +236,23 @@ class ReadOnlyCharacteristic(Characteristic):
         """Handle read operation with notification-only protocol.
 
         All data is transferred via notifications. Read operations return only
-        metadata about the data (length, chunks, content type, status).
+        binary CBOR metadata about the data (length, chunks, content type, status).
         """
         try:
             # Check if notifications are enabled
             if not self.notifying:
                 logger.warning(f"Read attempt on {self.uuid} without notifications enabled")
-                error_metadata = formatter.metadata(content_length=0, chunks_expected=0, status="error")
-                error_dict = json.loads(error_metadata)
-                error_dict["error"] = "Notifications must be enabled to receive data"
-                error_response = json.dumps(error_dict)
-                return dbus.Array(error_response.encode("utf-8"), signature="y")
+                error_metadata = formatter.metadata_cbor(
+                    content_length=0,
+                    chunk_count=0,
+                    status=STATUS_ERROR,
+                    error_message="Notifications must be enabled to receive data"
+                )
+                return dbus.Array(error_metadata, signature="y")
+
+            # Update MTU from device
+            mtu = self.get_mtu(options)
+            self.update_mtu(mtu)
 
             # Run the async handler in a synchronous context
             # Handle event loop carefully to avoid "Event loop is closed" errors
@@ -224,26 +282,27 @@ class ReadOnlyCharacteristic(Characteristic):
                 response = formatter.success(data)
                 response_bytes = response.encode("utf-8")
 
-                # Calculate chunks
-                chunks = chunker.chunk_data(response)
+                # Calculate chunks using binary chunker
+                chunk_count = self._chunker.get_chunk_count(response_bytes)
+
+                # Detect content type
+                content_type = CONTENT_TYPE_JSON if response.strip().startswith(("{", "[")) else CONTENT_TYPE_TEXT
 
                 # Schedule data to be sent via notifications AFTER read completes
                 # This prevents the notification from overwriting the read response value
-                logger.debug(f"Preparing {len(response_bytes)} bytes in {len(chunks)} notification chunks for {self.uuid}")
+                logger.debug(f"Preparing {len(response_bytes)} bytes in {chunk_count} notification chunks for {self.uuid}")
                 from gi.repository import GLib
 
                 GLib.idle_add(lambda: self.send_chunked_response(response) or False)
 
-                # Return metadata about the data
-                metadata_response = formatter.metadata(
+                # Return CBOR metadata about the data
+                metadata_response = formatter.metadata_cbor(
                     content_length=len(response_bytes),
-                    chunks_expected=len(chunks),
-                    content_type="application/json"
-                    if response.strip().startswith("{") or response.strip().startswith("[")
-                    else "text/plain",
-                    status="ready",
+                    chunk_count=chunk_count,
+                    content_type=content_type,
+                    status=STATUS_READY,
                 )
-                return dbus.Array(metadata_response.encode("utf-8"), signature="y")
+                return dbus.Array(metadata_response, signature="y")
 
             finally:
                 # Only close the loop if we created it
@@ -251,12 +310,14 @@ class ReadOnlyCharacteristic(Characteristic):
                     loop.close()
         except Exception as e:
             logger.error(f"Error reading {self.uuid}: {e}")
-            # Return error in metadata format to maintain notification-only protocol
-            error_metadata = formatter.metadata(content_length=0, chunks_expected=0, status="error")
-            error_dict = json.loads(error_metadata)
-            error_dict["error"] = str(e)
-            error_response = json.dumps(error_dict)
-            return dbus.Array(error_response.encode("utf-8"), signature="y")
+            # Return error in CBOR metadata format to maintain notification-only protocol
+            error_metadata = formatter.metadata_cbor(
+                content_length=0,
+                chunk_count=0,
+                status=STATUS_ERROR,
+                error_message=str(e)
+            )
+            return dbus.Array(error_metadata, signature="y")
 
 
 class WriteOnlyCharacteristic(Characteristic):
@@ -276,20 +337,14 @@ class WriteOnlyCharacteristic(Characteristic):
         """
         super().__init__(bus, index, uuid, ["write", "notify"], service, api_client, require_pairing)
         self.write_handler = write_handler
-        # Chunk accumulator for chunked writes
-        self.write_chunks: Dict[int, str] = {}
-        self.expected_chunks: int = 0
-
-    def _reset_chunks(self):
-        """Reset chunk accumulator state."""
-        self.write_chunks = {}
-        self.expected_chunks = 0
+        # Buffer for accumulating multi-write data
+        self.write_buffer = bytearray()
 
     def _process_write_data(self, request_data: Dict[str, Any]):
         """Process write data by calling the write handler.
 
         Args:
-            request_data: Parsed and reassembled request data
+            request_data: Parsed request data
         """
         # Run the async handler
         # Handle event loop carefully to avoid "Event loop is closed" errors
@@ -325,7 +380,11 @@ class WriteOnlyCharacteristic(Characteristic):
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="aya{sv}")
     def WriteValue(self, value, options):
-        """Handle write operation with support for chunked writes."""
+        """Handle write operation with simplified protocol.
+        
+        For small writes: Direct JSON parsing
+        For large writes: Sequential writes are accumulated until valid JSON is received
+        """
         # Check pairing if required
         if self.require_pairing and not self.check_pairing(options):
             error_response = formatter.pairing_required()
@@ -333,54 +392,28 @@ class WriteOnlyCharacteristic(Characteristic):
             return
 
         try:
-            # Parse the incoming data
+            # Add incoming data to buffer
             data_bytes = bytes(value)
-            is_chunk, parsed_data = parser.parse_chunked_write(data_bytes)
+            self.write_buffer.extend(data_bytes)
+            
+            logger.debug(f"Received {len(data_bytes)} bytes for {self.uuid}, buffer now {len(self.write_buffer)} bytes")
 
-            if parsed_data is None:
-                raise ValueError("Invalid JSON data")
+            # Try to parse as JSON
+            parsed_data = parser.parse_json(bytes(self.write_buffer))
 
-            if is_chunk:
-                # Handle chunked write protocol
-                seq = parsed_data["seq"]
-                total = parsed_data["total"]
-                chunk_data = parsed_data["data"]
-                is_complete = parsed_data.get("complete", False)
-
-                # Store chunk
-                self.write_chunks[seq] = chunk_data
-                self.expected_chunks = total
-
-                logger.debug(f"Received chunk {seq + 1}/{total} for {self.uuid}")
-
-                # Check if we have all chunks
-                if is_complete and len(self.write_chunks) == total:
-                    # Reassemble chunks in order
-                    reassembled_data = "".join(self.write_chunks[i] for i in range(total))
-                    logger.info(f"Reassembled {len(reassembled_data)} bytes from {total} chunks for {self.uuid}")
-
-                    # Reset chunk state
-                    self._reset_chunks()
-
-                    # Parse the reassembled data as JSON
-                    request_data = parser.parse_json(reassembled_data.encode("utf-8"))
-                    if request_data is None:
-                        raise ValueError("Invalid JSON data after reassembly")
-
-                    # Process the complete request
-                    self._process_write_data(request_data)
-                else:
-                    # Still waiting for more chunks
-                    logger.debug(f"Waiting for more chunks ({len(self.write_chunks)}/{total})")
-            else:
-                # Direct write (not chunked) - backwards compatible
-                logger.debug(f"Processing direct write for {self.uuid}")
+            if parsed_data is not None:
+                # Successfully parsed - process the request
+                logger.info(f"Successfully parsed {len(self.write_buffer)} bytes of JSON for {self.uuid}")
+                self.write_buffer.clear()
                 self._process_write_data(parsed_data)
+            else:
+                # Not yet complete JSON - wait for more data
+                logger.debug(f"Incomplete JSON, waiting for more data (buffer: {len(self.write_buffer)} bytes)")
 
         except Exception as e:
             logger.error(f"Error writing to {self.uuid}: {e}")
-            # Reset chunk state on error
-            self._reset_chunks()
+            # Clear buffer on error
+            self.write_buffer.clear()
             error_response = formatter.error(str(e))
             self.send_notification(error_response.encode("utf-8"))
 
