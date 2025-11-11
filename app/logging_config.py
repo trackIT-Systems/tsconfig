@@ -10,16 +10,22 @@ import sys
 from typing import Optional
 
 
-def setup_logging(verbose: bool = False, log_level: Optional[str] = None) -> None:
+def setup_logging(verbose: bool = False, log_level: Optional[str] = None, verbosity: int = 0) -> None:
     """Set up logging configuration for the application.
     
     Args:
-        verbose: If True, force DEBUG level (overrides other settings)
+        verbose: Deprecated. If True, force DEBUG level (overrides other settings)
         log_level: Optional log level override (DEBUG, INFO, WARNING, ERROR)
+        verbosity: Verbosity level (0=WARNING, 1=INFO, 2+=DEBUG)
     """
     # Determine log level
     if verbose:
+        # Backward compatibility
         level = logging.DEBUG
+    elif verbosity >= 2:
+        level = logging.DEBUG
+    elif verbosity == 1:
+        level = logging.INFO
     elif log_level:
         level = getattr(logging, log_level.upper(), logging.WARNING)
     else:

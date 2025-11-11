@@ -10,7 +10,8 @@ Options:
     --api-url URL           Base URL of tsconfig API (default: http://localhost:8000)
     --no-pairing            Disable pairing requirement for write operations
     --no-discoverable       Start in non-discoverable mode
-    --verbose, -v           Enable debug logging
+    -v                      Enable info logging
+    -vv                     Enable debug logging
 
 The BLE device name will automatically use the system hostname.
 """
@@ -45,8 +46,11 @@ Examples:
   # Start in non-discoverable mode
   python3 -m app.ble_gateway --no-discoverable
 
-  # Enable verbose logging
-  python3 -m app.ble_gateway --verbose
+  # Enable info logging
+  python3 -m app.ble_gateway -v
+
+  # Enable debug logging
+  python3 -m app.ble_gateway -vv
 
 The BLE device will advertise using the system hostname as its name.
         """,
@@ -74,8 +78,9 @@ The BLE device will advertise using the system hostname as its name.
     parser.add_argument(
         "--verbose",
         "-v",
-        action="store_true",
-        help="Enable debug logging",
+        action="count",
+        default=0,
+        help="Increase verbosity: -v for INFO, -vv for DEBUG",
     )
 
     return parser.parse_args()
@@ -86,17 +91,17 @@ def main():
     args = parse_arguments()
 
     # Set up logging
-    setup_logging(verbose=args.verbose)
+    setup_logging(verbosity=args.verbose)
     logger = get_logger(__name__)
 
     # Log configuration
-    logger.debug("=" * 60)
-    logger.debug("tsOS Configuration Manager - BLE GATT Gateway")
-    logger.debug("=" * 60)
-    logger.debug(f"API URL: {args.api_url}")
-    logger.debug(f"Pairing required: {not args.no_pairing}")
-    logger.debug(f"Discoverable: {not args.no_discoverable}")
-    logger.debug("=" * 60)
+    logger.info("=" * 60)
+    logger.info("tsOS Configuration Manager - BLE GATT Gateway")
+    logger.info("=" * 60)
+    logger.info(f"API URL: {args.api_url}")
+    logger.info(f"Pairing required: {not args.no_pairing}")
+    logger.info(f"Discoverable: {not args.no_discoverable}")
+    logger.info("=" * 60)
 
     # Check for dependencies
     try:
@@ -156,7 +161,7 @@ def main():
         logger.error("Try running with: sudo python3 -m app.ble_gateway")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Failed to start BLE GATT server: {e}", exc_info=args.verbose)
+        logger.error(f"Failed to start BLE GATT server: {e}", exc_info=args.verbose >= 2)
         sys.exit(1)
 
 
