@@ -248,17 +248,43 @@ def is_tsconfig_device(device) -> bool:
     Returns:
         True if tsconfig device, False otherwise
     """
-    # Check by service UUID first (most reliable)
+    # Check for tsOS 16-bit service UUID (0x7473) - most reliable
     uuids = get_device_uuids(device)
-    if any(SYSTEM_SERVICE_UUID.lower() in str(u).lower() for u in uuids):
+    if any("7473" in str(u).lower() for u in uuids):
         return True
 
-    # Fallback: check by device name pattern
+    # Fallback: check by device name pattern (for backward compatibility)
     if device.name:
         name_lower = device.name.lower()
         return any(pattern in name_lower for pattern in ["tsos", "tsconfig", "trackit"])
 
     return False
+
+
+def get_serial_from_device(device) -> Optional[str]:
+    """Extract serial number from device service data.
+
+    Args:
+        device: BLE device
+
+    Returns:
+        Serial number as 8-character hex string, or None if not available
+    """
+    try:
+        # Try to get service data from metadata
+        if hasattr(device, "metadata") and device.metadata:
+            service_data = device.metadata.get("service_data", {})
+            # Look for 0x7473 UUID service data
+            for key in service_data:
+                if "7473" in str(key).lower():
+                    data = service_data[key]
+                    if isinstance(data, bytes):
+                        return data.hex()
+                    elif hasattr(data, "hex"):
+                        return data.hex()
+    except (AttributeError, KeyError, TypeError):
+        pass
+    return None
 
 
 async def _scan_tsconfig_single(timeout: float, attempt: int, retries: int) -> list:
@@ -764,11 +790,15 @@ async def main():
         device_name = device.name or device.address
 
         if len(devices) == 1:
-            print_success(f"Auto-selected: {device_name}")
+            serial = get_serial_from_device(device)
+            serial_str = f" [Serial: {serial}]" if serial else ""
+            print_success(f"Auto-selected: {device_name}{serial_str}")
         else:
             print_warning(f"Found {len(devices)} devices, using: {device_name}")
             for i, d in enumerate(devices):
-                print(f"  {'→' if i == 0 else ' '} {d.name or 'Unknown'} ({d.address})")
+                serial = get_serial_from_device(d)
+                serial_str = f" [Serial: {serial}]" if serial else ""
+                print(f"  {'→' if i == 0 else ' '} {d.name or 'Unknown'} ({d.address}){serial_str}")
 
     if not device:
         print_error(f"Device not found after {args.retries} attempts")

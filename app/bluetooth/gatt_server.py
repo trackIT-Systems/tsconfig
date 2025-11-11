@@ -16,6 +16,7 @@ from gi.repository import GLib
 from app.bluetooth.api_client import TsConfigApiClient
 from app.bluetooth.services import SystemdService, SystemService, UploadService
 from app.logging_config import get_logger
+from app.main import _get_hardware_info
 
 logger = get_logger(__name__)
 
@@ -123,6 +124,7 @@ class Advertisement(dbus.service.Object):
         hostname = device_name or socket.gethostname()
         self.local_name = hostname[:20] if len(hostname) > 20 else hostname
         self.service_uuids: List[str] = []
+        self.service_data: Dict[str, bytes] = {}
         # Disable TX power to save advertisement space
         self.include_tx_power = False
 
@@ -141,6 +143,16 @@ class Advertisement(dbus.service.Object):
         if uuid not in self.service_uuids:
             self.service_uuids.append(uuid)
 
+    def set_service_data(self, uuid: str, data: bytes):
+        """Set service data for a specific UUID.
+
+        Args:
+            uuid: Service UUID to attach data to (e.g., "7473")
+            data: Binary data to include in advertisement
+        """
+        self.service_data[uuid] = data
+        logger.debug(f"Set service data for UUID {uuid}: {len(data)} bytes")
+
     def get_properties(self) -> Dict[str, Any]:
         """Get advertisement properties for D-Bus."""
         properties = {
@@ -149,6 +161,14 @@ class Advertisement(dbus.service.Object):
             "LocalName": dbus.String(self.local_name),
             "IncludeTxPower": dbus.Boolean(self.include_tx_power),
         }
+        
+        # Add service data if present
+        if self.service_data:
+            service_data_dict = {}
+            for uuid, data in self.service_data.items():
+                service_data_dict[uuid] = dbus.Array(data, signature='y')
+            properties["ServiceData"] = dbus.Dictionary(service_data_dict, signature='sv')
+        
         return {LE_ADVERTISEMENT_IFACE: properties}
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
@@ -264,12 +284,24 @@ class BleGattServer:
         # Create advertisement
         logger.debug("Creating BLE advertisement...")
         self.advertisement = Advertisement(self.bus, 0, "peripheral", self.device_name)
-        # Only advertise primary service UUID to stay within 31-byte BLE advertisement limit
-        # Other services will be discovered after connection via GATT service discovery
-        from app.bluetooth.protocol import SYSTEM_SERVICE_UUID
-
-        self.advertisement.add_service_uuid(SYSTEM_SERVICE_UUID)
-        logger.debug(f"Advertising with primary service UUID: {SYSTEM_SERVICE_UUID}")
+        
+        # Advertise with 16-bit tsOS UUID (0x7473) and serial number in service data
+        # This is space-efficient and allows client-side filtering
+        from app.bluetooth.protocol import TSOS_SERVICE_UUID_16BIT
+        
+        self.advertisement.add_service_uuid(TSOS_SERVICE_UUID_16BIT)
+        logger.debug(f"Advertising with tsOS service UUID: {TSOS_SERVICE_UUID_16BIT}")
+        
+        # Get serial number and add to service data (last 8 hex chars → 4 bytes)
+        try:
+            hardware_info = _get_hardware_info()
+            serial_short = hardware_info.get("serial_short", "00000000")
+            serial_bytes = bytes.fromhex(serial_short)
+            self.advertisement.set_service_data(TSOS_SERVICE_UUID_16BIT, serial_bytes)
+            logger.debug(f"Advertising serial: {serial_short} ({len(serial_bytes)} bytes)")
+        except Exception as e:
+            logger.warning(f"Could not add serial to advertisement: {e}")
+            # Continue without serial - device will still be discoverable
 
         logger.info("BLE GATT Server setup complete")
 

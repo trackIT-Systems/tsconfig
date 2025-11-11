@@ -24,7 +24,11 @@ import cbor2
 # Base UUID pattern
 BASE_UUID = "0000{:04x}-7473-4f53-636f-6e6669672121"
 
-# Service UUIDs
+# tsOS 16-bit Service UUID for advertisements (0x7473 = "ts" in ASCII hex)
+# This is advertised for device identification during BLE scanning
+TSOS_SERVICE_UUID_16BIT = "7473"
+
+# Service UUIDs (128-bit, for GATT services discovered after connection)
 SYSTEM_SERVICE_UUID = BASE_UUID.format(0x1000)
 SYSTEMD_SERVICE_UUID = BASE_UUID.format(0x2000)
 UPLOAD_SERVICE_UUID = BASE_UUID.format(0x3000)
