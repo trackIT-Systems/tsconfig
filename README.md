@@ -526,5 +526,5 @@ For support and documentation:
 
 ---
 
-**Version**: 2025.10.1  
+**Version**: 2025.11.1  
 **Compatibility**: tsOS, Raspberry Pi OS, Linux systems with systemd 
