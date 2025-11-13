@@ -32,9 +32,9 @@ services:
     expert: true
   - name: bluetooth.service
     expert: true
-  - name: network-online.target
-    expert: true
   - name: wg-quick@wireguard
     expert: true
   - name: NetworkManager.service
+    expert: true
+  - name: ModemManager.service
     expert: true
