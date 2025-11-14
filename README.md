@@ -46,7 +46,7 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
 
 ### 🔧 System Control
 - **System Reboot**: Safely restart the system with confirmation dialogs
-- **Secure Operations**: Sudo-based execution with proper permission management
+- **Secure Operations**: Controlled execution with proper permission management
 
 ### 📱 Bluetooth Low Energy (BLE) Gateway
 - **Wireless Access**: Access all API endpoints via Bluetooth GATT
@@ -62,7 +62,7 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
 ### Prerequisites
 - Python 3.9 or higher
 - Linux-based system (tested on Raspberry Pi OS / tsOS)
-- sudo access for system control features
+- Appropriate system permissions for system control features
 
 ### Setup
 
@@ -166,15 +166,12 @@ services:
 
 ### Security Configuration
 
-System control features require sudo permissions. The setup script configures these securely:
+System control features require appropriate permissions. The application must be run with sufficient privileges to execute system control operations such as:
 
-```bash
-# Allow specific operations without password
-username ALL=(ALL) NOPASSWD: /bin/systemctl start servicename
-username ALL=(ALL) NOPASSWD: /bin/systemctl stop servicename  
-username ALL=(ALL) NOPASSWD: /bin/systemctl restart servicename
-username ALL=(ALL) NOPASSWD: /sbin/reboot
-```
+- Starting, stopping, and restarting systemd services
+- Initiating system reboots
+- Modifying network configurations
+- Managing system files
 
 ## Usage
 
@@ -238,25 +235,25 @@ The BLE gateway provides wireless access to the tsconfig API via Bluetooth GATT,
 
 3. **Run the BLE gateway**:
    ```bash
-   # Basic usage
-   sudo python3 -m app.ble_gateway
+   # Basic usage (requires appropriate permissions)
+   python3 -m app.ble_gateway
 
    # With custom API URL
-   sudo python3 -m app.ble_gateway --api-url http://192.168.1.100:8000
+   python3 -m app.ble_gateway --api-url http://192.168.1.100:8000
 
    # Disable pairing requirement (insecure)
-   sudo python3 -m app.ble_gateway --no-pairing
+   python3 -m app.ble_gateway --no-pairing
 
    # Enable debug logging
-   sudo python3 -m app.ble_gateway --verbose
+   python3 -m app.ble_gateway --verbose
    ```
 
 4. **Install as systemd service** (recommended):
    ```bash
-   sudo cp tsconfig-ble.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable tsconfig-ble.service
-   sudo systemctl start tsconfig-ble.service
+   cp tsconfig-ble.service /etc/systemd/system/
+   systemctl daemon-reload
+   systemctl enable tsconfig-ble.service
+   systemctl start tsconfig-ble.service
    ```
 
 ### GATT Services & Characteristics
@@ -306,8 +303,8 @@ Configuration file upload and download (pairing required):
 #### Using gatttool (Linux)
 
 ```bash
-# Scan for devices
-sudo hcitool lescan
+# Scan for devices (may require appropriate permissions)
+hcitool lescan
 
 # Connect and explore services
 gatttool -b AA:BB:CC:DD:EE:FF -I
@@ -460,9 +457,9 @@ Write operations send responses via notifications (no read required):
 ### Troubleshooting
 
 **Device not appearing in scans:**
-- Ensure Bluetooth is powered: `sudo bluetoothctl power on`
-- Check gateway is running: `sudo systemctl status tsconfig-ble`
-- Try making adapter discoverable: `sudo bluetoothctl discoverable on`
+- Ensure Bluetooth is powered: `bluetoothctl power on`
+- Check gateway is running: `systemctl status tsconfig-ble`
+- Try making adapter discoverable: `bluetoothctl discoverable on`
 
 **Intermittent device detection (test_ble_client.py):**
 - BLE advertising is intermittent - the test client now includes automatic retry logic
@@ -471,8 +468,8 @@ Write operations send responses via notifications (no read required):
 - See [BLE_TROUBLESHOOTING.md](BLE_TROUBLESHOOTING.md) for detailed troubleshooting guide
 
 **Permission denied errors:**
-- BLE operations require root: `sudo python3 -m app.ble_gateway`
-- Or grant capabilities: `sudo setcap cap_net_admin+eip $(which python3)`
+- BLE operations require appropriate privileges (root or CAP_NET_ADMIN capability)
+- Grant capabilities: `setcap cap_net_admin+eip $(which python3)`
 
 **Cannot write to characteristics:**
 - Pair the device first using your BLE client

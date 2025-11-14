@@ -66,7 +66,7 @@ def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
     """
     try:
         result = subprocess.run(
-            ["sudo", "systemctl", "restart", service_name],
+            ["systemctl", "restart", service_name],
             capture_output=True,
             text=True,
             timeout=30,
@@ -565,7 +565,7 @@ async def upload_config(
         try:
             # Use systemd-run to schedule reboot in 10 seconds
             subprocess.run(
-                ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -1130,7 +1130,7 @@ async def upload_config_zip(
             try:
                 # Use systemd-run to schedule reboot in 10 seconds
                 subprocess.run(
-                    ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                    ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
                     capture_output=True,
                     text=True,
                     timeout=5
@@ -1152,7 +1152,7 @@ async def upload_config_zip(
             try:
                 # Use systemd-run to schedule reboot in 10 seconds
                 subprocess.run(
-                    ["sudo", "systemd-run", "--on-active=10s", "systemctl", "reboot"],
+                    ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
                     capture_output=True,
                     text=True,
                     timeout=5

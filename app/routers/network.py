@@ -100,13 +100,12 @@ class WiFiCapabilities(BaseModel):
     channel_widths: List[str] = Field(..., description="Supported channel widths (20, 40, 80, 160)")
 
 
-def run_nmcli_command(args: List[str], check: bool = True, sudo: bool = False) -> subprocess.CompletedProcess:
+def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Run nmcli command with proper error handling.
 
     Args:
         args: Command arguments to pass to nmcli
         check: Whether to check return code and raise exception on failure
-        sudo: Whether to run the command with sudo privileges
 
     Returns:
         CompletedProcess instance
@@ -115,7 +114,7 @@ def run_nmcli_command(args: List[str], check: bool = True, sudo: bool = False) -
         HTTPException: If command fails and check=True
     """
     try:
-        cmd = ["sudo", "nmcli"] + args if sudo else ["nmcli"] + args
+        cmd = ["nmcli"] + args
         result = subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=10)
         return result
     except subprocess.CalledProcessError as e:
@@ -387,9 +386,9 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
             with open(netplan_file, "r") as f:
                 netplan_content = yaml.safe_load(f)
         except PermissionError:
-            # Try with sudo using subprocess
+            # Try using subprocess
             read_result = subprocess.run(
-                ["sudo", "cat", str(netplan_file)],
+                ["cat", str(netplan_file)],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -427,9 +426,9 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
             with open(netplan_file, "w") as f:
                 f.write(yaml_output)
         except PermissionError:
-            # Use sudo to write
+            # Use tee to write
             write_result = subprocess.run(
-                ["sudo", "tee", str(netplan_file)],
+                ["tee", str(netplan_file)],
                 input=yaml_output,
                 capture_output=True,
                 text=True,
@@ -443,7 +442,7 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
         
         # Step 6: Reload NetworkManager connections
         reload_result = subprocess.run(
-            ["sudo", "nmcli", "connection", "reload"],
+            ["nmcli", "connection", "reload"],
             capture_output=True,
             text=True,
             timeout=10
@@ -699,7 +698,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
                 args.append("--")
                 for prop in properties_to_remove:
                     args.append(f"-{prop}")
-            run_nmcli_command(args, sudo=True)
+            run_nmcli_command(args)
 
         # Get updated configuration
         updated_config = await get_hotspot_config()
@@ -791,7 +790,7 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         
         # Execute all modifications in a single nmcli call
         args = ["connection", "modify", "cellular"] + modifications
-        run_nmcli_command(args, sudo=True)
+        run_nmcli_command(args)
 
         # Get updated configuration
         updated_config = await get_cellular_config()
@@ -816,7 +815,7 @@ async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
     """
     try:
         # Try to bring the connection up
-        result = run_nmcli_command(["connection", "up", connection_name], check=False, sudo=True)
+        result = run_nmcli_command(["connection", "up", connection_name], check=False)
 
         if result.returncode == 0:
             return {"message": f"Connection '{connection_name}' activated successfully", "connection_name": connection_name}

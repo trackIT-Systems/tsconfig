@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
+from app.config_loader import config_loader
 from app.logging_config import get_logger
 
 # Configure logging
@@ -45,7 +46,10 @@ class PtyProcess:
     """Manages a pseudo-terminal process for interactive shell sessions."""
 
     def __init__(self, command: Optional[str] = None):
-        self.command = command or get_user_shell()
+        # Get the configured shell user (defaults to 'pi')
+        shell_user = config_loader.get_shell_user()
+        # Use su -l to provide a login shell as the configured user
+        self.command = command or f"su -l {shell_user}"
         self.pid = None
         self.fd = None
         self.process = None
@@ -60,15 +64,20 @@ class PtyProcess:
             self.pid, self.fd = pty.fork()
 
             if self.pid == 0:
-                # Child process - change to home directory and execute the shell
-                try:
-                    # Change to user's home directory
-                    home_dir = os.path.expanduser("~")
-                    os.chdir(home_dir)
-                except Exception as e:
-                    logger.warning(f"Failed to change to home directory: {e}")
-
-                os.execvp(self.command, [self.command])
+                # Child process - execute login shell as configured user
+                # Parse the command to handle 'su -l username' properly
+                if self.command.startswith("su -l "):
+                    # Extract username from 'su -l username'
+                    parts = self.command.split()
+                    if len(parts) >= 3:
+                        # Execute: su -l username
+                        os.execvp("su", parts)
+                    else:
+                        # Fallback: just execute su
+                        os.execvp("su", ["-l"])
+                else:
+                    # Direct command execution (backward compatibility)
+                    os.execvp(self.command, [self.command])
             else:
                 # Parent process - we have the file descriptor
                 self.running = True
@@ -184,7 +193,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             return
 
         active_sessions[session_id] = pty_process
-        logger.info(f"Shell session {session_id} started with shell: {pty_process.command}")
+        shell_user = config_loader.get_shell_user()
+        logger.info(f"Shell session {session_id} started as login shell for user: {shell_user}")
     else:
         pty_process = active_sessions[session_id]
 

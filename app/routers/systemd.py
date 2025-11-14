@@ -272,7 +272,7 @@ async def service_action(action: ServiceAction):
 
     try:
         # Build systemctl command
-        cmd = ["sudo", "systemctl", action.action, action.service]
+        cmd = ["systemctl", action.action, action.service]
 
         # Execute systemctl command
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -299,7 +299,7 @@ async def reboot_system():
     """Initiate system reboot."""
     try:
         # Use systemctl to reboot the system
-        result = subprocess.run(["sudo", "systemctl", "reboot"], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(["systemctl", "reboot"], capture_output=True, text=True, timeout=10)
 
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {result.stderr}")
@@ -433,7 +433,7 @@ def create_service_override(service_name: str) -> bool:
         override_file = override_dir / "reboot-protection.conf"
 
         # Create override directory
-        result = subprocess.run(["sudo", "mkdir", "-p", str(override_dir)], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(["mkdir", "-p", str(override_dir)], capture_output=True, text=True, timeout=10)
 
         if result.returncode != 0:
             return False
@@ -445,7 +445,7 @@ StartLimitAction=none
 
         # Write override file
         result = subprocess.run(
-            ["sudo", "tee", str(override_file)], input=override_content, capture_output=True, text=True, timeout=10
+            ["tee", str(override_file)], input=override_content, capture_output=True, text=True, timeout=10
         )
 
         return result.returncode == 0
@@ -462,7 +462,7 @@ def remove_service_override(service_name: str) -> bool:
 
         # Remove override file
         if override_file.exists():
-            result = subprocess.run(["sudo", "rm", str(override_file)], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(["rm", str(override_file)], capture_output=True, text=True, timeout=10)
 
             if result.returncode != 0:
                 return False
@@ -514,7 +514,7 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
             raise HTTPException(status_code=500, detail=f"Some operations failed: {', '.join(errors)}")
 
         # Reload systemd daemon
-        result = subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, text=True, timeout=30)
+        result = subprocess.run(["systemctl", "daemon-reload"], capture_output=True, text=True, timeout=30)
 
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail="Failed to reload systemd daemon")
@@ -529,7 +529,7 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
 
                 if status_result.returncode == 0:  # Service is active
                     restart_result = subprocess.run(
-                        ["sudo", "systemctl", "restart", service], capture_output=True, text=True, timeout=30
+                        ["systemctl", "restart", service], capture_output=True, text=True, timeout=30
                     )
 
                     if restart_result.returncode != 0:

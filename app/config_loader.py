@@ -46,6 +46,16 @@ class ConfigLoader:
         system_config = config.get("system", {})
         return system_config.get("status_refresh_interval", 30)
 
+    def get_shell_user(self) -> str:
+        """Get the configured user for shell sessions.
+        
+        Returns the username that should be used for shell sessions (login shell).
+        Defaults to 'pi' if not configured.
+        """
+        config = self.load_config()
+        shell_config = config.get("shell", {})
+        return shell_config.get("user", "pi")
+
     def reload_config(self):
         """Force reload of the configuration."""
         self._config_cache = None
