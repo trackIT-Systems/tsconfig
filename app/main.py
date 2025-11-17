@@ -649,5 +649,7 @@ async def home(request: Request, config_group: str = None):
             "version": __version__,
             "base_url": BASE_URL,
             "config_group": config_group,
+            "is_server_mode": config_loader.is_server_mode(),
+            "config_loader": config_loader,
         },
     )

@@ -154,9 +154,9 @@ export function radiotrackingConfig() {
             }
             
             this.refreshInterval = setInterval(() => {
-                // Only refresh if radiotracking tab is active
+                // Only refresh if radiotracking tab is active and not in server mode
                 const currentHash = window.location.hash.slice(1);
-                if (currentHash === 'radiotracking') {
+                if (currentHash === 'radiotracking' && !this.serverMode) {
                     this.loadServiceStatus();
                 }
             }, refreshIntervalSeconds * 1000);
@@ -481,10 +481,12 @@ export function radiotrackingConfig() {
                 
                 this.dispatchMessage(`Configuration saved and ${data.message}`, false);
                 
-                // Refresh service status after restart
-                setTimeout(async () => {
-                    await this.loadServiceStatus();
-                }, 2000);
+                // Refresh service status after restart (only in tracker mode)
+                if (!this.serverMode) {
+                    setTimeout(async () => {
+                        await this.loadServiceStatus();
+                    }, 2000);
+                }
             };
             
             await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);

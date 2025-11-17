@@ -192,8 +192,11 @@ class AuthorizedKeysConfig(BaseConfig):
                         for idx, line in enumerate(f):
                             parsed = self._parse_key_line(line, idx)
                             if parsed:
-                                # Mark as server source in config upload mode
+                                # Mark as server source in config upload mode or server mode
                                 if self._is_tracker_mode and self._is_config_upload:
+                                    parsed["source"] = "server"
+                                elif not self._is_tracker_mode:
+                                    # In server mode, all keys are server-managed
                                     parsed["source"] = "server"
                                 keys.append(parsed)
                 except (IOError, OSError):
@@ -381,8 +384,11 @@ class AuthorizedKeysConfig(BaseConfig):
                 source = existing_key.get("source", "unknown")
                 raise ValueError(f"SSH key already exists in {source} keys")
 
-        # Mark as user key and add it
-        new_key["source"] = "user"
+        # Mark source based on mode: user in tracker mode, server in server mode
+        if self._is_tracker_mode:
+            new_key["source"] = "user"
+        else:
+            new_key["source"] = "server"
         keys.append(new_key)
         config["keys"] = keys
 
@@ -392,6 +398,7 @@ class AuthorizedKeysConfig(BaseConfig):
         """Remove a key from the user keys configuration by index.
 
         In tracker mode, only allows removing user keys. Server keys cannot be removed.
+        In server mode, all keys except the first one can be removed (to prevent lockout).
 
         Args:
             key_index: The index of the key to remove
@@ -400,7 +407,8 @@ class AuthorizedKeysConfig(BaseConfig):
             Updated configuration dictionary
         
         Raises:
-            ValueError: If the index is invalid or if trying to remove a server key
+            ValueError: If the index is invalid, if trying to remove a server key in tracker mode,
+                       or if trying to remove the first key in server mode
         """
         # Load current config
         config = self.load()
@@ -409,10 +417,14 @@ class AuthorizedKeysConfig(BaseConfig):
         if key_index < 0 or key_index >= len(keys):
             raise ValueError(f"Invalid key index: {key_index}")
 
-        # Check if this is a server key (cannot be removed)
+        # In tracker mode, check if this is a server key (cannot be removed)
         key_to_remove = keys[key_index]
-        if key_to_remove.get("source") == "server":
+        if self._is_tracker_mode and key_to_remove.get("source") == "server":
             raise ValueError("Cannot remove server-managed SSH keys. These keys are managed via config upload.")
+        
+        # In server mode, prevent removal of the first key to avoid lockout
+        if not self._is_tracker_mode and key_index == 0:
+            raise ValueError("Cannot remove the first SSH key in server mode to prevent lockout. You must have at least one SSH key configured.")
 
         # Remove the key
         keys.pop(key_index)

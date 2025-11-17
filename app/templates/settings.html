@@ -67,7 +67,7 @@
                         Network
                     </button>
                 </li>
-                <li class="nav-item ms-auto" role="presentation">
+                <li class="nav-item ms-auto" role="presentation" x-show="!serverMode">
                     <button class="nav-link" 
                             :class="{ 'active': systemTab === 'configupload' }"
                             @click="systemTab = 'configupload'"
@@ -478,8 +478,8 @@
                                                             <button type="button" 
                                                                     class="btn btn-outline-danger btn-sm" 
                                                                     @click="removeKey(key)"
-                                                                    x-show="key.source !== 'server'"
-                                                                    title="Remove this key">
+                                                                    x-show="serverMode ? (key.index !== 0) : (key.source !== 'server')"
+                                                                    :title="serverMode && key.index === 0 ? 'Cannot remove first key (prevents lockout)' : 'Remove this key'">
                                                                 <i class="fas fa-trash"></i>
                                                             </button>
                                                         </td>
@@ -610,8 +610,9 @@
                 </div>
 
                 <!-- Network Tab -->
-                <div x-show="systemTab === 'network'">
-                    <div class="card" x-data="networkConfig()" x-init="init()" x-destroy="cleanup()">
+                <template x-if="!serverMode">
+                    <div x-show="systemTab === 'network'">
+                        <div class="card" x-data="networkConfig()" x-init="init()" x-destroy="cleanup()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <h5 class="card-title mb-0 me-2">NetworkManager</h5>
@@ -1194,12 +1195,14 @@
                                 </template>
                             </div>
                         </div>
+                        </div>
                     </div>
-                </div>
+                </template>
 
                 <!-- Config Upload Tab -->
-                <div x-show="systemTab === 'configupload'">
-                    <div class="card" x-data="configUpload()" x-init="init()">
+                <template x-if="!serverMode">
+                    <div x-show="systemTab === 'configupload'">
+                        <div class="card" x-data="configUpload()" x-init="init()">
                         <div class="card-header">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-file-archive me-2"></i>
@@ -1355,7 +1358,8 @@
                             </form>
                         </div>
                     </div>
-                </div>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

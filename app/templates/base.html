@@ -51,8 +51,10 @@
     </main>
     
     {% include 'partials/footer.html' %}
+    {% if not is_server_mode %}
     {% include 'partials/log_modal.html' %}
     {% include 'partials/shell_modal.html' %}
+    {% endif %}
     
     {% block extra_body %}{% endblock %}
     

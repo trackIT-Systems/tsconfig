@@ -55,10 +55,10 @@ export function scheduleConfig() {
             }
             
             this.refreshInterval = setInterval(() => {
-                // Only refresh if settings tab is active
+                // Only refresh if settings tab is active and not in server mode
                 const currentHash = window.location.hash.slice(1);
                 const mainTab = currentHash.split('/')[0];
-                if (mainTab === 'settings') {
+                if (mainTab === 'settings' && !this.serverMode) {
                     this.loadServiceStatus();
                 }
             }, refreshIntervalSeconds * 1000);
@@ -256,10 +256,12 @@ export function scheduleConfig() {
                 
                 this.showMessage(`Configuration saved and ${data.message}`, false);
                 
-                // Refresh service status after restart
-                setTimeout(async () => {
-                    await this.loadServiceStatus();
-                }, 2000);
+                // Refresh service status after restart (only in tracker mode)
+                if (!this.serverMode) {
+                    setTimeout(async () => {
+                        await this.loadServiceStatus();
+                    }, 2000);
+                }
             };
             
             await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
