@@ -1,6 +1,34 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
-        <a class="navbar-brand" :href="window.BASE_URL || '/'" x-text="hostname">Loading...</a>
+        <!-- Config Group Selector (Server Mode Only) -->
+        <div x-show="serverMode" class="dropdown">
+            <button class="btn btn-link dropdown-toggle navbar-brand text-decoration-none p-0" 
+                    type="button" 
+                    id="configGroupDropdown" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false"
+                    style="color: rgba(255,255,255,.9); font-size: 1.25rem;">
+                <i class="fas fa-folder me-2"></i>
+                <span x-text="currentConfigGroup || 'Select Config'"></span>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="configGroupDropdown">
+                <template x-for="group in configGroups" :key="group">
+                    <li>
+                        <a class="dropdown-item" 
+                           href="#" 
+                           @click.prevent="window.serverModeManager.setCurrentConfigGroup(group)"
+                           :class="{ 'active': group === currentConfigGroup }">
+                            <i class="fas fa-check me-2" x-show="group === currentConfigGroup"></i>
+                            <span x-text="group"></span>
+                        </a>
+                    </li>
+                </template>
+            </ul>
+        </div>
+        
+        <!-- Hostname Brand (Non-Server Mode) -->
+        <a x-show="!serverMode" class="navbar-brand" :href="window.BASE_URL || '/'" x-text="hostname">Loading...</a>
+        
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
