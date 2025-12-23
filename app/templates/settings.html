@@ -7,9 +7,9 @@
         const parseSubtab = () => {
             const hash = window.location.hash.slice(1); // Remove #
             const parts = hash.split('/');
-            if (parts[0] === 'settings' && parts.length > 1) {
+                if (parts[0] === 'settings' && parts.length > 1) {
                 const subtab = parts[1];
-                if (['schedule', 'sshkeys', 'configupload', 'network'].includes(subtab)) {
+                if (['schedule', 'sshkeys', 'updates', 'configupload', 'network'].includes(subtab)) {
                     return subtab;
                 }
             }
@@ -56,6 +56,15 @@
                             type="button">
                         <i class="fas fa-key me-1"></i>
                         SSH Keys
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'updates' }"
+                            @click="systemTab = 'updates'"
+                            type="button">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        Updates
                     </button>
                 </li>
                 <li class="nav-item" role="presentation" x-show="!serverMode">
@@ -609,6 +618,289 @@
                     </div>
                 </div>
 
+                <!-- Updates Tab -->
+                <div x-show="systemTab === 'updates'">
+                    <div class="card" x-data="tsupdateConfig()" x-init="init()" x-destroy="cleanup()">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <!-- Service status elements - hidden in server mode -->
+                                <template x-if="!serverMode">
+                                    <div class="d-flex align-items-center">
+                                        <h5 class="card-title mb-0 me-2">tsupdated</h5>
+                                        <!-- Service Status Indicator -->
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge d-flex align-items-center gap-1" 
+                                                    :class="{
+                                                        'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                        'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                        'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                        'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                    }">
+                                                <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                                                <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
+                                            </span>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span x-text="serviceStatus.uptime"></span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- Server mode: Simple title -->
+                                <template x-if="serverMode">
+                                    <h5 class="card-title mb-0">Update Configuration</h5>
+                                </template>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <!-- Start/Stop button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle') || getServiceStartStopState('tsupdated') === 'started',
+                                            'btn-success': getServiceStartStopState('tsupdated') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle') || getServiceStartStopState('tsupdated') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('tsupdated') === 'stopping'
+                                        }"
+                                        @click="performStartStopAction('tsupdated', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('tsupdated') === 'starting' || getServiceStartStopState('tsupdated') === 'stopping'"
+                                        :title="serviceStatus.active ? 'Stop service' : 'Start service'"
+                                        x-show="!serverMode">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle'">
+                                        <i class="fas fa-play"></i>
+                                    </template>
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle'">
+                                        <i class="fas fa-stop"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('tsupdated') === 'starting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('tsupdated') === 'stopping'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('tsupdated') === 'started'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('tsupdated') === 'stopped'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <!-- Restart button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-warning': getServiceRestartState('tsupdated') === 'idle',
+                                            'btn-primary': getServiceRestartState('tsupdated') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('tsupdated') === 'restarted'
+                                        }"
+                                        @click="performAction('tsupdated', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('tsupdated') === 'restarting'"
+                                        title="Restart service"
+                                        x-show="!serverMode">
+                                    <template x-if="getServiceRestartState('tsupdated') === 'idle'">
+                                        <i class="fas fa-redo"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('tsupdated') === 'restarting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('tsupdated') === 'restarted'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm" 
+                                        @click="streamLogs('tsupdated')"
+                                        title="View tsupdated service logs"
+                                        x-show="!serverMode">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Logs
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <form @submit.prevent="saveConfig">
+                                <!-- Check Interval Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-clock me-2"></i>
+                                        Update Checking
+                                    </h6>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Check Interval (HH:MM)</label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   x-model="config.check_interval_hhmm"
+                                                   pattern="[0-9]{2}:[0-9]{2}" 
+                                                   required>
+                                            <div class="form-text">
+                                                How often the daemon checks for updates. Default: 01:00 (1 hour).
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Include Pre-releases</label>
+                                            <div class="form-check form-switch mt-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       x-model="config.include_prereleases" 
+                                                       id="includePrereleases">
+                                                <label class="form-check-label" for="includePrereleases">
+                                                    Include beta/pre-release updates
+                                                </label>
+                                            </div>
+                                            <div class="form-text">
+                                                When enabled, the daemon will check for and apply pre-release updates.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- GitHub URL Override Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fab fa-github me-2"></i>
+                                        Repository Settings
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">GitHub URL Override (optional)</label>
+                                        <input type="url" 
+                                               class="form-control" 
+                                               x-model="config.github_url"
+                                               placeholder="https://github.com/owner/repo">
+                                        <div class="form-text">
+                                            Optional. Override the default GitHub repository URL. If not set, uses SUPPORT_URL from /etc/os-release.
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Max Releases</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.max_releases"
+                                               min="1"
+                                               required>
+                                        <div class="form-text">
+                                            Maximum number of recent releases to check for batch updates. Default: 5.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Reboot Behavior Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-power-off me-2"></i>
+                                        Reboot Behavior
+                                    </h6>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Persist Timeout (HH:MM)</label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   x-model="config.persist_timeout_hhmm"
+                                                   pattern="[0-9]{2}:[0-9]{2}" 
+                                                   required>
+                                            <div class="form-text">
+                                                System uptime threshold before persisting tryboot configuration. Default: 00:10 (10 minutes).
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Update Countdown (HH:MM)</label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   x-model="config.update_countdown_hhmm"
+                                                   pattern="[0-9]{2}:[0-9]{2}" 
+                                                   required>
+                                            <div class="form-text">
+                                                Countdown before initiating tryboot reboot after update. Default: 00:01 (1 minute).
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Form Actions -->
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div class="d-flex gap-2">
+                                        <button type="button" 
+                                                class="btn btn-outline-secondary" 
+                                                @click="refreshConfig()">
+                                            Reset
+                                        </button>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="submit" 
+                                                class="btn"
+                                                :class="{
+                                                    'btn-success': saveState === 'idle',
+                                                    'btn-primary': saveState === 'saving',
+                                                    'btn-outline-success': saveState === 'saved'
+                                                }"
+                                                :disabled="saveState === 'saving'">
+                                            <template x-if="saveState === 'idle'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-save me-1"></i>
+                                                    Save
+                                                </div>
+                                            </template>
+                                            <template x-if="saveState === 'saving'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Saving...
+                                                </div>
+                                            </template>
+                                            <template x-if="saveState === 'saved'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-check me-1"></i>
+                                                    Saved!
+                                                </div>
+                                            </template>
+                                        </button>
+                                        <button type="button" 
+                                                class="btn"
+                                                :class="{
+                                                    'btn-warning': saveRestartState === 'idle',
+                                                    'btn-primary': saveRestartState === 'saving' || saveRestartState === 'restarting',
+                                                    'btn-outline-success': saveRestartState === 'saved'
+                                                }"
+                                                @click="saveAndRestartService()"
+                                                :disabled="saveRestartState === 'saving' || saveRestartState === 'restarting'"
+                                                x-show="!serverMode">
+                                            <template x-if="saveRestartState === 'idle'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-save me-1"></i>
+                                                    <i class="fas fa-redo me-1"></i>
+                                                    Save & Restart
+                                                </div>
+                                            </template>
+                                            <template x-if="saveRestartState === 'saving'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Saving...
+                                                </div>
+                                            </template>
+                                            <template x-if="saveRestartState === 'restarting'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>
+                                                    Restarting...
+                                                </div>
+                                            </template>
+                                            <template x-if="saveRestartState === 'saved'">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-check me-1"></i>
+                                                    Saved & Restarted!
+                                                </div>
+                                            </template>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Network Tab -->
                 <template x-if="!serverMode">
                     <div x-show="systemTab === 'network'">
@@ -639,30 +931,30 @@
                                 <button type="button" 
                                         class="btn btn-sm" 
                                         :class="{
-                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle') || getServiceStartStopState('NetworkManager.service') === 'started',
-                                            'btn-success': getServiceStartStopState('NetworkManager.service') === 'starting',
-                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle') || getServiceStartStopState('NetworkManager.service') === 'stopped',
-                                            'btn-danger': getServiceStartStopState('NetworkManager.service') === 'stopping'
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('NetworkManager') === 'idle') || getServiceStartStopState('NetworkManager') === 'started',
+                                            'btn-success': getServiceStartStopState('NetworkManager') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('NetworkManager') === 'idle') || getServiceStartStopState('NetworkManager') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('NetworkManager') === 'stopping'
                                         }"
-                                        @click="performStartStopAction('NetworkManager.service', serviceStatus.active ? 'stop' : 'start')"
-                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('NetworkManager.service') === 'starting' || getServiceStartStopState('NetworkManager.service') === 'stopping'"
+                                        @click="performStartStopAction('NetworkManager', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('NetworkManager') === 'starting' || getServiceStartStopState('NetworkManager') === 'stopping'"
                                         :title="serviceStatus.active ? 'Stop service' : 'Start service'">
-                                    <template x-if="!serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle'">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('NetworkManager') === 'idle'">
                                         <i class="fas fa-play"></i>
                                     </template>
-                                    <template x-if="serviceStatus.active && getServiceStartStopState('NetworkManager.service') === 'idle'">
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('NetworkManager') === 'idle'">
                                         <i class="fas fa-stop"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'starting'">
+                                    <template x-if="getServiceStartStopState('NetworkManager') === 'starting'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'stopping'">
+                                    <template x-if="getServiceStartStopState('NetworkManager') === 'stopping'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'started'">
+                                    <template x-if="getServiceStartStopState('NetworkManager') === 'started'">
                                         <i class="fas fa-check"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('NetworkManager.service') === 'stopped'">
+                                    <template x-if="getServiceStartStopState('NetworkManager') === 'stopped'">
                                         <i class="fas fa-check"></i>
                                     </template>
                                 </button>
@@ -670,26 +962,26 @@
                                 <button type="button" 
                                         class="btn btn-sm" 
                                         :class="{
-                                            'btn-outline-warning': getServiceRestartState('NetworkManager.service') === 'idle',
-                                            'btn-primary': getServiceRestartState('NetworkManager.service') === 'restarting',
-                                            'btn-outline-success': getServiceRestartState('NetworkManager.service') === 'restarted'
+                                            'btn-outline-warning': getServiceRestartState('NetworkManager') === 'idle',
+                                            'btn-primary': getServiceRestartState('NetworkManager') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('NetworkManager') === 'restarted'
                                         }"
-                                        @click="performAction('NetworkManager.service', 'restart')"
-                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('NetworkManager.service') === 'restarting'"
+                                        @click="performAction('NetworkManager', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('NetworkManager') === 'restarting'"
                                         title="Restart service">
-                                    <template x-if="getServiceRestartState('NetworkManager.service') === 'idle'">
+                                    <template x-if="getServiceRestartState('NetworkManager') === 'idle'">
                                         <i class="fas fa-redo"></i>
                                     </template>
-                                    <template x-if="getServiceRestartState('NetworkManager.service') === 'restarting'">
+                                    <template x-if="getServiceRestartState('NetworkManager') === 'restarting'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceRestartState('NetworkManager.service') === 'restarted'">
+                                    <template x-if="getServiceRestartState('NetworkManager') === 'restarted'">
                                         <i class="fas fa-check"></i>
                                     </template>
                                 </button>
                                 <button type="button" 
                                         class="btn btn-outline-info btn-sm" 
-                                        @click="streamLogs('NetworkManager.service')"
+                                        @click="streamLogs('NetworkManager')"
                                         title="View NetworkManager service logs">
                                     <i class="fas fa-file-alt me-1"></i>
                                     Logs

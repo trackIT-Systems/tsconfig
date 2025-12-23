@@ -20,8 +20,9 @@ from app.configs.geolocation import GeolocationConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.configs.tsupdate import TsupdateConfig
 from app.logging_config import get_logger, setup_logging
-from app.routers import authorized_keys, configs, network, radiotracking, schedule, shell, soundscapepipe, systemd
+from app.routers import authorized_keys, configs, network, radiotracking, schedule, shell, soundscapepipe, systemd, tsupdate
 
 # Set up logging for the main application
 setup_logging()
@@ -68,6 +69,10 @@ tags_metadata = [
     {
         "name": "network",
         "description": "Network configuration management for NetworkManager connections.",
+    },
+    {
+        "name": "tsupdate",
+        "description": "Tsupdate daemon configuration for automatic system updates.",
     },
 ]
 
@@ -122,6 +127,7 @@ app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
 app.include_router(configs.router)
+app.include_router(tsupdate.router)
 
 # Only include system-specific routers in tracker mode (default mode)
 # These are disabled in server mode since they require direct hardware access
@@ -522,6 +528,14 @@ async def get_available_services(config_group: str = None):
         authorized_keys_config = AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
         if authorized_keys_config.config_file.exists():
             available_services.append("authorized_keys")
+    except Exception:
+        pass
+
+    # Check tsupdate configuration
+    try:
+        tsupdate_config = TsupdateConfig(config_dir) if config_dir else TsupdateConfig()
+        if tsupdate_config.config_file.exists():
+            available_services.append("tsupdate")
     except Exception:
         pass
 

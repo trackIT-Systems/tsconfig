@@ -30,15 +30,19 @@ services:
     expert: true 
   - name: mosquitto
     expert: true
+  - name: tsupdated
+    expert: true
   - name: tsconfig
     expert: true
   - name: tsconfig-ble
     expert: true
-  - name: bluetooth.service
+  - name: bluetooth
+    expert: true
+  - name: ssh
     expert: true
   - name: wg-quick@wireguard
     expert: true
-  - name: NetworkManager.service
+  - name: NetworkManager
     expert: true
-  - name: ModemManager.service
+  - name: ModemManager
     expert: true

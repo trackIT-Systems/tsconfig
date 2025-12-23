@@ -145,7 +145,7 @@ export function networkConfig() {
                 const data = await response.json();
                 
                 // Find NetworkManager service
-                const nmService = data.find(s => s.name === 'NetworkManager.service');
+                const nmService = data.find(s => s.name === 'NetworkManager');
                 
                 if (nmService) {
                     this.serviceStatus = {
