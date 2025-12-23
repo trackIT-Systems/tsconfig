@@ -431,12 +431,101 @@
 
                 <!-- SSH Keys Tab -->
                 <div x-show="systemTab === 'sshkeys'">
-                    <div class="card" x-data="sshKeysConfig()" x-init="init()">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="fas fa-key me-2"></i>
-                                SSH Authorized Keys
-                            </h5>
+                    <div class="card" x-data="sshKeysConfig()" x-init="init()" x-destroy="cleanup()">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <!-- Service status elements - hidden in server mode -->
+                                <template x-if="!serverMode">
+                                    <div class="d-flex align-items-center">
+                                        <h5 class="card-title mb-0 me-2">ssh</h5>
+                                        <!-- Service Status Indicator -->
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge d-flex align-items-center gap-1" 
+                                                    :class="{
+                                                        'bg-success': serviceStatus.active && serviceStatus.status === 'active',
+                                                        'bg-danger': !serviceStatus.active && serviceStatus.status !== 'not-found' && serviceStatus.status !== 'timeout' && serviceStatus.status !== 'error' && serviceStatus.status !== 'unknown',
+                                                        'bg-secondary': serviceStatus.status === 'not-found' || serviceStatus.status === 'unknown',
+                                                        'bg-warning': serviceStatus.status === 'timeout' || serviceStatus.status === 'error'
+                                                    }">
+                                                <span class="d-none d-sm-inline" x-text="serviceStatus.active ? 'Active' : (serviceStatus.status === 'not-found' ? 'Not Found' : (serviceStatus.status === 'timeout' || serviceStatus.status === 'error' ? 'Error' : 'Inactive'))"></span>
+                                                <span class="d-sm-none" x-text="serviceStatus.active ? 'ON' : 'OFF'"></span>
+                                            </span>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span x-text="serviceStatus.uptime"></span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- Server mode: Simple title -->
+                                <template x-if="serverMode">
+                                    <h5 class="card-title mb-0">
+                                        <i class="fas fa-key me-2"></i>
+                                        SSH Authorized Keys
+                                    </h5>
+                                </template>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" x-show="!serverMode">
+                                <!-- Start/Stop button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('ssh') === 'idle') || getServiceStartStopState('ssh') === 'started',
+                                            'btn-success': getServiceStartStopState('ssh') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('ssh') === 'idle') || getServiceStartStopState('ssh') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('ssh') === 'stopping'
+                                        }"
+                                        @click="performStartStopAction('ssh', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('ssh') === 'starting' || getServiceStartStopState('ssh') === 'stopping'"
+                                        :title="serviceStatus.active ? 'Stop service' : 'Start service'">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('ssh') === 'idle'">
+                                        <i class="fas fa-play"></i>
+                                    </template>
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('ssh') === 'idle'">
+                                        <i class="fas fa-stop"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('ssh') === 'starting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('ssh') === 'stopping'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('ssh') === 'started'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                    <template x-if="getServiceStartStopState('ssh') === 'stopped'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <!-- Restart button -->
+                                <button type="button" 
+                                        class="btn btn-sm" 
+                                        :class="{
+                                            'btn-outline-warning': getServiceRestartState('ssh') === 'idle',
+                                            'btn-primary': getServiceRestartState('ssh') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('ssh') === 'restarted'
+                                        }"
+                                        @click="performAction('ssh', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('ssh') === 'restarting'"
+                                        title="Restart service">
+                                    <template x-if="getServiceRestartState('ssh') === 'idle'">
+                                        <i class="fas fa-redo"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('ssh') === 'restarting'">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </template>
+                                    <template x-if="getServiceRestartState('ssh') === 'restarted'">
+                                        <i class="fas fa-check"></i>
+                                    </template>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm" 
+                                        @click="streamLogs('ssh')"
+                                        title="View ssh service logs">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Logs
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <!-- Existing Keys List -->

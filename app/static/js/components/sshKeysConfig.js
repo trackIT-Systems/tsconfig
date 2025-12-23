@@ -1,12 +1,26 @@
 import { apiUrl } from '../utils/apiUtils.js';
+import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
+import { serviceManager } from '../managers/serviceManager.js';
+import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 
 export function sshKeysConfig() {
     return {
+        ...serviceActionMixin(),
         keys: [],
         newKey: '',
         githubUsername: '',
         launchpadUsername: '',
         loading: false,
+        // Service status tracking
+        serviceStatus: {
+            active: false,
+            enabled: false,
+            status: 'unknown',
+            uptime: 'N/A'
+        },
+        serviceStatusLoading: false,
+        refreshInterval: null, // For periodic service status refresh
+        actionLoading: false,
 
         // Server mode helper
         get serverMode() {
@@ -21,7 +35,63 @@ export function sshKeysConfig() {
         },
 
         async init() {
+            // Small delay to prevent simultaneous API calls during page load
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
             await this.loadKeys();
+            await this.setupPeriodicRefresh();
+            
+            // Listen for config group changes in server mode
+            window.addEventListener('config-group-changed', async () => {
+                await this.loadKeys();
+            });
+        },
+
+        async setupPeriodicRefresh() {
+            // Get the refresh interval from system config
+            const refreshIntervalSeconds = await getSystemRefreshInterval();
+            
+            // Set up periodic refresh for service status
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+            }
+            
+            this.refreshInterval = setInterval(() => {
+                // Only refresh if settings tab is active and not in server mode
+                const currentHash = window.location.hash.slice(1);
+                const mainTab = currentHash.split('/')[0];
+                if (mainTab === 'settings' && !this.serverMode) {
+                    this.loadServiceStatus();
+                }
+            }, refreshIntervalSeconds * 1000);
+        },
+
+        cleanup() {
+            // Clean up interval when component is destroyed
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+            }
+        },
+
+        async loadServiceStatus() {
+            this.serviceStatusLoading = true;
+            try {
+                const services = await serviceManager.getServices();
+                const sshService = services.find(service => service.name === 'ssh');
+                if (sshService) {
+                    this.serviceStatus = {
+                        active: sshService.active,
+                        enabled: sshService.enabled,
+                        status: sshService.status,
+                        uptime: sshService.uptime || 'N/A'
+                    };
+                }
+            } catch (error) {
+                console.error('Failed to load service status:', error);
+            } finally {
+                this.serviceStatusLoading = false;
+            }
         },
 
         async loadKeys() {
@@ -41,6 +111,11 @@ export function sshKeysConfig() {
                 
                 const data = await response.json();
                 this.keys = data.keys || [];
+                
+                // Load service status only in tracker mode (default mode)
+                if (!this.serverMode) {
+                    await this.loadServiceStatus();
+                }
             } catch (error) {
                 // Don't show error message if it's just a missing file
                 if (!error.message.includes('404')) {
@@ -187,6 +262,26 @@ export function sshKeysConfig() {
                              type === 'error' ? 'SSH Keys - Error' : 'SSH Keys';
                 window.toastManager.show(msg, type, { title });
             }
+        },
+
+        streamLogs(serviceName) {
+            // Show the log modal
+            const modal = new bootstrap.Modal(document.getElementById('logModal'));
+            // Get the log viewer instance and start streaming
+            const logViewerEl = document.getElementById('logModal');
+            if (logViewerEl && logViewerEl._x_dataStack) {
+                const logViewerInstance = logViewerEl._x_dataStack[0];
+                logViewerInstance.startStreaming(serviceName);
+            }
+            modal.show();
+            
+            // Scroll to bottom after modal is shown and content is rendered
+            setTimeout(() => {
+                const container = document.getElementById('logContainer');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, 250);
         }
     };
 }
