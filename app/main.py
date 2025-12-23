@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import __version__
+from app.auth.middleware import AuthenticationMiddleware
+from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.geolocation import GeolocationConfig
@@ -21,7 +23,7 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.logging_config import get_logger, setup_logging
-from app.routers import authorized_keys, configs, network, radiotracking, schedule, shell, soundscapepipe, systemd
+from app.routers import auth, authorized_keys, configs, network, radiotracking, schedule, shell, soundscapepipe, systemd
 
 # Set up logging for the main application
 setup_logging()
@@ -40,6 +42,10 @@ tags_metadata = [
     {
         "name": "system",
         "description": "System monitoring and status information including CPU, memory, disk, and network metrics.",
+    },
+    {
+        "name": "authentication",
+        "description": "OIDC/Keycloak authentication endpoints for server mode (only available when OIDC is configured).",
     },
     {
         "name": "schedule",
@@ -117,6 +123,7 @@ logger.debug(f"Base URL: {BASE_URL}")
 logger.debug(f"Server mode: {config_loader.is_server_mode()}")
 
 # Include routers
+app.include_router(auth.router)  # Authentication router (only active in server mode)
 app.include_router(schedule.router)
 app.include_router(radiotracking.router)
 app.include_router(soundscapepipe.router)
@@ -133,8 +140,85 @@ if not config_loader.is_server_mode():
 # Mount static files (must be after all route definitions to avoid conflicts)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+# Add authentication middleware (only active in server mode)
+app.add_middleware(AuthenticationMiddleware)
+
+# Add proxy headers middleware to handle X-Forwarded-* headers from reverse proxy
+if config_loader.is_server_mode():
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class ProxyHeadersMiddleware(BaseHTTPMiddleware):
+        """Middleware to handle proxy headers and reconstruct the original request URL.
+
+        This middleware handles the case where Caddy strips the base path prefix
+        (e.g., /tsconfig) before forwarding to the app. We need to store the
+        public-facing URL components for proper redirect URL construction.
+        """
+
+        async def dispatch(self, request: Request, call_next):
+            # Get forwarded headers
+            forwarded_proto = request.headers.get("x-forwarded-proto")
+            forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+
+            logger.debug(f"ProxyHeadersMiddleware: proto={forwarded_proto}, host={forwarded_host}")
+
+            # Store original values for URL reconstruction
+            if forwarded_proto and forwarded_host:
+                # Store proxy information in request state for use by other middleware/endpoints
+                request.state.forwarded_proto = forwarded_proto
+                request.state.forwarded_host = forwarded_host
+
+                # Build the complete public URL including root_path
+                root_path = request.scope.get("root_path", "")
+                path = request.scope.get("path", "/")
+                query_string = request.scope.get("query_string", b"").decode()
+
+                logger.debug(f"ProxyHeadersMiddleware: root_path='{root_path}', path='{path}', query='{query_string}'")
+
+                # Construct full URL: scheme://host/root_path/path?query
+                full_path = f"{root_path}{path}"
+                if query_string:
+                    public_url = f"{forwarded_proto}://{forwarded_host}{full_path}?{query_string}"
+                else:
+                    public_url = f"{forwarded_proto}://{forwarded_host}{full_path}"
+
+                logger.debug(f"ProxyHeadersMiddleware: constructed public_url='{public_url}'")
+
+                # Store the public URL in request state
+                request.state.public_url = public_url
+            else:
+                logger.debug("ProxyHeadersMiddleware: no forwarded headers found, skipping URL reconstruction")
+
+            return await call_next(request)
+
+    app.add_middleware(ProxyHeadersMiddleware)
+
 # Templates
 templates = Jinja2Templates(directory="app/templates")
+
+
+# Startup event to validate OIDC configuration in server mode
+@app.on_event("startup")
+async def validate_oidc_config():
+    """Validate OIDC configuration on startup if in server mode."""
+    if config_loader.is_server_mode():
+        if oidc_config.is_configured():
+            is_valid, error = oidc_config.validate()
+            if is_valid:
+                logger.info("OIDC authentication is configured and valid")
+                try:
+                    # Try to fetch discovery document to validate connection
+                    await oidc_config.get_discovery_document()
+                    logger.info("Successfully connected to OIDC provider")
+                except Exception as e:
+                    logger.error(f"Failed to connect to OIDC provider: {e}")
+                    logger.warning("Server mode is enabled but OIDC provider is not accessible")
+            else:
+                logger.error(f"OIDC configuration is invalid: {error}")
+                logger.warning("Server mode is enabled but OIDC is misconfigured")
+        else:
+            logger.warning("Server mode is enabled but OIDC is not configured")
+            logger.warning("Authentication will not be enforced")
 
 
 # Add base_url to template context for all responses
@@ -200,6 +284,7 @@ async def get_server_mode():
         "enabled": is_server_mode,
         "config_groups": config_loader.list_config_groups() if is_server_mode else [],
         "config_root": str(config_root) if is_server_mode and config_root else None,
+        "oidc_enabled": is_server_mode and oidc_config.is_configured(),
         "debug": debug_info if is_server_mode else None,
     }
 
@@ -235,27 +320,27 @@ async def get_geolocation():
 def _beautify_sensor_name(name: str) -> str:
     """
     Convert a system sensor name to a more beautiful display string.
-    
+
     Examples:
     - cpu_thermal -> CPU Thermal
     - rp1_adc -> RP1 ADC
     - coretemp -> Coretemp
     """
     # Split by underscores and capitalize each word
-    words = name.split('_')
+    words = name.split("_")
     beautified_words = []
-    
+
     for word in words:
         # Special case: "cpu" should be all caps
-        if word.lower() == 'cpu':
-            beautified_words.append('CPU')
+        if word.lower() == "cpu":
+            beautified_words.append("CPU")
         # Special case: short words (3 chars or less) or already uppercase words
         elif word.isupper() or len(word) <= 3:
             beautified_words.append(word.upper())
         else:
             beautified_words.append(word.capitalize())
-    
-    return ' '.join(beautified_words)
+
+    return " ".join(beautified_words)
 
 
 @app.get(

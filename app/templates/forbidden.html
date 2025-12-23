@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>403 - Access Denied | tsconfig</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="{{ base_url }}/static/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/fontawesome/css/all.min.css">
+    <link href="{{ base_url }}/static/css/style.css" rel="stylesheet">
+</head>
+<body class="d-flex flex-column h-100">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ base_url }}/">
+                <i class="fas fa-cog me-2"></i>tsconfig
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-shrink-0">
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-8 col-lg-6">
+                    <div class="card shadow-sm">
+                        <div class="card-body p-4">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-lock text-danger" style="font-size: 4rem;"></i>
+                                <h1 class="h2 mt-3 mb-2">Access Denied</h1>
+                                <p class="text-muted">You are authenticated but not authorized to access tsconfig</p>
+                            </div>
+
+                            {% if user_email %}
+                            <div class="alert alert-info border-start border-4 border-info">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-user-check me-2"></i>Authenticated as
+                                </h5>
+                                <p class="mb-0"><strong>{{ user_email }}</strong></p>
+                            </div>
+                            {% endif %}
+
+                            <div class="alert alert-danger border-start border-4 border-danger">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Authorization Failed
+                                </h5>
+                                <p class="mb-2">You need to be a member of one of the following groups:</p>
+                                <div class="bg-white rounded p-3 mb-3">
+                                    <code class="text-dark">
+                                        {% for group in required_groups %}
+                                        <i class="fas fa-users text-primary me-2"></i>{{ group }}<br>
+                                        {% endfor %}
+                                    </code>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mt-4">
+                                <form action="{{ base_url }}/auth/logout" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-sign-out-alt me-2"></i>Logout
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div class="text-center mt-4 pt-3 border-top">
+                                <p class="text-muted small mb-1">
+                                    If you believe you should have access, please contact your administrator
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- Bootstrap JS -->
+    <script src="{{ base_url }}/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
