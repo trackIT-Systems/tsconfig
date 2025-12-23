@@ -12,18 +12,18 @@
     </script>
     
     <!-- Common CSS -->
-    <link href="{{ url_for('static', path='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', path='vendor/leaflet/css/leaflet.css') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', path='vendor/leaflet-locate/css/L.Control.Locate.min.css') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', path='vendor/leaflet-vector-markers/css/leaflet-vector-markers.css') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', path='vendor/fontawesome/css/all.min.css') }}">
-    <link href="{{ url_for('static', path='css/style.css') }}" rel="stylesheet">
+    <link href="{{ base_url }}/static/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/leaflet/css/leaflet.css" />
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/leaflet-locate/css/L.Control.Locate.min.css" />
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/leaflet-vector-markers/css/leaflet-vector-markers.css" />
+    <link rel="stylesheet" href="{{ base_url }}/static/vendor/fontawesome/css/all.min.css">
+    <link href="{{ base_url }}/static/css/style.css" rel="stylesheet">
     
     <!-- Common JS -->
-    <script src="{{ url_for('static', path='vendor/leaflet/js/leaflet.js') }}"></script>
-    <script src="{{ url_for('static', path='vendor/leaflet-vector-markers/js/leaflet-vector-markers.min.js') }}"></script>
-    <script src="{{ url_for('static', path='vendor/leaflet-locate/js/L.Control.Locate.min.js') }}"></script>
-    <script src="{{ url_for('static', path='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ base_url }}/static/vendor/leaflet/js/leaflet.js"></script>
+    <script src="{{ base_url }}/static/vendor/leaflet-vector-markers/js/leaflet-vector-markers.min.js"></script>
+    <script src="{{ base_url }}/static/vendor/leaflet-locate/js/L.Control.Locate.min.js"></script>
+    <script src="{{ base_url }}/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     
     {% block extra_head %}{% endblock %}
 </head>
@@ -59,10 +59,13 @@
     {% block extra_body %}{% endblock %}
     
     <!-- Load toast utility first -->
-    <script type="module" src="{{ url_for('static', path='js/utils/toastUtils.js') }}"></script>
+    <script type="module" src="{{ base_url }}/static/js/utils/toastUtils.js"></script>
+    
+    <!-- Load authentication module (only active in server mode with OIDC) -->
+    <script type="module" src="{{ base_url }}/static/js/auth.js"></script>
     
     <!-- Load app modules FIRST - these will expose components to window -->
-    <script type="module" src="{{ url_for('static', path='js/app.js') }}"></script>
+    <script type="module" src="{{ base_url }}/static/js/app.js"></script>
     
     <!-- After modules signal ready, dynamically load Alpine.js -->
     <script>
@@ -70,7 +73,7 @@
         window.addEventListener('app-modules-ready', () => {
             // Dynamically load Alpine.js script
             const alpineScript = document.createElement('script');
-            alpineScript.src = "{{ url_for('static', path='vendor/alpinejs/js/cdn.min.js') }}";
+            alpineScript.src = "{{ base_url }}/static/vendor/alpinejs/js/cdn.min.js";
             alpineScript.onerror = () => {
                 console.error('Failed to load Alpine.js');
             };

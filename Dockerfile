@@ -29,7 +29,7 @@ ENV TSCONFIG_PORT=8000
 
 # Health check to verify the application is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${TSCONFIG_PORT}${TSCONFIG_BASE_URL}/api/server-mode || exit 1
+    CMD curl -f http://localhost:${TSCONFIG_PORT}${TSCONFIG_BASE_URL}/docs || exit 1
 
 # Run the application
 CMD ["/bin/sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${TSCONFIG_PORT}"]
