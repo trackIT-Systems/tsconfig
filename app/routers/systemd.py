@@ -336,6 +336,9 @@ async def stream_service_logs(service_name: str):
 
     async def generate_logs():
         """Generate streaming logs using journalctl -fu."""
+        # Send initial comment to establish the connection (comments don't trigger onmessage)
+        yield f": Stream started\n\n"
+        
         try:
             # Start journalctl process with follow and unit flags
             process = await asyncio.create_subprocess_exec(

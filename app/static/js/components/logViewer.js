@@ -8,6 +8,7 @@ export function logViewer() {
         currentService: '',
         logs: [],
         isStreaming: false,
+        isConnecting: false,
         streamError: null,
         autoScroll: true,
         eventSource: null,
@@ -37,10 +38,16 @@ export function logViewer() {
             this.logs = [];
             this.streamError = null;
             this.isStreaming = true;
+            this.isConnecting = true;
 
             try {
                 // Create event source for server-sent events
                 this.eventSource = new EventSource(apiUrl(`/api/systemd/logs/${encodeURIComponent(serviceName)}`));
+                
+                // Hide spinner as soon as connection is established, but keep streaming indicator
+                this.eventSource.onopen = () => {
+                    this.isConnecting = false;
+                };
                 
                 this.eventSource.onmessage = (event) => {
                     const logLine = event.data;
@@ -69,6 +76,7 @@ export function logViewer() {
                     console.error('Log stream error:', error);
                     this.streamError = 'Connection to log stream failed';
                     this.isStreaming = false;
+                    this.isConnecting = false;
                     if (this.eventSource) {
                         this.eventSource.close();
                         this.eventSource = null;
@@ -78,6 +86,7 @@ export function logViewer() {
                 console.error('Error starting log stream:', error);
                 this.streamError = 'Failed to start log streaming';
                 this.isStreaming = false;
+                this.isConnecting = false;
             }
         },
 
@@ -87,6 +96,7 @@ export function logViewer() {
                 this.eventSource = null;
             }
             this.isStreaming = false;
+            this.isConnecting = false;
         },
 
         clearLogs() {

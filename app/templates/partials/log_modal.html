@@ -26,13 +26,13 @@
                      id="logContainer" 
                      style="padding: 1rem; white-space: pre-wrap; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;">
                     <!-- Empty state indicator -->
-                    <div x-show="!isStreaming && logs.length === 0" 
+                    <div x-show="!isConnecting && logs.length === 0" 
                          class="position-absolute top-50 start-50 translate-middle text-center text-muted">
                         <i class="fas fa-file-alt fa-3x mb-3 d-block"></i>
                         <p class="mb-0">No logs to display</p>
                     </div>
                     <!-- Loading indicator -->
-                    <div x-show="isStreaming && logs.length === 0" 
+                    <div x-show="isConnecting && logs.length === 0" 
                          class="position-absolute top-50 start-50 translate-middle text-center text-muted">
                         <div class="spinner-border text-primary mb-3" role="status">
                             <span class="visually-hidden">Loading...</span>
