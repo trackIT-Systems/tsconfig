@@ -2,6 +2,7 @@
 
 import os
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -170,16 +171,16 @@ async def callback(
         )
 
 
-@router.post(
+@router.get(
     "/logout",
     summary="Logout",
-    description="Clears authentication cookie and optionally redirects to Keycloak logout.",
+    description="Clears authentication cookie and ends Keycloak SSO session.",
 )
 async def logout(
     request: Request,
     auth_token: Optional[str] = Cookie(None),
 ):
-    """Logout and clear authentication cookie."""
+    """Logout and clear authentication cookie, ending Keycloak SSO session."""
     # Only available in server mode
     if not config_loader.is_server_mode():
         raise HTTPException(
@@ -189,25 +190,38 @@ async def logout(
 
     # Get base URL
     base_url = os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
-
-    # Try to get end session endpoint from Keycloak
     logout_url = f"{base_url}/" if base_url else "/"
 
     try:
         if oidc_config.is_configured() and auth_token:
             end_session_endpoint = await oidc_config.get_end_session_endpoint()
             if end_session_endpoint:
-                # Build Keycloak logout URL with post-logout redirect
-                post_logout_redirect = f"{request.base_url}{base_url}/"
+                # Build post-logout redirect URL
+                # Extract base URL from redirect_uri (e.g., https://wdev.trackit-system.de/tsconfig)
+                if oidc_config.redirect_uri:
+                    # Remove /auth/callback from redirect_uri to get base
+                    redirect_base = oidc_config.redirect_uri.rsplit("/auth/callback", 1)[0]
+                    post_logout_redirect = f"{redirect_base}/"
+                else:
+                    # Fallback to constructing from request
+                    scheme = request.url.scheme
+                    host = request.headers.get("host", "localhost")
+                    post_logout_redirect = f"{scheme}://{host}{base_url}/"
+
+                # URL encode the redirect URI
+                encoded_redirect = quote(post_logout_redirect, safe="")
+
+                # Build Keycloak logout URL
                 logout_url = (
-                    f"{end_session_endpoint}?post_logout_redirect_uri={post_logout_redirect}&id_token_hint={auth_token}"
+                    f"{end_session_endpoint}?post_logout_redirect_uri={encoded_redirect}&id_token_hint={auth_token}"
                 )
+                logger.info(f"Redirecting to Keycloak logout with post_logout_redirect_uri: {post_logout_redirect}")
     except Exception as e:
-        logger.warning(f"Could not get end session endpoint: {e}")
+        logger.warning(f"Could not configure Keycloak logout: {e}")
 
     # Clear authentication cookie
     response = RedirectResponse(url=logout_url, status_code=302)
-    response.delete_cookie(key="auth_token")
+    response.delete_cookie(key="auth_token", path="/", samesite="lax")
 
     logger.info("User logged out")
     return response

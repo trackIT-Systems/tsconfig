@@ -65,6 +65,14 @@ export const authManager = {
     getUser() {
         return this.user;
     },
+
+    /**
+     * Logout the current user
+     * Redirects to the logout endpoint which handles Keycloak logout
+     */
+    logout() {
+        window.location.href = apiUrl('/auth/logout');
+    },
 };
 
 // Initialize authentication on page load
