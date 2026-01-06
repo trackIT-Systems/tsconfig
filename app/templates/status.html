@@ -594,6 +594,18 @@
                                         <dd class="mb-0" x-text="systemInfo.os_release.ID"></dd>
                                     </div>
                                 </template>
+                                <template x-if="systemInfo?.tsupdate_status">
+                                    <div class="col-sm-6 col-lg-3 mb-2">
+                                        <dt class="text-muted small">Tryboot</dt>
+                                        <dd class="mb-0" x-text="(systemInfo.tsupdate_status.booted_via_tryboot === 'True' || systemInfo.tsupdate_status.booted_via_tryboot === true || String(systemInfo.tsupdate_status.booted_via_tryboot).toLowerCase() === 'true') ? 'True' : 'False'"></dd>
+                                    </div>
+                                </template>
+                                <template x-if="systemInfo?.tsupdate_status">
+                                    <div class="col-sm-6 col-lg-3 mb-2">
+                                        <dt class="text-muted small">Active Partition</dt>
+                                        <dd class="mb-0" x-text="systemInfo.tsupdate_status.active_partition_label || systemInfo.tsupdate_status.active_partition || 'N/A'"></dd>
+                                    </div>
+                                </template>
                                 <!-- URL fields take full width on all screen sizes -->
                                 <template x-if="systemInfo?.os_release?.HOME_URL">
                                     <div class="col-12 mb-2">

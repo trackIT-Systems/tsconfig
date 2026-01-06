@@ -1,6 +1,7 @@
 """tsOS Configuration Manager."""
 
 import datetime
+import json
 import os
 import platform
 import socket
@@ -352,6 +353,9 @@ async def get_system_status():
         # Get hardware information (Raspberry Pi specific)
         hardware_info = _get_hardware_info()
 
+        # Get tsupdate status information
+        tsupdate_status = _get_tsupdate_status()
+
         # Get system information
         system_info = {
             "operating_system": f"{platform.system()} {platform.release()}",
@@ -375,6 +379,10 @@ async def get_system_status():
             "temperatures": temperatures,
         }
 
+        # Add tsupdate status if available
+        if tsupdate_status:
+            system_info["tsupdate_status"] = tsupdate_status
+
         return JSONResponse(content=system_info)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Failed to get system status: {str(e)}"})
@@ -386,6 +394,38 @@ def _get_freedesktop_os_release():
         return platform.freedesktop_os_release()
     except (AttributeError, OSError):
         # platform.freedesktop_os_release() is not available or failed
+        return None
+
+
+def _get_tsupdate_status():
+    """Get tsupdate status information."""
+    try:
+        result = subprocess.run(
+            ["tsupdate", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        
+        if result.returncode != 0:
+            logger.debug(f"tsupdate status command failed: {result.stderr}")
+            return None
+        
+        status_data = json.loads(result.stdout)
+        
+        # Extract relevant fields
+        tsupdate_status = {
+            "booted_via_tryboot": status_data.get("booted_via_tryboot", "False"),
+            "active_partition": status_data.get("active_partition"),
+            "active_partition_label": status_data.get("active_partition_label"),
+        }
+        
+        return tsupdate_status
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+        logger.debug(f"Failed to get tsupdate status: {str(e)}")
+        return None
+    except Exception as e:
+        logger.debug(f"Unexpected error getting tsupdate status: {str(e)}")
         return None
 
 
