@@ -279,7 +279,7 @@ def handle_service_restart(config_type: str, restart_service: bool) -> Dict[str,
     
     service_mapping = {
         "radiotracking": "radiotracking",
-        "schedule": "wittypid", 
+        "schedule": "tsschedule", 
         "soundscapepipe": "soundscapepipe",
     }
     
@@ -605,7 +605,7 @@ RECOGNIZED_CONFIG_FILES = {
 # Service mapping for restart
 SERVICE_MAPPING = {
     "radiotracking": "radiotracking",
-    "schedule": "wittypid",
+    "schedule": "tsschedule",
     "soundscapepipe": "soundscapepipe",
     "wireguard": "wg-quick@wireguard",
     "mosquitto_cert": "mosquitto",

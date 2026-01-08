@@ -137,13 +137,13 @@ export function scheduleConfig() {
             this.serviceStatusLoading = true;
             try {
                 const services = await serviceManager.getServices();
-                const wittypidService = services.find(service => service.name === 'wittypid');
-                if (wittypidService) {
+                const tsscheduleService = services.find(service => service.name === 'tsschedule');
+                if (tsscheduleService) {
                     this.serviceStatus = {
-                        active: wittypidService.active,
-                        enabled: wittypidService.enabled,
-                        status: wittypidService.status,
-                        uptime: wittypidService.uptime || 'N/A'
+                        active: tsscheduleService.active,
+                        enabled: tsscheduleService.enabled,
+                        status: tsscheduleService.status,
+                        uptime: tsscheduleService.uptime || 'N/A'
                     };
                 }
             } catch (error) {
@@ -236,14 +236,14 @@ export function scheduleConfig() {
             };
             
             const restartFunction = async () => {
-                // Then restart the wittypid service
+                // Then restart the tsschedule service
                 const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        service: 'wittypid',
+                        service: 'tsschedule',
                         action: 'restart'
                     })
                 });
@@ -251,7 +251,7 @@ export function scheduleConfig() {
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.detail || 'Failed to restart wittypid service');
+                    throw new Error(data.detail || 'Failed to restart tsschedule service');
                 }
                 
                 this.showMessage(`Configuration saved and ${data.message}`, false);

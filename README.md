@@ -148,7 +148,7 @@ location /tsconfig/ {
 The application can control systemd services through the web interface. The default monitored services include:
 
 - **chrony** - Time synchronization service
-- **wittypid** - Witty Pi daemon for power management
+- **tsschedule** - tsschedule daemon for power management
 - **wg-quick@wireguard** - WireGuard VPN connection
 - **mosquitto** - MQTT broker for data communication
 - **mqttutil** - MQTT utility services

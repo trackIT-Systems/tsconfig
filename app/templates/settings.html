@@ -97,7 +97,7 @@
                                 <!-- Service status elements - hidden in server mode -->
                                 <template x-if="!serverMode">
                                     <div class="d-flex align-items-center">
-                                        <h5 class="card-title mb-0 me-2">wittypid</h5>
+                                        <h5 class="card-title mb-0 me-2">tsschedule</h5>
                                         <!-- Service Status Indicator -->
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="badge d-flex align-items-center gap-1" 
@@ -127,31 +127,31 @@
                                 <button type="button" 
                                         class="btn btn-sm" 
                                         :class="{
-                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('wittypid') === 'idle') || getServiceStartStopState('wittypid') === 'started',
-                                            'btn-success': getServiceStartStopState('wittypid') === 'starting',
-                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('wittypid') === 'idle') || getServiceStartStopState('wittypid') === 'stopped',
-                                            'btn-danger': getServiceStartStopState('wittypid') === 'stopping'
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('tsschedule') === 'idle') || getServiceStartStopState('tsschedule') === 'started',
+                                            'btn-success': getServiceStartStopState('tsschedule') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('tsschedule') === 'idle') || getServiceStartStopState('tsschedule') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('tsschedule') === 'stopping'
                                         }"
-                                        @click="performStartStopAction('wittypid', serviceStatus.active ? 'stop' : 'start')"
-                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('wittypid') === 'starting' || getServiceStartStopState('wittypid') === 'stopping'"
+                                        @click="performStartStopAction('tsschedule', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('tsschedule') === 'starting' || getServiceStartStopState('tsschedule') === 'stopping'"
                                         :title="serviceStatus.active ? 'Stop service' : 'Start service'"
                                         x-show="!serverMode">
-                                    <template x-if="!serviceStatus.active && getServiceStartStopState('wittypid') === 'idle'">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('tsschedule') === 'idle'">
                                         <i class="fas fa-play"></i>
                                     </template>
-                                    <template x-if="serviceStatus.active && getServiceStartStopState('wittypid') === 'idle'">
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('tsschedule') === 'idle'">
                                         <i class="fas fa-stop"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('wittypid') === 'starting'">
+                                    <template x-if="getServiceStartStopState('tsschedule') === 'starting'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('wittypid') === 'stopping'">
+                                    <template x-if="getServiceStartStopState('tsschedule') === 'stopping'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('wittypid') === 'started'">
+                                    <template x-if="getServiceStartStopState('tsschedule') === 'started'">
                                         <i class="fas fa-check"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('wittypid') === 'stopped'">
+                                    <template x-if="getServiceStartStopState('tsschedule') === 'stopped'">
                                         <i class="fas fa-check"></i>
                                     </template>
                                 </button>
@@ -159,28 +159,28 @@
                                 <button type="button" 
                                         class="btn btn-sm" 
                                         :class="{
-                                            'btn-outline-warning': getServiceRestartState('wittypid') === 'idle',
-                                            'btn-primary': getServiceRestartState('wittypid') === 'restarting',
-                                            'btn-outline-success': getServiceRestartState('wittypid') === 'restarted'
+                                            'btn-outline-warning': getServiceRestartState('tsschedule') === 'idle',
+                                            'btn-primary': getServiceRestartState('tsschedule') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('tsschedule') === 'restarted'
                                         }"
-                                        @click="performAction('wittypid', 'restart')"
-                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('wittypid') === 'restarting'"
+                                        @click="performAction('tsschedule', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('tsschedule') === 'restarting'"
                                         title="Restart service"
                                         x-show="!serverMode">
-                                    <template x-if="getServiceRestartState('wittypid') === 'idle'">
+                                    <template x-if="getServiceRestartState('tsschedule') === 'idle'">
                                         <i class="fas fa-redo"></i>
                                     </template>
-                                    <template x-if="getServiceRestartState('wittypid') === 'restarting'">
+                                    <template x-if="getServiceRestartState('tsschedule') === 'restarting'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceRestartState('wittypid') === 'restarted'">
+                                    <template x-if="getServiceRestartState('tsschedule') === 'restarted'">
                                         <i class="fas fa-check"></i>
                                     </template>
                                 </button>
                                 <button type="button" 
                                         class="btn btn-outline-info btn-sm" 
-                                        @click="streamLogs('wittypid')"
-                                        title="View wittypid service logs"
+                                        @click="streamLogs('tsschedule')"
+                                        title="View tsschedule service logs"
                                         x-show="!serverMode">
                                     <i class="fas fa-file-alt me-1"></i>
                                     Logs

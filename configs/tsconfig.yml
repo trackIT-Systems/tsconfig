@@ -22,7 +22,7 @@ services:
     expert: false
   - name: time-sync.target
     expert: true
-  - name: wittypid
+  - name: tsschedule
     expert: false
   - name: chrony
     expert: true
