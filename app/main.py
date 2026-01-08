@@ -45,7 +45,7 @@ tags_metadata = [
     },
     {
         "name": "authentication",
-        "description": "OIDC/Keycloak authentication endpoints for server mode (only available when OIDC is configured).",
+        "description": "OIDC authentication endpoints for server mode (only available when OIDC is configured).",
     },
     {
         "name": "schedule",

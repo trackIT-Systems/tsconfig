@@ -24,12 +24,12 @@ class OIDCConfig:
 
     def _load_from_env(self):
         """Load OIDC settings from environment variables."""
-        self.issuer_url = "https://auth.trackit.systems/realms/trackit-system.de"
-        self.client_id = "tsconfig-oauth"
+        self.domain = os.environ.get("DOMAIN")
+        self.issuer_url = f"https://auth.trackit.systems/application/o/{self.domain.replace('.', '-')}-tsconfig/"
+        self.client_id = f"{self.domain}/tsconfig"
         self.client_secret = os.environ.get("TSCONFIG_OAUTH_CLIENT_SECRET")
         self.redirect_uri = "https://wdev.trackit-system.de/tsconfig/auth/callback"
         self.scopes = "openid profile email groups"
-        self.domain = os.environ.get("DOMAIN")
 
     def is_configured(self) -> bool:
         """Check if OIDC is properly configured."""
@@ -72,7 +72,7 @@ class OIDCConfig:
         if self._discovery_cache is not None:
             return self._discovery_cache
 
-        discovery_url = f"{self.issuer_url}/.well-known/openid-configuration"
+        discovery_url = f"{self.issuer_url}.well-known/openid-configuration"
         logger.debug(f"Fetching OIDC discovery document from {discovery_url}")
 
         async with httpx.AsyncClient() as client:
