@@ -7,7 +7,6 @@ from urllib.parse import urlencode
 import httpx
 from authlib.jose import JsonWebKey, jwt
 from authlib.jose.errors import JoseError
-from authlib.oidc.core import CodeIDToken
 from itsdangerous import URLSafeTimedSerializer
 
 from app.auth.oidc_config import oidc_config
@@ -97,7 +96,7 @@ class OIDCHandler:
 
         authorization_url = f"{auth_endpoint}?{urlencode(params)}"
 
-        logger.debug(f"Generated authorization URL for OIDC login")
+        logger.debug("Generated authorization URL for OIDC login")
         return authorization_url, state, code_verifier
 
     async def handle_callback(self, code: str, state: str, code_verifier: str) -> Dict[str, Any]:
@@ -134,7 +133,7 @@ class OIDCHandler:
         if oidc_config.client_secret:
             data["client_secret"] = oidc_config.client_secret
 
-        logger.debug(f"Exchanging authorization code for tokens")
+        logger.debug("Exchanging authorization code for tokens")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -235,7 +234,6 @@ class OIDCHandler:
             "preferred_username": token_claims.get("preferred_username"),
             "given_name": token_claims.get("given_name"),
             "family_name": token_claims.get("family_name"),
-            "roles": token_claims.get("realm_access", {}).get("roles", []),
             "groups": token_claims.get("groups", []),
         }
 
