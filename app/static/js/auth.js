@@ -68,7 +68,7 @@ export const authManager = {
 
     /**
      * Logout the current user
-     * Redirects to the logout endpoint which handles Keycloak logout
+     * Redirects to the logout endpoint which handles OIDC logout
      */
     logout() {
         window.location.href = apiUrl('/auth/logout');

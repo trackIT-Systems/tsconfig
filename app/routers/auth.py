@@ -27,7 +27,7 @@ _pkce_store: dict[str, str] = {}
 @router.get(
     "/login",
     summary="Initiate OIDC login",
-    description="Redirects to Keycloak login page to start the authentication flow.",
+    description="Redirects to OIDC login page to start the authentication flow.",
 )
 async def login(return_to: Optional[str] = Query(None, description="URL to return to after successful login")):
     """Initiate OIDC authorization code flow."""
@@ -66,7 +66,7 @@ async def login(return_to: Optional[str] = Query(None, description="URL to retur
 @router.get(
     "/callback",
     summary="OIDC callback handler",
-    description="Handles the callback from Keycloak after user authentication.",
+    description="Handles the callback from OIDC after user authentication.",
     response_class=HTMLResponse,
 )
 async def callback(
@@ -97,7 +97,7 @@ async def callback(
         token_response = await oidc_handler.handle_callback(code, state, code_verifier)
 
         # Use ID token for authentication (it has the correct audience)
-        # Access tokens in Keycloak often have aud="account" instead of the client_id
+        # Access tokens in OIDC often have aud="account" instead of the client_id
         id_token = token_response.get("id_token")
         access_token = token_response.get("access_token")
         token = id_token or access_token
@@ -174,13 +174,13 @@ async def callback(
 @router.get(
     "/logout",
     summary="Logout",
-    description="Clears authentication cookie and ends Keycloak SSO session.",
+    description="Clears authentication cookie and ends OIDC SSO session.",
 )
 async def logout(
     request: Request,
     auth_token: Optional[str] = Cookie(None),
 ):
-    """Logout and clear authentication cookie, ending Keycloak SSO session."""
+    """Logout and clear authentication cookie, ending OIDC SSO session."""
     # Only available in server mode
     if not config_loader.is_server_mode():
         raise HTTPException(
@@ -197,7 +197,7 @@ async def logout(
             end_session_endpoint = await oidc_config.get_end_session_endpoint()
             if end_session_endpoint:
                 # Build post-logout redirect URL
-                # Extract base URL from redirect_uri (e.g., https://wdev.trackit-system.de/tsconfig)
+                # Extract base URL from redirect_uri
                 if oidc_config.redirect_uri:
                     # Remove /auth/callback from redirect_uri to get base
                     redirect_base = oidc_config.redirect_uri.rsplit("/auth/callback", 1)[0]
@@ -211,13 +211,13 @@ async def logout(
                 # URL encode the redirect URI
                 encoded_redirect = quote(post_logout_redirect, safe="")
 
-                # Build Keycloak logout URL
+                # Build OIDC logout URL
                 logout_url = (
                     f"{end_session_endpoint}?post_logout_redirect_uri={encoded_redirect}&id_token_hint={auth_token}"
                 )
-                logger.info(f"Redirecting to Keycloak logout with post_logout_redirect_uri: {post_logout_redirect}")
+                logger.info(f"Redirecting to OIDC logout with post_logout_redirect_uri: {post_logout_redirect}")
     except Exception as e:
-        logger.warning(f"Could not configure Keycloak logout: {e}")
+        logger.warning(f"Could not configure OIDC logout: {e}")
 
     # Clear authentication cookie
     response = RedirectResponse(url=logout_url, status_code=302)
