@@ -3,6 +3,7 @@ import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 import { apiUrl } from '../utils/apiUtils.js';
+import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
 
 export function tsupdateConfig() {
     return {
@@ -17,7 +18,11 @@ export function tsupdateConfig() {
             persist_timeout: 600,
             persist_timeout_hhmm: '00:10', // UI representation in HH:MM format
             update_countdown: 60,
-            update_countdown_hhmm: '00:01' // UI representation in HH:MM format
+            update_countdown_hhmm: '00:01', // UI representation in HH:MM format
+            do: 'nothing',
+            maintenance_check_interval: 3600,
+            maintenance_check_interval_hhmm: '01:00', // UI representation in HH:MM format
+            maintenance_do: 'check'
         },
         // Service status tracking
         serviceStatus: {
@@ -29,6 +34,10 @@ export function tsupdateConfig() {
         serviceStatusLoading: false,
         refreshInterval: null, // For periodic service status refresh
         actionLoading: false,
+        
+        // Maintenance schedule entry from schedule.yml (read by tsupdate)
+        maintenanceSchedule: null,
+        maintenanceScheduleLoading: false,
 
         // Server mode helper
         get serverMode() {
@@ -41,11 +50,18 @@ export function tsupdateConfig() {
             
             // Load configuration and set up periodic refresh
             await this.loadConfig();
+            await this.loadMaintenanceSchedule();
             await this.setupPeriodicRefresh();
             
             // Listen for config group changes in server mode
             window.addEventListener('config-group-changed', async () => {
                 await this.loadConfig();
+                await this.loadMaintenanceSchedule();
+            });
+            
+            // Listen for schedule changes to refresh maintenance schedule display
+            window.addEventListener('schedule-config-saved', async () => {
+                await this.loadMaintenanceSchedule();
             });
         },
 
@@ -116,6 +132,58 @@ export function tsupdateConfig() {
             const minutes = parseInt(parts[1], 10) || 0;
             return (hours * 3600) + (minutes * 60);
         },
+        
+        // Load maintenance schedule entry from schedule.yml
+        async loadMaintenanceSchedule() {
+            this.maintenanceScheduleLoading = true;
+            try {
+                // Build API URL with config_group parameter if in server mode
+                const url = window.serverModeManager?.buildApiUrl('/api/schedule') || '/api/schedule';
+                const response = await fetch(url);
+                if (response.status === 404) {
+                    this.maintenanceSchedule = null;
+                    return;
+                }
+                if (!response.ok) {
+                    console.warn('Failed to load schedule configuration for maintenance interval');
+                    this.maintenanceSchedule = null;
+                    return;
+                }
+                const scheduleData = await response.json();
+                
+                // Find the maintenance entry
+                const maintenanceEntry = scheduleData.schedule?.find(entry => entry.name === 'maintenance');
+                
+                if (maintenanceEntry) {
+                    // Process the entry to add UI helper properties (same as scheduleConfig does)
+                    const startParts = parseTimeString(maintenanceEntry.start);
+                    const stopParts = parseTimeString(maintenanceEntry.stop);
+                    
+                    this.maintenanceSchedule = {
+                        name: maintenanceEntry.name,
+                        start: maintenanceEntry.start,
+                        stop: maintenanceEntry.stop,
+                        startReference: startParts.reference,
+                        startSign: startParts.sign,
+                        startOffset: startParts.offset,
+                        stopReference: stopParts.reference,
+                        stopSign: stopParts.sign,
+                        stopOffset: stopParts.offset
+                    };
+                } else {
+                    this.maintenanceSchedule = null;
+                }
+            } catch (error) {
+                console.error('Failed to load maintenance schedule:', error);
+                this.maintenanceSchedule = null;
+            } finally {
+                this.maintenanceScheduleLoading = false;
+            }
+        },
+        
+        // Expose parseTimeString and updateTimeString for use in template
+        parseTimeString,
+        updateTimeString,
 
         async refreshConfig() {
             try {
@@ -129,7 +197,11 @@ export function tsupdateConfig() {
                     persist_timeout: 600,
                     persist_timeout_hhmm: '00:10',
                     update_countdown: 60,
-                    update_countdown_hhmm: '00:01'
+                    update_countdown_hhmm: '00:01',
+                    do: 'nothing',
+                    maintenance_check_interval: 3600,
+                    maintenance_check_interval_hhmm: '01:00',
+                    maintenance_do: 'check'
                 };
                 
                 // Reload the configuration
@@ -155,7 +227,11 @@ export function tsupdateConfig() {
                         persist_timeout: 600,
                         persist_timeout_hhmm: '00:10',
                         update_countdown: 60,
-                        update_countdown_hhmm: '00:01'
+                        update_countdown_hhmm: '00:01',
+                        do: 'nothing',
+                        maintenance_check_interval: 3600,
+                        maintenance_check_interval_hhmm: '01:00',
+                        maintenance_do: 'check'
                     };
                     this.showMessage("No tsupdate configuration found. Using default values.", false);
                     return;
@@ -172,6 +248,21 @@ export function tsupdateConfig() {
                 data.check_interval_hhmm = this.secondsToHHMM(data.check_interval || 3600);
                 data.persist_timeout_hhmm = this.secondsToHHMM(data.persist_timeout || 600);
                 data.update_countdown_hhmm = this.secondsToHHMM(data.update_countdown || 60);
+                // Convert maintenance_check_interval if present, otherwise use default
+                if (data.maintenance_check_interval !== null && data.maintenance_check_interval !== undefined) {
+                    data.maintenance_check_interval_hhmm = this.secondsToHHMM(data.maintenance_check_interval);
+                } else {
+                    data.maintenance_check_interval = 3600;
+                    data.maintenance_check_interval_hhmm = '01:00';
+                }
+                // Ensure do has a default value
+                if (!data.do) {
+                    data.do = 'nothing';
+                }
+                // Ensure maintenance_do has a default value
+                if (!data.maintenance_do) {
+                    data.maintenance_do = 'check';
+                }
                 this.config = data;
                 
                 // Load service status only in tracker mode (default mode)
@@ -188,11 +279,25 @@ export function tsupdateConfig() {
                 // Build API URL with config_group parameter if in server mode
                 const url = window.serverModeManager?.buildApiUrl('/api/tsupdate') || '/api/tsupdate';
                 
-                // Prepare config for sending - convert HH:MM to seconds and remove UI-only field
+                // Prepare config for sending - convert HH:MM to seconds and remove UI-only fields
                 const configToSend = { ...this.config };
                 // Convert check_interval_hhmm to check_interval (seconds)
                 configToSend.check_interval = this.hhmmToSeconds(configToSend.check_interval_hhmm);
                 delete configToSend.check_interval_hhmm; // Remove UI-only field
+                
+                // Convert maintenance_check_interval_hhmm if present and not empty
+                if (configToSend.maintenance_check_interval_hhmm && configToSend.maintenance_check_interval_hhmm.trim() !== '') {
+                    configToSend.maintenance_check_interval = this.hhmmToSeconds(configToSend.maintenance_check_interval_hhmm);
+                }
+                delete configToSend.maintenance_check_interval_hhmm; // Remove UI-only field
+                
+                // Remove null/empty optional maintenance fields
+                if (configToSend.maintenance_check_interval === null || configToSend.maintenance_check_interval === undefined) {
+                    delete configToSend.maintenance_check_interval;
+                }
+                if (configToSend.maintenance_do === null || configToSend.maintenance_do === undefined || configToSend.maintenance_do === '') {
+                    delete configToSend.maintenance_do;
+                }
                 
                 if (configToSend.github_url === '') {
                     configToSend.github_url = null;
@@ -237,10 +342,23 @@ export function tsupdateConfig() {
                 configToSend.check_interval = this.hhmmToSeconds(configToSend.check_interval_hhmm);
                 configToSend.persist_timeout = this.hhmmToSeconds(configToSend.persist_timeout_hhmm);
                 configToSend.update_countdown = this.hhmmToSeconds(configToSend.update_countdown_hhmm);
+                // Convert maintenance_check_interval_hhmm if present and not empty
+                if (configToSend.maintenance_check_interval_hhmm && configToSend.maintenance_check_interval_hhmm.trim() !== '') {
+                    configToSend.maintenance_check_interval = this.hhmmToSeconds(configToSend.maintenance_check_interval_hhmm);
+                }
                 // Remove UI-only fields
                 delete configToSend.check_interval_hhmm;
                 delete configToSend.persist_timeout_hhmm;
                 delete configToSend.update_countdown_hhmm;
+                delete configToSend.maintenance_check_interval_hhmm;
+                
+                // Remove null/empty optional maintenance fields
+                if (configToSend.maintenance_check_interval === null || configToSend.maintenance_check_interval === undefined) {
+                    delete configToSend.maintenance_check_interval;
+                }
+                if (configToSend.maintenance_do === null || configToSend.maintenance_do === undefined || configToSend.maintenance_do === '') {
+                    delete configToSend.maintenance_do;
+                }
                 
                 if (configToSend.github_url === '') {
                     configToSend.github_url = null;

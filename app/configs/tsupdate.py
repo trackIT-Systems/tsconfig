@@ -49,6 +49,7 @@ class TsupdateConfig(BaseConfig):
             "max_releases": 5,
             "persist_timeout": 600,
             "update_countdown": 60,
+            "do": "nothing",
         }
         
         # Merge defaults with loaded data
@@ -124,6 +125,30 @@ class TsupdateConfig(BaseConfig):
                     errors.append("update_countdown must be a positive integer")
             except (ValueError, TypeError):
                 errors.append("update_countdown must be a valid integer")
+
+        # Validate do (regular behavior)
+        do = config.get("do")
+        if do is not None:
+            valid_values = ["nothing", "check", "download", "apply"]
+            if do not in valid_values:
+                errors.append(f"do must be one of: {', '.join(valid_values)}")
+
+        # Validate maintenance_check_interval (optional)
+        maintenance_check_interval = config.get("maintenance_check_interval")
+        if maintenance_check_interval is not None:
+            try:
+                interval = int(maintenance_check_interval)
+                if interval <= 0:
+                    errors.append("maintenance_check_interval must be a positive integer")
+            except (ValueError, TypeError):
+                errors.append("maintenance_check_interval must be a valid integer")
+
+        # Validate maintenance_do (optional)
+        maintenance_do = config.get("maintenance_do")
+        if maintenance_do is not None:
+            valid_values = ["nothing", "check", "download", "apply"]
+            if maintenance_do not in valid_values:
+                errors.append(f"maintenance_do must be one of: {', '.join(valid_values)}")
 
         return errors
 

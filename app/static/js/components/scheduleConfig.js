@@ -276,6 +276,9 @@ export function scheduleConfig() {
                 }
                 const data = await response.json();
                 this.showMessage(data.message, false);  // false means not an error, so it will be success
+                
+                // Dispatch event to notify other components (e.g., tsupdate) that schedule config was saved
+                window.dispatchEvent(new CustomEvent('schedule-config-saved'));
             };
             
             await this.handleSaveConfig(configSaveFunction);
@@ -330,6 +333,9 @@ export function scheduleConfig() {
                 }
                 
                 this.showMessage(`Configuration saved and ${data.message}`, false);
+                
+                // Dispatch event to notify other components (e.g., tsupdate) that schedule config was saved
+                window.dispatchEvent(new CustomEvent('schedule-config-saved'));
                 
                 // Refresh service status after restart (only in tracker mode)
                 if (!this.serverMode) {

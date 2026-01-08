@@ -826,20 +826,22 @@
                         </div>
                         <div class="card-body">
                             <form @submit.prevent="saveConfig">
-                                <!-- Check Interval Section -->
+                                <!-- Regular Behavior Section -->
                                 <div class="mb-4">
                                     <h6 class="border-bottom pb-2">
-                                        <i class="fas fa-clock me-2"></i>
-                                        Update Checking
+                                        <i class="fas fa-calendar-alt me-2"></i>
+                                        Regular Behavior
                                     </h6>
+                                    <div class="form-text mb-3">
+                                        Applies outside maintenance window or when no maintenance schedule is configured.
+                                    </div>
                                     
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">Check Interval (HH:MM)</label>
-                                            <input type="text" 
+                                            <label class="form-label">Check Interval</label>
+                                            <input type="time" 
                                                    class="form-control" 
                                                    x-model="config.check_interval_hhmm"
-                                                   pattern="[0-9]{2}:[0-9]{2}" 
                                                    required>
                                             <div class="form-text">
                                                 How often the daemon checks for updates. Default: 01:00 (1 hour).
@@ -847,6 +849,184 @@
                                         </div>
                                         
                                         <div class="col-md-6 mb-3">
+                                            <label class="form-label">Update Action</label>
+                                            <select class="form-select" 
+                                                    x-model="config.do"
+                                                    required>
+                                                <option value="nothing">Nothing - Skip update check entirely</option>
+                                                <option value="check">Check - Check for updates but don't download or apply</option>
+                                                <option value="download">Download - Check and download updates but don't apply</option>
+                                                <option value="apply">Apply - Perform full update workflow (check → download → sync → apply → reboot)</option>
+                                            </select>
+                                            <div class="form-text">
+                                                What to do when checking for updates. Default: check.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Maintenance Behavior Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-tools me-2"></i>
+                                        Maintenance Behavior
+                                    </h6>
+                                    <div class="form-text mb-3">
+                                        Applies inside maintenance window. If not specified, uses regular behavior settings.
+                                    </div>
+                                    
+                                    <template x-if="maintenanceScheduleLoading">
+                                        <div class="text-center py-3">
+                                            <i class="fas fa-spinner fa-spin me-2"></i>
+                                            Loading maintenance schedule...
+                                        </div>
+                                    </template>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Check Interval</label>
+                                            <input type="time" 
+                                                   class="form-control" 
+                                                   x-model="config.maintenance_check_interval_hhmm">
+                                            <div class="form-text">
+                                                How often to check for updates during maintenance window. If not specified, uses the regular check interval.
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Update Action</label>
+                                            <select class="form-select" 
+                                                    x-model="config.maintenance_do">
+                                                <option :value="null">Use regular behavior</option>
+                                                <option value="nothing">Nothing - Skip update check entirely</option>
+                                                <option value="check">Check - Check for updates but don't download or apply</option>
+                                                <option value="download">Download - Check and download updates but don't apply</option>
+                                                <option value="apply">Apply - Perform full update workflow (check → download → sync → apply → reboot)</option>
+                                            </select>
+                                            <div class="form-text">
+                                                What to do when checking for updates during maintenance window. If not specified, defaults to "apply" when maintenance schedule exists.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <template x-if="!maintenanceScheduleLoading && maintenanceSchedule">
+                                        <div class="rounded-2 p-3 mb-3 bg-light border border-info border-2">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                    <i class="fas fa-clock text-primary me-2"></i>
+                                                    <input type="text" 
+                                                            class="form-control form-control-sm fw-medium bg-secondary bg-opacity-10 text-muted" 
+                                                            x-model="maintenanceSchedule.name" 
+                                                            readonly
+                                                            disabled>
+                                                    <span class="badge bg-info text-white ms-2" title="This schedule entry is used by tsupdate">
+                                                        <i class="fas fa-info-circle me-1"></i>System maintenance
+                                                    </span>
+                                                </div>
+                                                <a href="#settings/schedule" 
+                                                   class="btn btn-outline-primary btn-sm" 
+                                                   title="Edit in Schedule section">
+                                                    <i class="fas fa-edit me-1"></i>
+                                                    Edit
+                                                </a>
+                                            </div>
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                            <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="maintenanceSchedule.startReference"
+                                                                        disabled>
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="maintenanceSchedule.startSign"
+                                                                        disabled>
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                        class="form-control form-control-sm" 
+                                                                        style="width: 110px;"
+                                                                        x-model="maintenanceSchedule.startOffset"
+                                                                        disabled>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                            <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                        </label>
+                                                        <div class="row g-1 flex-grow-1">
+                                                            <div class="col">
+                                                                <select class="form-select form-select-sm" 
+                                                                        x-model="maintenanceSchedule.stopReference"
+                                                                        disabled>
+                                                                    <option value="time">Clock Time</option>
+                                                                    <option value="sunrise">Sunrise</option>
+                                                                    <option value="sunset">Sunset</option>
+                                                                    <option value="dawn">Dawn</option>
+                                                                    <option value="dusk">Dusk</option>
+                                                                    <option value="noon">Solar Noon</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <select class="form-select form-select-sm" 
+                                                                        style="width: 70px;"
+                                                                        x-model="maintenanceSchedule.stopSign"
+                                                                        disabled>
+                                                                    <option value="+">+</option>
+                                                                    <option value="-">-</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-auto">
+                                                                <input type="time" 
+                                                                        class="form-control form-control-sm" 
+                                                                        style="width: 110px;"
+                                                                        x-model="maintenanceSchedule.stopOffset"
+                                                                        disabled>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    
+                                    <template x-if="!maintenanceScheduleLoading && !maintenanceSchedule">
+                                        <div class="alert alert-warning mb-3">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            No maintenance schedule entry found. 
+                                            <a href="#settings/schedule" class="alert-link">Create a schedule entry named "maintenance"</a> in the Schedule tab.
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- Update Handling Section -->
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-cog me-2"></i>
+                                        Update Handling
+                                    </h6>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
                                             <label class="form-label">Include Pre-releases</label>
                                             <div class="form-check form-switch mt-2">
                                                 <input class="form-check-input" 
@@ -861,35 +1041,23 @@
                                                 When enabled, the daemon will check for and apply pre-release updates.
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- Reboot Behavior Section -->
-                                <div class="mb-4">
-                                    <h6 class="border-bottom pb-2">
-                                        <i class="fas fa-power-off me-2"></i>
-                                        Reboot Behavior
-                                    </h6>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Persist Timeout (HH:MM)</label>
-                                            <input type="text" 
+                                        
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Persist Timeout</label>
+                                            <input type="time" 
                                                    class="form-control" 
                                                    x-model="config.persist_timeout_hhmm"
-                                                   pattern="[0-9]{2}:[0-9]{2}" 
                                                    required>
                                             <div class="form-text">
                                                 System uptime threshold before persisting tryboot configuration. Default: 00:10 (10 minutes).
                                             </div>
                                         </div>
                                         
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Update Countdown (HH:MM)</label>
-                                            <input type="text" 
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Update Countdown</label>
+                                            <input type="time" 
                                                    class="form-control" 
                                                    x-model="config.update_countdown_hhmm"
-                                                   pattern="[0-9]{2}:[0-9]{2}" 
                                                    required>
                                             <div class="form-text">
                                                 Countdown before initiating tryboot reboot after update. Default: 00:01 (1 minute).
