@@ -30,7 +30,7 @@ services:
     expert: true 
   - name: mosquitto
     expert: true
-  - name: tsupdated
+  - name: tsupdate
     expert: true
   - name: tsconfig
     expert: true

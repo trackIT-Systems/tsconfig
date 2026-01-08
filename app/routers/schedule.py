@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from fastapi import Query
+from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
 from app.configs.schedule import ScheduleConfig, ScheduleEntry

@@ -239,22 +239,41 @@
                                     </h6>
                                     <div class="form-text mb-3">Define time spans during which the tracker will be on. You can create multiple entries, and overlapping entries are allowed - the tracker will stay on continuously if entries overlap.</div>
                                     <template x-for="(entry, index) in config.schedule" :key="index">
-                                        <div class="bg-light rounded-2 p-3 mb-2">
+                                        <div class="rounded-2 p-3 mb-2" 
+                                             :class="isFirstMaintenanceEntry(index) ? 'bg-light border border-info border-2' : 'bg-light'">
                                             <div class="d-flex align-items-center justify-content-between mb-3">
                                                 <div class="d-flex align-items-center flex-grow-1 me-3">
                                                     <i class="fas fa-clock text-primary me-2"></i>
                                                     <input type="text" 
                                                             class="form-control form-control-sm fw-medium" 
+                                                            :class="isMaintenanceEntryProtected(index) ? 'bg-secondary bg-opacity-10 text-muted' : ''"
                                                             x-model="entry.name" 
+                                                            :readonly="isMaintenanceEntryProtected(index)"
+                                                            @blur="if (checkDuplicateMaintenanceName(entry.name, index)) { showMessage('A schedule entry named \"maintenance\" already exists. Only one maintenance entry is allowed.', true); entry.name = ''; }"
                                                             placeholder="Enter schedule name..." 
                                                             required>
+                                                    <template x-if="isFirstMaintenanceEntry(index)">
+                                                        <span class="badge bg-info text-white ms-2" title="This schedule entry is protected">
+                                                            <i class="fas fa-lock me-1"></i>System maintenance
+                                                        </span>
+                                                    </template>
                                                 </div>
+                                                <template x-if="!isMaintenanceEntryProtected(index)">
                                                 <button type="button" 
                                                         class="btn btn-outline-danger btn-sm" 
                                                         @click="removeSchedule(index)"
                                                         title="Remove schedule">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
+                                                </template>
+                                                <template x-if="isMaintenanceEntryProtected(index)">
+                                                    <button type="button" 
+                                                            class="btn btn-outline-secondary btn-sm" 
+                                                            disabled
+                                                            title="Cannot delete maintenance schedule entry. Enable expert mode to delete it.">
+                                                        <i class="fas fa-lock"></i>
+                                                    </button>
+                                                </template>
                                             </div>
                                             <div class="row g-3">
                                                 <div class="col-md-6">
@@ -715,7 +734,7 @@
                                 <!-- Service status elements - hidden in server mode -->
                                 <template x-if="!serverMode">
                                     <div class="d-flex align-items-center">
-                                        <h5 class="card-title mb-0 me-2">tsupdated</h5>
+                                        <h5 class="card-title mb-0 me-2">tsupdate</h5>
                                         <!-- Service Status Indicator -->
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="badge d-flex align-items-center gap-1" 
@@ -745,31 +764,31 @@
                                 <button type="button" 
                                         class="btn btn-sm" 
                                         :class="{
-                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle') || getServiceStartStopState('tsupdated') === 'started',
-                                            'btn-success': getServiceStartStopState('tsupdated') === 'starting',
-                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle') || getServiceStartStopState('tsupdated') === 'stopped',
-                                            'btn-danger': getServiceStartStopState('tsupdated') === 'stopping'
+                                            'btn-outline-success': (!serviceStatus.active && getServiceStartStopState('tsupdate') === 'idle') || getServiceStartStopState('tsupdate') === 'started',
+                                            'btn-success': getServiceStartStopState('tsupdate') === 'starting',
+                                            'btn-outline-danger': (serviceStatus.active && getServiceStartStopState('tsupdate') === 'idle') || getServiceStartStopState('tsupdate') === 'stopped',
+                                            'btn-danger': getServiceStartStopState('tsupdate') === 'stopping'
                                         }"
-                                        @click="performStartStopAction('tsupdated', serviceStatus.active ? 'stop' : 'start')"
-                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('tsupdated') === 'starting' || getServiceStartStopState('tsupdated') === 'stopping'"
+                                        @click="performStartStopAction('tsupdate', serviceStatus.active ? 'stop' : 'start')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceStartStopState('tsupdate') === 'starting' || getServiceStartStopState('tsupdate') === 'stopping'"
                                         :title="serviceStatus.active ? 'Stop service' : 'Start service'"
                                         x-show="!serverMode">
-                                    <template x-if="!serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle'">
+                                    <template x-if="!serviceStatus.active && getServiceStartStopState('tsupdate') === 'idle'">
                                         <i class="fas fa-play"></i>
                                     </template>
-                                    <template x-if="serviceStatus.active && getServiceStartStopState('tsupdated') === 'idle'">
+                                    <template x-if="serviceStatus.active && getServiceStartStopState('tsupdate') === 'idle'">
                                         <i class="fas fa-stop"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('tsupdated') === 'starting'">
+                                    <template x-if="getServiceStartStopState('tsupdate') === 'starting'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('tsupdated') === 'stopping'">
+                                    <template x-if="getServiceStartStopState('tsupdate') === 'stopping'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('tsupdated') === 'started'">
+                                    <template x-if="getServiceStartStopState('tsupdate') === 'started'">
                                         <i class="fas fa-check"></i>
                                     </template>
-                                    <template x-if="getServiceStartStopState('tsupdated') === 'stopped'">
+                                    <template x-if="getServiceStartStopState('tsupdate') === 'stopped'">
                                         <i class="fas fa-check"></i>
                                     </template>
                                 </button>
@@ -777,28 +796,28 @@
                                 <button type="button" 
                                         class="btn btn-sm" 
                                         :class="{
-                                            'btn-outline-warning': getServiceRestartState('tsupdated') === 'idle',
-                                            'btn-primary': getServiceRestartState('tsupdated') === 'restarting',
-                                            'btn-outline-success': getServiceRestartState('tsupdated') === 'restarted'
+                                            'btn-outline-warning': getServiceRestartState('tsupdate') === 'idle',
+                                            'btn-primary': getServiceRestartState('tsupdate') === 'restarting',
+                                            'btn-outline-success': getServiceRestartState('tsupdate') === 'restarted'
                                         }"
-                                        @click="performAction('tsupdated', 'restart')"
-                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('tsupdated') === 'restarting'"
+                                        @click="performAction('tsupdate', 'restart')"
+                                        :disabled="actionLoading || serviceStatus.status === 'not-found' || getServiceRestartState('tsupdate') === 'restarting'"
                                         title="Restart service"
                                         x-show="!serverMode">
-                                    <template x-if="getServiceRestartState('tsupdated') === 'idle'">
+                                    <template x-if="getServiceRestartState('tsupdate') === 'idle'">
                                         <i class="fas fa-redo"></i>
                                     </template>
-                                    <template x-if="getServiceRestartState('tsupdated') === 'restarting'">
+                                    <template x-if="getServiceRestartState('tsupdate') === 'restarting'">
                                         <i class="fas fa-spinner fa-spin"></i>
                                     </template>
-                                    <template x-if="getServiceRestartState('tsupdated') === 'restarted'">
+                                    <template x-if="getServiceRestartState('tsupdate') === 'restarted'">
                                         <i class="fas fa-check"></i>
                                     </template>
                                 </button>
                                 <button type="button" 
                                         class="btn btn-outline-info btn-sm" 
-                                        @click="streamLogs('tsupdated')"
-                                        title="View tsupdated service logs"
+                                        @click="streamLogs('tsupdate')"
+                                        title="View tsupdate service logs"
                                         x-show="!serverMode">
                                     <i class="fas fa-file-alt me-1"></i>
                                     Logs
@@ -845,37 +864,6 @@
                                     </div>
                                 </div>
 
-                                <!-- GitHub URL Override Section -->
-                                <div class="mb-4">
-                                    <h6 class="border-bottom pb-2">
-                                        <i class="fab fa-github me-2"></i>
-                                        Repository Settings
-                                    </h6>
-                                    
-                                    <div class="mb-3">
-                                        <label class="form-label">GitHub URL Override (optional)</label>
-                                        <input type="url" 
-                                               class="form-control" 
-                                               x-model="config.github_url"
-                                               placeholder="https://github.com/owner/repo">
-                                        <div class="form-text">
-                                            Optional. Override the default GitHub repository URL. If not set, uses SUPPORT_URL from /etc/os-release.
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label class="form-label">Max Releases</label>
-                                        <input type="number" 
-                                               class="form-control" 
-                                               x-model.number="config.max_releases"
-                                               min="1"
-                                               required>
-                                        <div class="form-text">
-                                            Maximum number of recent releases to check for batch updates. Default: 5.
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <!-- Reboot Behavior Section -->
                                 <div class="mb-4">
                                     <h6 class="border-bottom pb-2">
@@ -906,6 +894,38 @@
                                             <div class="form-text">
                                                 Countdown before initiating tryboot reboot after update. Default: 00:01 (1 minute).
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- GitHub URL Override Section (Expert Mode) -->
+                                <div class="mb-4" x-show="expertMode" x-transition>
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fab fa-github me-2"></i>
+                                        Repository Settings
+                                        <small class="text-muted ms-2">(Expert Mode)</small>
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">GitHub URL Override (optional)</label>
+                                        <input type="url" 
+                                               class="form-control" 
+                                               x-model="config.github_url"
+                                               placeholder="https://github.com/owner/repo">
+                                        <div class="form-text">
+                                            Optional. Override the default GitHub repository URL. If not set, uses SUPPORT_URL from /etc/os-release.
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Max Releases</label>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               x-model.number="config.max_releases"
+                                               min="1"
+                                               required>
+                                        <div class="form-text">
+                                            Maximum number of recent releases to check for batch updates. Default: 5.
                                         </div>
                                     </div>
                                 </div>

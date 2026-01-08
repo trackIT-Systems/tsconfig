@@ -25,15 +25,50 @@ export function scheduleConfig() {
         serviceStatusLoading: false,
         refreshInterval: null, // For periodic service status refresh
         actionLoading: false,
+        expertModeCheckInterval: null, // For polling expert mode changes
+        _expertMode: false, // Internal reactive property for expert mode
 
         // Server mode helper
         get serverMode() {
             return window.serverModeManager?.isEnabled() || false;
         },
 
+        // Expert mode - reactive property that gets updated from URL
+        get expertMode() {
+            return this._expertMode;
+        },
+
+        updateExpertMode() {
+            // Read expert mode from URL parameter (same source as configManager uses)
+            const urlParams = new URLSearchParams(window.location.search);
+            const newExpertMode = urlParams.get('expert') === 'true';
+            if (this._expertMode !== newExpertMode) {
+                this._expertMode = newExpertMode;
+            }
+        },
+
         async init() {
             // Small delay to prevent simultaneous API calls during page load
             await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Initialize expert mode from URL
+            this.updateExpertMode();
+            
+            // Set up polling to detect expert mode changes
+            // (history.replaceState doesn't trigger events, so we poll)
+            this.expertModeCheckInterval = setInterval(() => {
+                this.updateExpertMode();
+            }, 100); // Check every 100ms
+            
+            // Watch for URL changes (expert mode is stored in URL)
+            window.addEventListener('popstate', () => {
+                this.updateExpertMode();
+            });
+            
+            // Watch for hash changes
+            window.addEventListener('hashchange', () => {
+                this.updateExpertMode();
+            });
             
             // Load configuration and set up periodic refresh
             await this.loadConfig();
@@ -65,10 +100,14 @@ export function scheduleConfig() {
         },
 
         cleanup() {
-            // Clean up interval when component is destroyed
+            // Clean up intervals when component is destroyed
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
                 this.refreshInterval = null;
+            }
+            if (this.expertModeCheckInterval) {
+                clearInterval(this.expertModeCheckInterval);
+                this.expertModeCheckInterval = null;
             }
         },
 
@@ -170,7 +209,43 @@ export function scheduleConfig() {
             });
         },
 
+        checkDuplicateMaintenanceName(name, currentIndex) {
+            // Check if another entry (not the current one) already has the name 'maintenance'
+            if (name === 'maintenance') {
+                const duplicateIndex = this.config.schedule.findIndex((entry, index) => 
+                    entry.name === 'maintenance' && index !== currentIndex
+                );
+                return duplicateIndex !== -1;
+            }
+            return false;
+        },
+
+        isFirstMaintenanceEntry(index) {
+            // Check if this is the first entry with name 'maintenance'
+            const entry = this.config.schedule[index];
+            if (!entry || entry.name !== 'maintenance') {
+                return false;
+            }
+            // Find the first maintenance entry index
+            const firstMaintenanceIndex = this.config.schedule.findIndex(e => e.name === 'maintenance');
+            return firstMaintenanceIndex === index;
+        },
+
+        isMaintenanceEntryProtected(index) {
+            // Maintenance entry is only protected if it's the first one AND not in expert mode
+            if (!this.isFirstMaintenanceEntry(index)) {
+                return false;
+            }
+            // expertMode is a reactive property that gets updated via polling
+            return !this.expertMode;
+        },
+
         removeSchedule(index) {
+            const entry = this.config.schedule[index];
+            if (this.isMaintenanceEntryProtected(index)) {
+                this.showMessage('Cannot delete the "maintenance" schedule entry. Enable expert mode to delete it.', true);
+                return;
+            }
             this.config.schedule.splice(index, 1);
         },
 

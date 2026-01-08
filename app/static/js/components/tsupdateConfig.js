@@ -80,13 +80,13 @@ export function tsupdateConfig() {
             this.serviceStatusLoading = true;
             try {
                 const services = await serviceManager.getServices();
-                const tsupdatedService = services.find(service => service.name === 'tsupdated');
-                if (tsupdatedService) {
+                const tsupdateService = services.find(service => service.name === 'tsupdate');
+                if (tsupdateService) {
                     this.serviceStatus = {
-                        active: tsupdatedService.active,
-                        enabled: tsupdatedService.enabled,
-                        status: tsupdatedService.status,
-                        uptime: tsupdatedService.uptime || 'N/A'
+                        active: tsupdateService.active,
+                        enabled: tsupdateService.enabled,
+                        status: tsupdateService.status,
+                        uptime: tsupdateService.uptime || 'N/A'
                     };
                 }
             } catch (error) {
@@ -272,14 +272,14 @@ export function tsupdateConfig() {
             };
             
             const restartFunction = async () => {
-                // Then restart the tsupdated service
+                // Then restart the tsupdate service
                 const response = await fetch(apiUrl('/api/systemd/action'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        service: 'tsupdated',
+                        service: 'tsupdate',
                         action: 'restart'
                     })
                 });
@@ -287,7 +287,7 @@ export function tsupdateConfig() {
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.detail || 'Failed to restart tsupdated service');
+                    throw new Error(data.detail || 'Failed to restart tsupdate service');
                 }
                 
                 this.showMessage(`Configuration saved and ${data.message}`, false);
