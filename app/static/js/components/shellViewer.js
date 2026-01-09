@@ -11,13 +11,26 @@ export function shellViewer() {
         fitAddon: null,
         resizeObserver: null,
         resizeHandler: null,
+        hasFocused: false,
+        modalShowHandler: null,
+        modalHideHandler: null,
+        clickHandler: null,
+        initialized: false,
 
         init() {
+            // Only initialize once to prevent duplicate event listeners
+            if (this.initialized) {
+                return;
+            }
+            this.initialized = true;
+            
             // Generate a unique session ID
             this.sessionId = 'shell_' + Math.random().toString(36).substr(2, 9);
             
-            // Handle modal show event
-            document.getElementById('shellModal').addEventListener('shown.bs.modal', () => {
+            const modal = document.getElementById('shellModal');
+            
+            // Store handlers so they can be removed if needed
+            this.modalShowHandler = () => {
                 // Generate a new session ID each time the modal is opened
                 this.sessionId = 'shell_' + Math.random().toString(36).substr(2, 9);
                 
@@ -25,6 +38,7 @@ export function shellViewer() {
                 this.isConnected = false;
                 this.isConnecting = false;
                 this.connectionError = null;
+                this.hasFocused = false;
                 
                 this.$nextTick(() => {
                     this.initTerminal();
@@ -32,10 +46,9 @@ export function shellViewer() {
                         this.connect();
                     }, 200); // Give terminal more time to initialize
                 });
-            });
+            };
 
-            // Handle modal hide event
-            document.getElementById('shellModal').addEventListener('hidden.bs.modal', () => {
+            this.modalHideHandler = () => {
                 this.disconnect();
                 this.destroyTerminal();
                 
@@ -44,7 +57,11 @@ export function shellViewer() {
                 this.isConnecting = false;
                 this.connectionError = null;
                 this.websocket = null;
-            });
+            };
+            
+            // Add event listeners
+            modal.addEventListener('shown.bs.modal', this.modalShowHandler);
+            modal.addEventListener('hidden.bs.modal', this.modalHideHandler);
         },
 
         initTerminal() {
@@ -100,6 +117,13 @@ export function shellViewer() {
                     this.fitTerminal();
                 }, 100);
             });
+            
+            // Add click handler to focus terminal when clicked (fallback)
+            // Store handler reference for cleanup
+            this.clickHandler = () => {
+                this.focusTerminal();
+            };
+            terminalContainer.addEventListener('click', this.clickHandler);
 
             // Handle window resize
             this.resizeHandler = () => {
@@ -113,6 +137,36 @@ export function shellViewer() {
                 this.fitTerminal();
             });
             this.resizeObserver.observe(modal);
+        },
+
+        focusTerminal() {
+            if (this.terminal) {
+                try {
+                    // Try multiple methods to ensure focus works
+                    this.terminal.focus();
+                    
+                    // Also try focusing the textarea element directly (xterm.js uses this for input)
+                    // The textarea is in the terminal's element tree
+                    const terminalElement = this.terminal.element;
+                    if (terminalElement) {
+                        // Try to find the textarea element used by xterm.js
+                        const textarea = terminalElement.querySelector('.xterm-helper-textarea');
+                        if (textarea) {
+                            // Use setTimeout to ensure DOM is ready
+                            setTimeout(() => {
+                                textarea.focus();
+                                // Also try click to ensure focus is captured
+                                textarea.click();
+                            }, 0);
+                        }
+                        
+                        // Also try focusing the terminal element itself
+                        terminalElement.focus();
+                    }
+                } catch (error) {
+                    console.warn('Error focusing terminal:', error);
+                }
+            }
         },
 
         fitTerminal() {
@@ -222,6 +276,14 @@ export function shellViewer() {
                     
                     if (data.type === 'output' && this.terminal) {
                         this.terminal.write(data.data);
+                        // Focus terminal when we receive first output (shell is ready)
+                        if (!this.hasFocused && this.isConnected) {
+                            // Wait a bit for the output to be written, then focus
+                            setTimeout(() => {
+                                this.focusTerminal();
+                                this.hasFocused = true;
+                            }, 100);
+                        }
                     } else if (data.type === 'error') {
                         if (this.terminal) {
                             this.terminal.write(`\x1b[31mError: ${data.data}\x1b[0m\r\n`);
@@ -230,7 +292,27 @@ export function shellViewer() {
                     } else if (data.type === 'exit') {
                         if (this.terminal) {
                             this.terminal.write(`\x1b[33m\r\n${data.data}\x1b[0m\r\n`);
-                            this.terminal.write('\x1b[90mConnection will close automatically...\x1b[0m\r\n');
+                            // If exit code is 0 (normal exit), automatically close the modal
+                            if (data.exit_code === 0) {
+                                this.terminal.write('\x1b[90mShell exited normally. Closing...\x1b[0m\r\n');
+                                // Close modal after a short delay to show the message
+                                setTimeout(() => {
+                                    const modalElement = document.getElementById('shellModal');
+                                    if (modalElement) {
+                                        // Try to get existing modal instance
+                                        let modal = bootstrap.Modal.getInstance(modalElement);
+                                        // If no instance exists, create one
+                                        if (!modal) {
+                                            modal = new bootstrap.Modal(modalElement);
+                                        }
+                                        if (modal) {
+                                            modal.hide();
+                                        }
+                                    }
+                                }, 500);
+                            } else {
+                                this.terminal.write('\x1b[90mConnection will close automatically...\x1b[0m\r\n');
+                            }
                         }
                         // Mark as disconnected
                         this.isConnected = false;
@@ -309,6 +391,13 @@ export function shellViewer() {
             if (this.resizeHandler) {
                 window.removeEventListener('resize', this.resizeHandler);
                 this.resizeHandler = null;
+            }
+            
+            // Remove click handler to prevent accumulation
+            const terminalContainer = document.getElementById('terminal');
+            if (terminalContainer && this.clickHandler) {
+                terminalContainer.removeEventListener('click', this.clickHandler);
+                this.clickHandler = null;
             }
             
             // Clean up terminal and addon carefully

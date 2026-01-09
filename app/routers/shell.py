@@ -54,6 +54,7 @@ class PtyProcess:
         self.fd = None
         self.process = None
         self.running = False
+        self.exit_code = None  # Store exit code when process exits
         self.cols = 80  # Default terminal width
         self.rows = 24  # Default terminal height
 
@@ -123,14 +124,20 @@ class PtyProcess:
                 # Process is still running
                 return True
             else:
-                # Process has exited
-                logger.info(f"Shell process {self.pid} exited with status {status}")
+                # Process has exited - extract exit code
+                if os.WIFEXITED(status):
+                    self.exit_code = os.WEXITSTATUS(status)
+                else:
+                    # Process was killed by signal
+                    self.exit_code = -1
+                logger.info(f"Shell process {self.pid} exited with status {status}, exit code: {self.exit_code}")
                 self.running = False
                 return False
         except (OSError, ChildProcessError) as e:
             # Process doesn't exist or other error
             logger.info(f"Shell process {self.pid} is no longer alive: {e}")
             self.running = False
+            self.exit_code = -1  # Unknown exit code
             return False
 
     def resize(self, cols: int, rows: int):
@@ -234,7 +241,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             # Process has died, send termination message and close connection
             if not pty_process.is_alive():
                 try:
-                    await websocket.send_text(json.dumps({"type": "exit", "data": "Shell process has exited"}))
+                    exit_code = pty_process.exit_code if hasattr(pty_process, 'exit_code') else None
+                    exit_message = "Shell process has exited"
+                    if exit_code == 0:
+                        exit_message = "Shell process exited normally"
+                    elif exit_code is not None:
+                        exit_message = f"Shell process exited with code {exit_code}"
+                    
+                    await websocket.send_text(json.dumps({
+                        "type": "exit", 
+                        "data": exit_message,
+                        "exit_code": exit_code
+                    }))
                     await websocket.close(code=1000, reason="Shell process exited")
                 except Exception as e:
                     logger.warning(f"Error sending exit notification: {e}")
