@@ -46,3 +46,5 @@ services:
     expert: true
   - name: ModemManager
     expert: true
+  - name: dmesg
+    expert: true

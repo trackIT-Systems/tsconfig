@@ -2,10 +2,12 @@
 
 import asyncio
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import psutil
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -46,6 +48,7 @@ class ServiceInfo(BaseModel):
     uptime: Optional[str] = None
     expert: bool = False
     is_target: bool = False  # True if this is a systemd target (cannot be controlled)
+    is_kernel: bool = False  # True if this is the kernel logs service
 
 
 class ServiceAction(BaseModel):
@@ -73,6 +76,30 @@ def get_configured_services(include_expert: bool = True) -> List[ServiceConfig]:
         return config.services
     else:
         return [service for service in config.services if not service.expert]
+
+
+def format_uptime_from_seconds(total_seconds: float) -> str:
+    """Format uptime from seconds into a human-readable string."""
+    try:
+        total_seconds = int(total_seconds)
+        if total_seconds < 0:
+            total_seconds = abs(total_seconds)
+
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        if days > 0:
+            return f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        elif minutes > 0:
+            return f"{minutes}m {seconds}s"
+        else:
+            return f"{seconds}s"
+    except Exception:
+        return "N/A"
 
 
 def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> Optional[str]:
@@ -124,25 +151,8 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
 
         duration = now - timestamp
 
-        # Format duration
-        total_seconds = int(duration.total_seconds())
-        if total_seconds < 0:
-            # Handle negative durations (future timestamps) - might indicate clock issues
-            total_seconds = abs(total_seconds)  # Show absolute time for debugging
-
-        days = total_seconds // 86400
-        hours = (total_seconds % 86400) // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-
-        if days > 0:
-            return f"{days}d {hours}h {minutes}m"
-        elif hours > 0:
-            return f"{hours}h {minutes}m"
-        elif minutes > 0:
-            return f"{minutes}m {seconds}s"
-        else:
-            return f"{seconds}s"
+        # Format duration using the shared formatting function
+        return format_uptime_from_seconds(duration.total_seconds())
 
     except Exception:
         return None
@@ -150,6 +160,29 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
 
 async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
     """Get information about a systemd service."""
+    # Special handling for kernel/dmesg service
+    if service_config.name == "kernel" or service_config.name == "dmesg":
+        # Calculate system uptime for kernel service
+        try:
+            boot_time = psutil.boot_time()
+            current_time = time.time()
+            uptime_seconds = current_time - boot_time
+            uptime_str = format_uptime_from_seconds(uptime_seconds)
+        except Exception:
+            uptime_str = None
+        
+        return ServiceInfo(
+            name=service_config.name,
+            description="Kernel ring buffer logs (dmesg)",
+            active=True,  # Kernel is always "active"
+            enabled=True,
+            status="active",
+            uptime=uptime_str,
+            expert=service_config.expert,
+            is_target=False,
+            is_kernel=True,
+        )
+    
     try:
         # Get service status including timestamps and type
         result = await run_subprocess_async(
@@ -163,7 +196,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             capture_output=True,
             text=True,
             timeout=10,
-        )
+            )
 
         if result.returncode != 0:
             # Service doesn't exist or error occurred - mark as expert
@@ -269,6 +302,10 @@ async def service_action(action: ServiceAction):
     service_names = [service.name for service in configured_services]
     if action.service not in service_names:
         raise HTTPException(status_code=400, detail="Service not in configured list")
+    
+    # Prevent actions on kernel service (it's not a real systemd service)
+    if action.service == "kernel" or action.service == "dmesg":
+        raise HTTPException(status_code=400, detail="Cannot perform actions on kernel logs service")
 
     try:
         # Build systemctl command
@@ -327,7 +364,7 @@ async def get_system_config():
 
 @router.get("/logs/{service_name}")
 async def stream_service_logs(service_name: str):
-    """Stream journalctl logs for a specific service."""
+    """Stream journalctl logs for a specific service, or kernel logs."""
     # Validate service is in our configured list
     configured_services = get_configured_services(include_expert=True)
     service_names = [service.name for service in configured_services]
@@ -335,22 +372,36 @@ async def stream_service_logs(service_name: str):
         raise HTTPException(status_code=400, detail="Service not in configured list")
 
     async def generate_logs():
-        """Generate streaming logs using journalctl -fu."""
+        """Generate streaming logs using journalctl -fu or journalctl -kf for kernel."""
         # Send initial comment to establish the connection (comments don't trigger onmessage)
         yield f": Stream started\n\n"
         
         try:
-            # Start journalctl process with follow and unit flags
-            process = await asyncio.create_subprocess_exec(
-                "journalctl",
-                "-fu",
-                service_name,
-                "--no-pager",
-                "-n",
-                "50",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
+            # Special handling for kernel logs
+            if service_name == "kernel" or service_name == "dmesg":
+                # Use journalctl -k -f for kernel logs (kernel messages, follow mode)
+                process = await asyncio.create_subprocess_exec(
+                    "journalctl",
+                    "-k",
+                    "-f",
+                    "--no-pager",
+                    "-n",
+                    "50",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+            else:
+                # Start journalctl process with follow and unit flags
+                process = await asyncio.create_subprocess_exec(
+                    "journalctl",
+                    "-fu",
+                    service_name,
+                    "--no-pager",
+                    "-n",
+                    "50",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
 
             while True:
                 line = await process.stdout.readline()
