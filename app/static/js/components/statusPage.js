@@ -89,6 +89,12 @@ export function statusPage() {
                 this.systemInfo = data;
                 this.lastUpdated = new Date().toLocaleTimeString();
                 
+                // Reset reboot loading state when uptime is refreshed
+                // This handles the case where the system was rebooted and status is refreshed
+                if (data.uptime !== undefined) {
+                    this.rebootLoading = false;
+                }
+                
                 // Handle timedatectl status
                 if (timedatectlResponse.ok) {
                     const timedatectlData = await timedatectlResponse.json();
