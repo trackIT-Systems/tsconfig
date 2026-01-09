@@ -228,6 +228,72 @@ async def logout(
 
 
 @router.get(
+    "/frontchannel-logout",
+    summary="OIDC Front-Channel Logout",
+    description="Handles front-channel logout requests from OIDC provider via iframe.",
+    response_class=HTMLResponse,
+)
+async def frontchannel_logout(
+    request: Request,
+    iss: Optional[str] = Query(None, description="Issuer identifier"),
+    sid: Optional[str] = Query(None, description="Session ID"),
+):
+    """
+    Handle OIDC front-channel logout.
+    
+    This endpoint is called by the OIDC provider via iframe when a user logs out
+    from another service. It clears the local authentication cookie.
+    
+    Per OIDC Front-Channel Logout 1.0 spec:
+    https://openid.net/specs/openid-connect-frontchannel-1_0.html
+    """
+    # Only available in server mode
+    if not config_loader.is_server_mode():
+        raise HTTPException(
+            status_code=404,
+            detail="Authentication is only available in server mode",
+        )
+    
+    # Validate issuer if provided
+    if iss:
+        if not oidc_config.is_configured():
+            logger.warning("Front-channel logout called but OIDC is not configured")
+            raise HTTPException(
+                status_code=503,
+                detail="OIDC is not configured",
+            )
+        
+        if iss != oidc_config.issuer_url:
+            logger.warning(f"Front-channel logout called with invalid issuer: {iss}")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid issuer",
+            )
+    
+    # Log the logout event
+    logger.info(f"Front-channel logout triggered for session: {sid if sid else 'unknown'}")
+    
+    # Clear the authentication cookie
+    # Return minimal HTML with Set-Cookie header
+    response = HTMLResponse(
+        content="""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Logout</title>
+</head>
+<body>
+    <!-- Front-channel logout successful -->
+</body>
+</html>""",
+        status_code=200,
+    )
+    response.delete_cookie(key="auth_token", path="/", samesite="lax")
+    
+    return response
+
+
+@router.get(
     "/userinfo",
     summary="Get current user information",
     description="Returns information about the currently authenticated user.",
