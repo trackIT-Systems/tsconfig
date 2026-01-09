@@ -28,7 +28,7 @@ class OIDCConfig:
         self.issuer_url = f"https://auth.trackit.systems/application/o/{self.domain.replace('.', '-')}-tsconfig/"
         self.client_id = f"{self.domain}/tsconfig"
         self.client_secret = os.environ.get("TSCONFIG_OAUTH_CLIENT_SECRET")
-        self.redirect_uri = "https://wdev.trackit-system.de/tsconfig/auth/callback"
+        self.redirect_uri = f"https://{self.domain}/tsconfig/auth/callback"
         self.scopes = "openid profile email groups"
 
     def is_configured(self) -> bool:
@@ -111,6 +111,25 @@ class OIDCConfig:
         """Get the JWKS URI from the discovery document."""
         discovery = await self.get_discovery_document()
         return discovery["jwks_uri"]
+
+    def get_frontchannel_logout_uri(self) -> str:
+        """
+        Get the front-channel logout URI for this application.
+        
+        This URI should be registered with the OIDC provider to enable
+        front-channel logout. When a user logs out from another service,
+        the OIDC provider will embed an iframe to this URI to clear the
+        local session.
+        
+        Returns:
+            str: The full front-channel logout URI
+        """
+        if not self.redirect_uri:
+            raise ValueError("redirect_uri is not configured")
+        
+        # Extract base URL from redirect_uri
+        redirect_base = self.redirect_uri.rsplit("/auth/callback", 1)[0]
+        return f"{redirect_base}/auth/frontchannel-logout"
 
 
 # Global instance
