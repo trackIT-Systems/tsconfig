@@ -249,7 +249,7 @@
                                                             :class="isMaintenanceEntryProtected(index) ? 'bg-secondary bg-opacity-10 text-muted' : ''"
                                                             x-model="entry.name" 
                                                             :readonly="isMaintenanceEntryProtected(index)"
-                                                            @blur="if (checkDuplicateMaintenanceName(entry.name, index)) { showMessage('A schedule entry named \"maintenance\" already exists. Only one maintenance entry is allowed.', true); entry.name = ''; }"
+                                                            @blur='if (checkDuplicateMaintenanceName(entry.name, index)) { showMessage("A schedule entry named \"maintenance\" already exists. Only one maintenance entry is allowed.", true); entry.name = ""; }'
                                                             placeholder="Enter schedule name..." 
                                                             required>
                                                     <template x-if="isFirstMaintenanceEntry(index)">
