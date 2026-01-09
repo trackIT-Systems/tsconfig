@@ -1,10 +1,13 @@
 """Soundscapepipe configuration endpoints."""
 
+import asyncio
 import json
 import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from app.utils.subprocess_async import run_subprocess_async
 
 
 # Check if ALSA is available by checking for /proc/asound/cards
@@ -363,8 +366,8 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
         # Refresh ALSA device list if requested
         if refresh:
             try:
-                subprocess.run(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
-            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                await run_subprocess_async(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
+            except (subprocess.TimeoutExpired, asyncio.TimeoutError, FileNotFoundError, OSError):
                 pass
 
         # Query all available devices from hardware

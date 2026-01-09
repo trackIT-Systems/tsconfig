@@ -6,12 +6,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
+from app.utils.subprocess_async import run_subprocess_async
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
@@ -148,11 +148,11 @@ def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> O
         return None
 
 
-def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
+async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
     """Get information about a systemd service."""
     try:
         # Get service status including timestamps and type
-        result = subprocess.run(
+        result = await run_subprocess_async(
             [
                 "systemctl",
                 "show",
@@ -221,7 +221,7 @@ def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             is_target=is_target,
         )
 
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         return ServiceInfo(
             name=service_config.name,
             description="Timeout getting service info",
@@ -252,7 +252,7 @@ async def list_services():
     service_info = []
 
     for service in services:
-        info = get_service_info(service)
+        info = await get_service_info(service)
         service_info.append(info)
 
     return service_info
@@ -275,7 +275,7 @@ async def service_action(action: ServiceAction):
         cmd = ["systemctl", action.action, action.service]
 
         # Execute systemctl command
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = await run_subprocess_async(cmd, capture_output=True, text=True, timeout=30)
 
         if result.returncode != 0:
             error_msg = result.stderr.strip() if result.stderr else f"Command failed with exit code {result.returncode}"
@@ -288,7 +288,7 @@ async def service_action(action: ServiceAction):
 
         return {"success": True, "message": message, "service": action.service, "action": action.action}
 
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         raise HTTPException(status_code=500, detail=f"Timeout while trying to {action.action} service {action.service}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error performing action: {str(e)}")
@@ -299,14 +299,14 @@ async def reboot_system():
     """Initiate system reboot."""
     try:
         # Use systemctl to reboot the system
-        result = subprocess.run(["systemctl", "reboot"], capture_output=True, text=True, timeout=10)
+        result = await run_subprocess_async(["systemctl", "reboot"], capture_output=True, text=True, timeout=10)
 
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {result.stderr}")
 
         return {"message": "System reboot initiated"}
 
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         # Timeout is expected as the system will be rebooting
         return {"message": "System reboot initiated"}
     except subprocess.CalledProcessError as e:
@@ -391,14 +391,14 @@ class RebootProtectionToggle(BaseModel):
     enabled: bool
 
 
-def get_services_with_reboot_action() -> List[str]:
+async def get_services_with_reboot_action() -> List[str]:
     """Get list of services that have StartLimitAction=reboot configured."""
     services_to_check = ["radiotracking", "soundscapepipe"]
     services_with_reboot = []
 
     for service in services_to_check:
         try:
-            result = subprocess.run(
+            result = await run_subprocess_async(
                 ["systemctl", "cat", f"{service}.service"], capture_output=True, text=True, timeout=10
             )
 
@@ -429,14 +429,14 @@ def is_reboot_protection_enabled() -> bool:
     return False
 
 
-def create_service_override(service_name: str) -> bool:
+async def create_service_override(service_name: str) -> bool:
     """Create a systemd service override to disable reboot action."""
     try:
         override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
         override_file = override_dir / "reboot-protection.conf"
 
         # Create override directory
-        result = subprocess.run(["mkdir", "-p", str(override_dir)], capture_output=True, text=True, timeout=10)
+        result = await run_subprocess_async(["mkdir", "-p", str(override_dir)], capture_output=True, text=True, timeout=10)
 
         if result.returncode != 0:
             return False
@@ -447,17 +447,26 @@ StartLimitAction=none
 """
 
         # Write override file
-        result = subprocess.run(
-            ["tee", str(override_file)], input=override_content, capture_output=True, text=True, timeout=10
+        process = await asyncio.create_subprocess_exec(
+            "tee",
+            str(override_file),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(override_content.encode()),
+            timeout=10.0
+        )
+        returncode = await process.wait()
 
-        return result.returncode == 0
+        return returncode == 0
 
     except Exception:
         return False
 
 
-def remove_service_override(service_name: str) -> bool:
+async def remove_service_override(service_name: str) -> bool:
     """Remove systemd service override file."""
     try:
         override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
@@ -465,7 +474,7 @@ def remove_service_override(service_name: str) -> bool:
 
         # Remove override file
         if override_file.exists():
-            result = subprocess.run(["rm", str(override_file)], capture_output=True, text=True, timeout=10)
+            result = await run_subprocess_async(["rm", str(override_file)], capture_output=True, text=True, timeout=10)
 
             if result.returncode != 0:
                 return False
@@ -488,7 +497,7 @@ async def get_reboot_protection_status():
     """Get current reboot protection status."""
     try:
         enabled = is_reboot_protection_enabled()
-        services_with_reboot = get_services_with_reboot_action()
+        services_with_reboot = await get_services_with_reboot_action()
 
         return RebootProtectionStatus(enabled=enabled, services=services_with_reboot)
     except Exception as e:
@@ -505,11 +514,11 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
 
         for service in services_to_protect:
             if toggle.enabled:
-                if not create_service_override(service):
+                if not await create_service_override(service):
                     success = False
                     errors.append(f"Failed to create override for {service}")
             else:
-                if not remove_service_override(service):
+                if not await remove_service_override(service):
                     success = False
                     errors.append(f"Failed to remove override for {service}")
 
@@ -517,7 +526,7 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
             raise HTTPException(status_code=500, detail=f"Some operations failed: {', '.join(errors)}")
 
         # Reload systemd daemon
-        result = subprocess.run(["systemctl", "daemon-reload"], capture_output=True, text=True, timeout=30)
+        result = await run_subprocess_async(["systemctl", "daemon-reload"], capture_output=True, text=True, timeout=30)
 
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail="Failed to reload systemd daemon")
@@ -526,12 +535,12 @@ async def toggle_reboot_protection(toggle: RebootProtectionToggle):
         for service in services_to_protect:
             try:
                 # Check if service exists and is active before restarting
-                status_result = subprocess.run(
+                status_result = await run_subprocess_async(
                     ["systemctl", "is-active", service], capture_output=True, text=True, timeout=10
                 )
 
                 if status_result.returncode == 0:  # Service is active
-                    restart_result = subprocess.run(
+                    restart_result = await run_subprocess_async(
                         ["systemctl", "restart", service], capture_output=True, text=True, timeout=30
                     )
 

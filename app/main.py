@@ -1,5 +1,6 @@
 """tsOS Configuration Manager."""
 
+import asyncio
 import datetime
 import json
 import os
@@ -16,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import __version__
 from app.config_loader import config_loader
+from app.utils.subprocess_async import run_subprocess_async
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.geolocation import GeolocationConfig
 from app.configs.radiotracking import RadioTrackingConfig
@@ -354,7 +356,7 @@ async def get_system_status():
         hardware_info = _get_hardware_info()
 
         # Get tsupdate status information
-        tsupdate_status = _get_tsupdate_status()
+        tsupdate_status = await _get_tsupdate_status()
 
         # Get system information
         system_info = {
@@ -397,10 +399,10 @@ def _get_freedesktop_os_release():
         return None
 
 
-def _get_tsupdate_status():
+async def _get_tsupdate_status():
     """Get tsupdate status information."""
     try:
-        result = subprocess.run(
+        result = await run_subprocess_async(
             ["tsupdate", "status", "--json"],
             capture_output=True,
             text=True,
@@ -421,7 +423,7 @@ def _get_tsupdate_status():
         }
         
         return tsupdate_status
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+    except (FileNotFoundError, subprocess.TimeoutExpired, asyncio.TimeoutError, json.JSONDecodeError) as e:
         logger.debug(f"Failed to get tsupdate status: {str(e)}")
         return None
     except Exception as e:
@@ -612,9 +614,9 @@ async def get_timedatectl_status():
 
         # Check if timedatectl command is available
         try:
-            test_result = subprocess.run(["timedatectl", "--version"], capture_output=True, text=True, timeout=5)
+            test_result = await run_subprocess_async(["timedatectl", "--version"], capture_output=True, text=True, timeout=5)
             timedatectl_status["available"] = test_result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, asyncio.TimeoutError, FileNotFoundError):
             timedatectl_status["available"] = False
             timedatectl_status["error"] = "timedatectl command not found"
             return JSONResponse(content=timedatectl_status)
@@ -625,13 +627,13 @@ async def get_timedatectl_status():
 
         # Get timedatectl status
         try:
-            status_result = subprocess.run(["timedatectl", "status"], capture_output=True, text=True, timeout=10)
+            status_result = await run_subprocess_async(["timedatectl", "status"], capture_output=True, text=True, timeout=10)
 
             if status_result.returncode == 0:
                 timedatectl_status["status"] = _parse_timedatectl_status(status_result.stdout)
             else:
                 timedatectl_status["error"] = f"timedatectl status failed: {status_result.stderr.strip()}"
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, asyncio.TimeoutError):
             timedatectl_status["error"] = "timedatectl status command timed out"
         except Exception as e:
             timedatectl_status["error"] = f"Error executing timedatectl status: {str(e)}"

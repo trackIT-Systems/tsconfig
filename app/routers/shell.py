@@ -3,9 +3,9 @@ import os
 import pty
 import pwd
 import select
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config_loader import config_loader
 from app.logging_config import get_logger

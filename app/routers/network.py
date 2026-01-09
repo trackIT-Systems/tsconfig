@@ -1,5 +1,6 @@
 """Network management router for NetworkManager connections."""
 
+import asyncio
 import json
 import subprocess
 import yaml
@@ -8,6 +9,8 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+from app.utils.subprocess_async import run_subprocess_async
 
 router = APIRouter(prefix="/api/network", tags=["network"])
 
@@ -100,7 +103,7 @@ class WiFiCapabilities(BaseModel):
     channel_widths: List[str] = Field(..., description="Supported channel widths (20, 40, 80, 160)")
 
 
-def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+async def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Run nmcli command with proper error handling.
 
     Args:
@@ -115,19 +118,19 @@ def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.Complet
     """
     try:
         cmd = ["nmcli"] + args
-        result = subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=10)
+        result = await run_subprocess_async(cmd, capture_output=True, text=True, check=check, timeout=10)
         return result
     except subprocess.CalledProcessError as e:
         raise HTTPException(
             status_code=500, detail=f"NetworkManager command failed: {e.stderr.strip() or e.stdout.strip() or str(e)}"
         )
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         raise HTTPException(status_code=504, detail="NetworkManager command timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="NetworkManager (nmcli) not available")
 
 
-def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+async def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Run mmcli command with proper error handling.
 
     Args:
@@ -141,19 +144,19 @@ def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.Complet
         HTTPException: If command fails and check=True
     """
     try:
-        result = subprocess.run(["mmcli"] + args, capture_output=True, text=True, check=check, timeout=10)
+        result = await run_subprocess_async(["mmcli"] + args, capture_output=True, text=True, check=check, timeout=10)
         return result
     except subprocess.CalledProcessError as e:
         raise HTTPException(
             status_code=500, detail=f"ModemManager command failed: {e.stderr.strip() or e.stdout.strip() or str(e)}"
         )
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         raise HTTPException(status_code=504, detail="ModemManager command timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="ModemManager (mmcli) not available")
 
 
-def parse_wifi_capabilities() -> WiFiCapabilities:
+async def parse_wifi_capabilities() -> WiFiCapabilities:
     """Parse WiFi capabilities from iw list command.
 
     Returns:
@@ -164,7 +167,7 @@ def parse_wifi_capabilities() -> WiFiCapabilities:
     """
     try:
         # Run iw list to get device capabilities
-        result = subprocess.run(["iw", "list"], capture_output=True, text=True, timeout=10)
+        result = await run_subprocess_async(["iw", "list"], capture_output=True, text=True, timeout=10)
         
         if result.returncode != 0:
             raise HTTPException(status_code=503, detail="WiFi device not available or iw command failed")
@@ -242,7 +245,7 @@ def parse_wifi_capabilities() -> WiFiCapabilities:
         
         return WiFiCapabilities(bands=bands_data, channel_widths=sorted_widths)
         
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         raise HTTPException(status_code=504, detail="WiFi capability detection timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="iw command not available")
@@ -252,7 +255,7 @@ def parse_wifi_capabilities() -> WiFiCapabilities:
         raise HTTPException(status_code=500, detail=f"Failed to parse WiFi capabilities: {str(e)}")
 
 
-def get_nmcli_connection_properties(connection_name: str, show_secrets: bool = False) -> Dict[str, str]:
+async def get_nmcli_connection_properties(connection_name: str, show_secrets: bool = False) -> Dict[str, str]:
     """Get all properties from a NetworkManager connection.
 
     Args:
@@ -271,7 +274,7 @@ def get_nmcli_connection_properties(connection_name: str, show_secrets: bool = F
             args.append("--show-secrets")
         args.append(connection_name)
         
-        result = run_nmcli_command(args, check=False)
+        result = await run_nmcli_command(args, check=False)
         
         if result.returncode != 0:
             raise HTTPException(
@@ -304,7 +307,7 @@ def get_nmcli_connection_properties(connection_name: str, show_secrets: bool = F
         )
 
 
-def get_device_ipv4_address(device: str) -> str | None:
+async def get_device_ipv4_address(device: str) -> str | None:
     """Get IPv4 address for a network device using NetworkManager.
 
     Args:
@@ -317,7 +320,7 @@ def get_device_ipv4_address(device: str) -> str | None:
         return None
 
     try:
-        result = run_nmcli_command(["-t", "-f", "IP4.ADDRESS", "device", "show", device], check=False)
+        result = await run_nmcli_command(["-t", "-f", "IP4.ADDRESS", "device", "show", device], check=False)
 
         if result.returncode == 0 and result.stdout:
             # Parse output like: "IP4.ADDRESS[1]:192.168.178.147/24"
@@ -333,7 +336,7 @@ def get_device_ipv4_address(device: str) -> str | None:
         return None
 
 
-def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name: str = "cellular") -> None:
+async def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name: str = "cellular") -> None:
     """Remove GSM fields from netplan YAML file.
     
     nmcli doesn't allow directly unsetting certain GSM fields (like password, pin),
@@ -355,7 +358,7 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
     
     try:
         # Step 1: Get connection UUID
-        result = run_nmcli_command(
+        result = await run_nmcli_command(
             ["-t", "-f", "connection.uuid", "connection", "show", connection_name],
             check=False
         )
@@ -387,7 +390,7 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
                 netplan_content = yaml.safe_load(f)
         except PermissionError:
             # Try using subprocess
-            read_result = subprocess.run(
+            read_result = await run_subprocess_async(
                 ["cat", str(netplan_file)],
                 capture_output=True,
                 text=True,
@@ -427,12 +430,24 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
                 f.write(yaml_output)
         except PermissionError:
             # Use tee to write
-            write_result = subprocess.run(
-                ["tee", str(netplan_file)],
-                input=yaml_output,
-                capture_output=True,
-                text=True,
-                timeout=5
+            process = await asyncio.create_subprocess_exec(
+                "tee",
+                str(netplan_file),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(yaml_output.encode()),
+                timeout=5.0
+            )
+            returncode = await process.wait()
+            
+            write_result = subprocess.CompletedProcess(
+                args=["tee", str(netplan_file)],
+                returncode=returncode,
+                stdout=stdout.decode() if stdout else '',
+                stderr=stderr.decode() if stderr else '',
             )
             if write_result.returncode != 0:
                 raise HTTPException(
@@ -441,7 +456,7 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
                 )
         
         # Step 6: Reload NetworkManager connections
-        reload_result = subprocess.run(
+        reload_result = await run_subprocess_async(
             ["nmcli", "connection", "reload"],
             capture_output=True,
             text=True,
@@ -454,7 +469,7 @@ def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name:
         
     except HTTPException:
         raise
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         raise HTTPException(status_code=504, detail="Operation timed out")
     except Exception as e:
         # Log error but don't fail the entire update
@@ -469,7 +484,7 @@ async def get_wifi_capabilities() -> WiFiCapabilities:
         WiFi capabilities with bands, channels, and widths
     """
     try:
-        return parse_wifi_capabilities()
+        return await parse_wifi_capabilities()
     except HTTPException:
         raise
     except Exception as e:
@@ -485,7 +500,7 @@ async def get_connections() -> List[ConnectionInfo]:
     """
     try:
         # Use terse format for easy parsing
-        result = run_nmcli_command(["-t", "-f", "NAME,TYPE,DEVICE,STATE", "connection", "show"])
+        result = await run_nmcli_command(["-t", "-f", "NAME,TYPE,DEVICE,STATE", "connection", "show"])
 
         connections = []
         for line in result.stdout.strip().split("\n"):
@@ -496,7 +511,7 @@ async def get_connections() -> List[ConnectionInfo]:
             parts = line.split(":")
             if len(parts) >= 4:
                 device = parts[2] if parts[2] else ""
-                ipv4_address = get_device_ipv4_address(device) if device else None
+                ipv4_address = await get_device_ipv4_address(device) if device else None
 
                 connections.append(
                     ConnectionInfo(
@@ -521,7 +536,7 @@ async def get_hotspot_config() -> HotspotConfig:
     """
     try:
         # Get all properties in a single call (with secrets revealed)
-        props = get_nmcli_connection_properties("hotspot", show_secrets=True)
+        props = await get_nmcli_connection_properties("hotspot", show_secrets=True)
         
         # Get SSID
         ssid = props.get("802-11-wireless.ssid")
@@ -603,7 +618,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         # Validate band and channel if provided
         if update.band is not None or update.channel is not None:
             try:
-                capabilities = parse_wifi_capabilities()
+                capabilities = await parse_wifi_capabilities()
                 
                 # Validate band
                 if update.band is not None:
@@ -698,7 +713,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
                 args.append("--")
                 for prop in properties_to_remove:
                     args.append(f"-{prop}")
-            run_nmcli_command(args)
+            await run_nmcli_command(args)
 
         # Get updated configuration
         updated_config = await get_hotspot_config()
@@ -720,7 +735,7 @@ async def get_cellular_config() -> CellularConfig:
     """
     try:
         # Get all properties in a single call (with secrets revealed)
-        props = get_nmcli_connection_properties("cellular", show_secrets=True)
+        props = await get_nmcli_connection_properties("cellular", show_secrets=True)
         
         # Extract GSM properties
         apn = props.get("gsm.apn")
@@ -786,11 +801,11 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         
         # Remove fields from netplan if needed
         if fields_to_remove_from_netplan:
-            remove_gsm_fields_from_netplan(fields_to_remove_from_netplan, "cellular")
+            await remove_gsm_fields_from_netplan(fields_to_remove_from_netplan, "cellular")
         
         # Execute all modifications in a single nmcli call
         args = ["connection", "modify", "cellular"] + modifications
-        run_nmcli_command(args)
+        await run_nmcli_command(args)
 
         # Get updated configuration
         updated_config = await get_cellular_config()
@@ -815,7 +830,7 @@ async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
     """
     try:
         # Try to bring the connection up
-        result = run_nmcli_command(["connection", "up", connection_name], check=False)
+        result = await run_nmcli_command(["connection", "up", connection_name], check=False)
 
         if result.returncode == 0:
             return {"message": f"Connection '{connection_name}' activated successfully", "connection_name": connection_name}
@@ -848,7 +863,7 @@ async def get_modem_info() -> ModemInfo | None:
     """
     try:
         # First, list available modems
-        list_result = run_mmcli_command(["-L", "--output-json"], check=False)
+        list_result = await run_mmcli_command(["-L", "--output-json"], check=False)
 
         if list_result.returncode != 0:
             # ModemManager not available or no modems
@@ -872,7 +887,7 @@ async def get_modem_info() -> ModemInfo | None:
         modem_id = first_modem_path.split("/")[-1]
 
         # Get detailed modem information
-        detail_result = run_mmcli_command(["-m", modem_id, "--output-json"], check=False)
+        detail_result = await run_mmcli_command(["-m", modem_id, "--output-json"], check=False)
 
         if detail_result.returncode != 0:
             return None
@@ -927,7 +942,7 @@ async def get_modem_info() -> ModemInfo | None:
         ip_addresses = []
         for bearer_path in bearer_paths:
             bearer_id = bearer_path.split("/")[-1]
-            bearer_result = run_mmcli_command(["-b", bearer_id, "--output-json"], check=False)
+            bearer_result = await run_mmcli_command(["-b", bearer_id, "--output-json"], check=False)
             if bearer_result.returncode == 0:
                 try:
                     bearer_data = json.loads(bearer_result.stdout)
@@ -950,7 +965,7 @@ async def get_modem_info() -> ModemInfo | None:
 
         if sim_path:
             sim_id = sim_path.split("/")[-1]
-            sim_result = run_mmcli_command(["-i", sim_id, "--output-json"], check=False)
+            sim_result = await run_mmcli_command(["-i", sim_id, "--output-json"], check=False)
             if sim_result.returncode == 0:
                 try:
                     sim_data = json.loads(sim_result.stdout)

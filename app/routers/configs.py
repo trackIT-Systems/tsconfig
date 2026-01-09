@@ -1,23 +1,23 @@
 """Configuration file upload and download endpoints."""
 
+import asyncio
 import calendar
 import os
 import socket
 import subprocess
-import time
 import zipfile
 from configparser import ConfigParser
 from datetime import datetime, timedelta, timezone
 from email.utils import formatdate
 from io import BytesIO
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import yaml
 from fastapi import APIRouter, File, Form, HTTPException, Path as PathParam, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config_loader import config_loader
+from app.utils.subprocess_async import run_subprocess_async
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.cmdline import CmdlineConfig
 from app.configs.geolocation import GeolocationConfig
@@ -55,7 +55,7 @@ def round_mtime_for_fat32(dt: datetime) -> datetime:
         return dt
 
 
-def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
+async def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
     """Restart a systemd service.
 
     Args:
@@ -65,7 +65,7 @@ def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
         Tuple of (success, error_message)
     """
     try:
-        result = subprocess.run(
+        result = await run_subprocess_async(
             ["systemctl", "restart", service_name],
             capture_output=True,
             text=True,
@@ -78,7 +78,7 @@ def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
 
         return True, None
 
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         return False, "Service restart timed out"
     except Exception as e:
         return False, str(e)
@@ -255,7 +255,7 @@ def build_standard_response(success: bool, config_type: str, filename: str, **kw
     return response
 
 
-def handle_service_restart(config_type: str, restart_service: bool) -> Dict[str, Any]:
+async def handle_service_restart(config_type: str, restart_service: bool) -> Dict[str, Any]:
     """Handle service restart logic.
     
     Args:
@@ -288,7 +288,7 @@ def handle_service_restart(config_type: str, restart_service: bool) -> Dict[str,
         result["service_restart_error"] = f"No service mapping for config type: {config_type}"
         return result
     
-    success, error = restart_systemd_service(service_name)
+    success, error = await restart_systemd_service(service_name)
     result["service_restarted"] = success
     if error:
         result["service_restart_error"] = error
@@ -564,7 +564,7 @@ async def upload_config(
         response_data["reboot_delay_seconds"] = 10
         try:
             # Use systemd-run to schedule reboot in 10 seconds
-            subprocess.run(
+            await run_subprocess_async(
                 ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
                 capture_output=True,
                 text=True,
@@ -577,7 +577,7 @@ async def upload_config(
             response_data["reboot_initiated"] = False
     else:
         # Normal service restart for other config types
-        restart_result = handle_service_restart(config_type, restart_service)
+        restart_result = await handle_service_restart(config_type, restart_service)
         response_data.update(restart_result)
         
         # Update message with restart info
@@ -1093,7 +1093,7 @@ async def upload_config_zip(
                 service_name = SERVICE_MAPPING.get(config_type)
 
                 if service_name:
-                    success, error = restart_systemd_service(service_name)
+                    success, error = await restart_systemd_service(service_name)
 
                     if success:
                         response["services_restarted"].append(service_name)
@@ -1129,7 +1129,7 @@ async def upload_config_zip(
         else:
             try:
                 # Use systemd-run to schedule reboot in 10 seconds
-                subprocess.run(
+                await run_subprocess_async(
                     ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
                     capture_output=True,
                     text=True,
