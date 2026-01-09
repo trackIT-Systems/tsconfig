@@ -22,41 +22,42 @@
                 </div>
             </div>
             <div class="modal-body p-0 flex-grow-1 d-flex flex-column" style="min-height: 0;">
-                <div class="h-100 bg-dark text-light font-monospace small position-relative" 
+                <div class="h-100 w-100 bg-dark text-light font-monospace small" 
                      id="logContainer" 
                      style="padding: 1rem; white-space: pre-wrap; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;">
-                    <!-- Empty state indicator -->
-                    <div x-show="!isConnecting && logs.length === 0" 
-                         class="position-absolute top-50 start-50 translate-middle text-center text-muted">
-                        <i class="fas fa-file-alt fa-3x mb-3 d-block"></i>
-                        <p class="mb-0">No logs to display</p>
-                    </div>
-                    <!-- Loading indicator -->
-                    <div x-show="isConnecting && logs.length === 0" 
-                         class="position-absolute top-50 start-50 translate-middle text-center text-muted">
-                        <div class="spinner-border text-primary mb-3" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="mb-0">Connecting to log stream...</p>
-                    </div>
                     <!-- Log lines -->
                     <template x-for="(log, index) in logs" :key="index">
                         <div class="log-line" x-text="log"></div>
                     </template>
-                    <!-- Error indicator -->
-                    <div x-show="streamError" class="text-danger">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <span x-text="streamError"></span>
-                    </div>
                 </div>
             </div>
             <div class="modal-footer bg-light flex-shrink-0">
                 <div class="d-flex justify-content-between w-100 align-items-center">
-                    <div class="small text-muted">
-                        <span x-text="logs.length"></span> lines
-                        <span x-show="isStreaming" class="text-success">
-                            <i class="fas fa-circle fa-xs me-1"></i>Streaming
+                    <div class="small d-flex align-items-center gap-3">
+                        <span class="text-muted">
+                            <span x-text="logs.length"></span> lines
                         </span>
+                        <!-- Connection status - show only current state -->
+                        <template x-if="isConnecting">
+                            <span class="text-info d-flex align-items-center">
+                                <i class="fas fa-spinner fa-spin fa-xs me-1"></i>Connecting...
+                            </span>
+                        </template>
+                        <template x-if="!isConnecting && streamError">
+                            <span class="text-danger d-flex align-items-center">
+                                <i class="fas fa-exclamation-triangle fa-xs me-1"></i>Connection failed
+                            </span>
+                        </template>
+                        <template x-if="!isConnecting && !streamError && isStreaming">
+                            <span class="text-success d-flex align-items-center">
+                                <i class="fas fa-circle fa-xs me-1"></i>Streaming
+                            </span>
+                        </template>
+                        <template x-if="!isConnecting && !isStreaming && !streamError && currentService">
+                            <span class="text-muted d-flex align-items-center">
+                                <i class="fas fa-circle fa-xs me-1"></i>Disconnected
+                            </span>
+                        </template>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
                         <button type="button" 
