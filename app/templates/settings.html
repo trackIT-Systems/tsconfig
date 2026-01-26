@@ -18,12 +18,24 @@
         
         this.systemTab = parseSubtab();
         
+        // If expert mode is off and we're on SSH keys tab, switch to schedule
+        if (!expertMode && this.systemTab === 'sshkeys') {
+            this.systemTab = 'schedule';
+        }
+        
         // Watch for systemTab changes and update URL
         this.$watch('systemTab', (value) => {
             const currentHash = window.location.hash.slice(1);
             const parts = currentHash.split('/');
             if (parts[0] === 'settings') {
                 window.location.hash = `settings/${value}`;
+            }
+        });
+        
+        // Watch for expert mode changes - switch away from SSH keys tab if expert mode is disabled
+        this.$watch('expertMode', (value) => {
+            if (!value && this.systemTab === 'sshkeys') {
+                this.systemTab = 'schedule';
             }
         });
         
@@ -49,7 +61,7 @@
                         Schedule
                     </button>
                 </li>
-                <li class="nav-item" role="presentation">
+                <li class="nav-item" role="presentation" x-show="expertMode">
                     <button class="nav-link" 
                             :class="{ 'active': systemTab === 'sshkeys' }"
                             @click="systemTab = 'sshkeys'"
@@ -449,7 +461,7 @@
                 </div>
 
                 <!-- SSH Keys Tab -->
-                <div x-show="systemTab === 'sshkeys'">
+                <div x-show="systemTab === 'sshkeys' && expertMode">
                     <div class="card" x-data="sshKeysConfig()" x-init="init()" x-destroy="cleanup()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
