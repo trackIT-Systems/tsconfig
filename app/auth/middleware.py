@@ -149,7 +149,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             user_info = oidc_handler.extract_user_claims(token_claims)
 
             # Validate user groups
-            required_groups = [f"tenant_{oidc_config.domain}", "ts_admin"]
+            required_groups = [f"tenant_{oidc_config.domain}", "ts_admin", "ts_staff"]
             is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
 
             if not is_authorized:
