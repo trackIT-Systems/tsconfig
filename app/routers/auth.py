@@ -110,7 +110,7 @@ async def callback(
         user_info = oidc_handler.extract_user_claims(token_claims)
 
         # Validate user groups
-        required_groups = [f"tenant_{oidc_config.domain}", "ts_admin"]
+        required_groups = [f"tenant_{oidc_config.domain}", "ts_admin", "ts_staff"]
         is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
 
         if not is_authorized:
@@ -240,10 +240,10 @@ async def frontchannel_logout(
 ):
     """
     Handle OIDC front-channel logout.
-    
+
     This endpoint is called by the OIDC provider via iframe when a user logs out
     from another service. It clears the local authentication cookie.
-    
+
     Per OIDC Front-Channel Logout 1.0 spec:
     https://openid.net/specs/openid-connect-frontchannel-1_0.html
     """
@@ -253,7 +253,7 @@ async def frontchannel_logout(
             status_code=404,
             detail="Authentication is only available in server mode",
         )
-    
+
     # Validate issuer if provided
     if iss:
         if not oidc_config.is_configured():
@@ -262,17 +262,17 @@ async def frontchannel_logout(
                 status_code=503,
                 detail="OIDC is not configured",
             )
-        
+
         if iss != oidc_config.issuer_url:
             logger.warning(f"Front-channel logout called with invalid issuer: {iss}")
             raise HTTPException(
                 status_code=400,
                 detail="Invalid issuer",
             )
-    
+
     # Log the logout event
     logger.info(f"Front-channel logout triggered for session: {sid if sid else 'unknown'}")
-    
+
     # Clear the authentication cookie
     # Return minimal HTML with Set-Cookie header
     response = HTMLResponse(
@@ -289,7 +289,7 @@ async def frontchannel_logout(
         status_code=200,
     )
     response.delete_cookie(key="auth_token", path="/", samesite="lax")
-    
+
     return response
 
 
