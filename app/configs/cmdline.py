@@ -1,7 +1,7 @@
 """Cmdline configuration management."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from app.configs import BaseConfig
 
@@ -10,11 +10,17 @@ class CmdlineConfig(BaseConfig):
     """Cmdline.txt configuration management.
 
     This file contains kernel boot parameters and is written to /boot/firmware/cmdline.txt.
-    The file format is: <technical_params> -- <user_params>
     
-    When updating, only user parameters (after --) are modified, while technical
-    parameters (before --) are preserved from the existing file.
+    When updating, only parameters listed in CONFIGURABLE_PARAMETERS are modified,
+    while all other parameters are preserved from the existing file.
     """
+
+    # Parameters that can be updated via tsconfig
+    CONFIGURABLE_PARAMETERS = [
+        "timezone",
+        "systemd.hostname",
+        "cfg80211.ieee80211_regdom",
+    ]
 
     def __init__(self, config_dir: Path | None = None):
         # Always use /boot/firmware regardless of config_dir
@@ -26,61 +32,56 @@ class CmdlineConfig(BaseConfig):
         """Return the configuration file path."""
         return Path("/boot/firmware/cmdline.txt")
 
-    def _parse_cmdline(self, content: str) -> Tuple[str, Dict[str, str]]:
-        """Parse cmdline content into technical params and user params.
+    def _parse_cmdline(self, content: str) -> Dict[str, str]:
+        """Parse cmdline content into a dictionary of parameters.
         
         Args:
             content: Raw cmdline.txt content
             
         Returns:
-            Tuple of (technical_params_str, user_params_dict)
+            Dictionary mapping parameter names to values (empty string for flags without values)
         """
         content = content.strip()
+        params = {}
         
-        # Split on --
-        if " -- " in content:
-            technical_part, user_part = content.split(" -- ", 1)
-        else:
-            # No separator, treat everything as technical params
-            technical_part = content
-            user_part = ""
+        if not content:
+            return params
         
-        # Parse user parameters into a dictionary
-        user_params = {}
-        if user_part:
-            for param in user_part.split():
-                if "=" in param:
-                    key, value = param.split("=", 1)
-                    user_params[key] = value
-                else:
-                    # Standalone flag without value
-                    user_params[param] = ""
+        # Parse all parameters (split by spaces)
+        for param in content.split():
+            # Skip empty strings
+            if not param:
+                continue
+            
+            if "=" in param:
+                key, value = param.split("=", 1)
+                params[key] = value
+            else:
+                # Standalone flag without value
+                params[param] = ""
         
-        return technical_part, user_params
+        return params
 
-    def _build_cmdline(self, technical_part: str, user_params: Dict[str, str]) -> str:
-        """Build cmdline content from technical params and user params.
+    def _build_cmdline(self, params: Dict[str, str]) -> str:
+        """Build cmdline content from a dictionary of parameters.
         
         Args:
-            technical_part: Technical boot parameters string
-            user_params: Dictionary of user parameters
+            params: Dictionary mapping parameter names to values
             
         Returns:
-            Complete cmdline string
+            Complete cmdline string with parameters joined by spaces
         """
-        if not user_params:
-            return technical_part
+        if not params:
+            return ""
         
-        # Build user params string
-        user_parts = []
-        for key, value in user_params.items():
+        parts = []
+        for key, value in sorted(params.items()):
             if value:
-                user_parts.append(f"{key}={value}")
+                parts.append(f"{key}={value}")
             else:
-                user_parts.append(key)
+                parts.append(key)
         
-        user_part = " ".join(user_parts)
-        return f"{technical_part} -- {user_part}"
+        return " ".join(parts)
 
     def load(self) -> Dict[str, Any]:
         """Load the cmdline configuration from disk.
@@ -101,16 +102,16 @@ class CmdlineConfig(BaseConfig):
     def save(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Save the cmdline configuration to disk.
         
-        Only updates user parameters (after --) while preserving technical
-        parameters (before --) from the existing file.
+        Only updates parameters listed in CONFIGURABLE_PARAMETERS from the new content,
+        while preserving all other parameters from the existing file.
 
         Args:
             config: Dictionary with 'content' key containing the new content
             
         Returns:
             Dictionary with metadata about the save operation:
-            - parameters_changed: bool indicating if any parameter changed
-            - parameter_changes: dict mapping parameter names to change info:
+            - parameters_changed: bool indicating if any whitelisted parameter changed
+            - parameter_changes: dict mapping whitelisted parameter names to change info:
                 - status: 'added', 'modified', 'removed', or 'unchanged'
                 - old_value: previous value (None if added)
                 - new_value: new value (None if removed)
@@ -126,34 +127,34 @@ class CmdlineConfig(BaseConfig):
             except (IOError, OSError):
                 pass
         
-        # Parse new content to extract user parameters
-        _, new_user_params = self._parse_cmdline(new_content)
+        # Parse all parameters from existing and new content
+        existing_params = self._parse_cmdline(existing_content) if existing_content else {}
+        new_params = self._parse_cmdline(new_content)
         
-        # Parse existing content
-        if existing_content:
-            technical_part, existing_user_params = self._parse_cmdline(existing_content)
-        else:
-            # No existing file, extract technical part from new content
-            technical_part, _ = self._parse_cmdline(new_content)
-            existing_user_params = {}
+        # Extract only whitelisted parameters from new content
+        new_whitelisted_params = {
+            key: value
+            for key, value in new_params.items()
+            if key in self.CONFIGURABLE_PARAMETERS
+        }
         
-        # Update user parameters with new ones
-        updated_user_params = existing_user_params.copy()
-        updated_user_params.update(new_user_params)
+        # Start with all existing parameters
+        final_params = existing_params.copy()
+        
+        # Update only whitelisted parameters from new content
+        final_params.update(new_whitelisted_params)
         
         # Build final content
-        final_content = self._build_cmdline(technical_part, updated_user_params)
+        final_content = self._build_cmdline(final_params)
         
-        # Track all parameter changes
+        # Track changes only for whitelisted parameters
         parameter_changes = {}
         parameters_changed = False
         
-        # Get all unique parameter keys
-        all_params = set(existing_user_params.keys()) | set(updated_user_params.keys())
-        
-        for param in all_params:
-            old_value = existing_user_params.get(param)
-            new_value = updated_user_params.get(param)
+        # Check changes for each whitelisted parameter
+        for param in self.CONFIGURABLE_PARAMETERS:
+            old_value = existing_params.get(param)
+            new_value = final_params.get(param)
             
             if old_value is None and new_value is not None:
                 # Parameter was added
@@ -164,7 +165,9 @@ class CmdlineConfig(BaseConfig):
                 }
                 parameters_changed = True
             elif old_value is not None and new_value is None:
-                # Parameter was removed (shouldn't happen with current logic, but handle it)
+                # Parameter was removed
+                # Note: This case should not occur with current merge logic since we preserve
+                # existing parameters. It's included for completeness in case the logic changes.
                 parameter_changes[param] = {
                     "status": "removed",
                     "old_value": old_value,
