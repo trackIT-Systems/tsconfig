@@ -170,6 +170,11 @@ main {
     color: #0d6efd;
 }
 
+/* Log modal font size */
+#logModal #logContainer {
+    font-size: 0.75rem;
+}
+
 /* Log modal mobile optimization */
 @media (max-width: 991.98px) {
     #logModal .modal-dialog {

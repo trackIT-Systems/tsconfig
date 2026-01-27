@@ -21,9 +21,6 @@ export function statusPage() {
         actionLoading: false,
         // Reboot functionality
         rebootLoading: false,
-        // Reboot protection functionality
-        rebootProtectionEnabled: false,
-        rebootProtectionLoading: false,
         // Timedatectl status properties
         timedatectlStatus: null,
         timedatectlLoading: false,
@@ -55,8 +52,6 @@ export function statusPage() {
                 return;
             }
             
-            // Load reboot protection status
-            await this.loadRebootProtectionStatus();
             // Load system configuration first to get refresh interval
             await this.loadSystemConfig();
             await this.refreshStatus();
@@ -276,6 +271,11 @@ export function statusPage() {
             }, 250);
         },
 
+        streamAllLogs() {
+            // Stream all system logs
+            this.streamLogs('all');
+        },
+
         async rebootSystem() {
             // Show confirmation dialog
             if (!confirm('Are you sure you want to reboot the system? This will restart the device and temporarily interrupt all services.')) {
@@ -315,63 +315,6 @@ export function statusPage() {
             }
         },
 
-        // Reboot protection methods
-        async loadRebootProtectionStatus() {
-            try {
-                const response = await fetch(apiUrl('/api/systemd/reboot-protection'));
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                this.rebootProtectionEnabled = data.enabled;
-            } catch (err) {
-                console.error('Failed to load reboot protection status:', err);
-                // Don't show error to user, just log it
-            }
-        },
-
-        async toggleRebootProtection() {
-            this.rebootProtectionLoading = true;
-            
-            try {
-                const response = await fetch(apiUrl('/api/systemd/reboot-protection'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        enabled: this.rebootProtectionEnabled
-                    })
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Failed to toggle reboot protection');
-                }
-                
-                const data = await response.json();
-                
-                // Show success message
-                let message = data.message || `Reboot protection ${this.rebootProtectionEnabled ? 'enabled' : 'disabled'}`;
-                
-                // Show warnings if any
-                if (data.warnings && data.warnings.length > 0) {
-                    message += ` (Warnings: ${data.warnings.join(', ')})`;
-                }
-                
-                this.showToast(message, 'success', { title: 'Reboot Protection' });
-                
-            } catch (err) {
-                // Revert the toggle state on error
-                this.rebootProtectionEnabled = !this.rebootProtectionEnabled;
-                
-                this.showToast(`Failed to toggle reboot protection: ${err.message}`, 'error', { title: 'Reboot Protection Failed' });
-                console.error('Reboot protection toggle error:', err);
-            } finally {
-                this.rebootProtectionLoading = false;
-            }
-        },
 
         // Function to get filtered disks based on expert mode
         getFilteredDisks(expertMode) {

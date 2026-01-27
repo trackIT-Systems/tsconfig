@@ -15,7 +15,12 @@
             <div class="modal-header bg-dark text-white flex-shrink-0">
                 <h5 class="modal-title" id="logModalLabel">
                     <i class="fas fa-file-alt me-2"></i>
-                    Service Logs: <span x-text="currentService"></span>
+                    <template x-if="currentService === 'all'">
+                        <span>All System Logs</span>
+                    </template>
+                    <template x-if="currentService !== 'all'">
+                        <span>Service Logs: <span x-text="currentService"></span></span>
+                    </template>
                 </h5>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -68,7 +73,8 @@
                                     'btn-outline-success': restartState === 'restarted'
                                 }"
                                 @click="restartService()" 
-                                :disabled="!currentService || restartState === 'restarting'">
+                                :disabled="!currentService || currentService === 'all' || restartState === 'restarting'"
+                                x-show="currentService !== 'all'">
                             <template x-if="restartState === 'idle'">
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-redo me-1"></i>

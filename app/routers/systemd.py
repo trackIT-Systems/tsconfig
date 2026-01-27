@@ -364,27 +364,47 @@ async def get_system_config():
 
 @router.get("/logs/{service_name}")
 async def stream_service_logs(service_name: str):
-    """Stream journalctl logs for a specific service, or kernel logs."""
-    # Validate service is in our configured list
-    configured_services = get_configured_services(include_expert=True)
-    service_names = [service.name for service in configured_services]
-    if service_name not in service_names:
-        raise HTTPException(status_code=400, detail="Service not in configured list")
+    """Stream journalctl logs for a specific service, kernel logs, or all system logs."""
+    # Special handling for "all" logs - bypass validation
+    if service_name == "all":
+        pass  # Allow "all" without validation
+    else:
+        # Validate service is in our configured list
+        configured_services = get_configured_services(include_expert=True)
+        service_names = [service.name for service in configured_services]
+        if service_name not in service_names:
+            raise HTTPException(status_code=400, detail="Service not in configured list")
 
     async def generate_logs():
-        """Generate streaming logs using journalctl -fu or journalctl -kf for kernel."""
+        """Generate streaming logs using journalctl -fu, journalctl -kf for kernel, or journalctl -f for all."""
         # Send initial comment to establish the connection (comments don't trigger onmessage)
         yield f": Stream started\n\n"
         
         try:
+            # Special handling for all system logs
+            if service_name == "all":
+                # Use journalctl -f for all system logs (follow mode, no unit filter)
+                process = await asyncio.create_subprocess_exec(
+                    "journalctl",
+                    "-f",
+                    "--no-pager",
+                    "--no-hostname",
+                    "--output", "short",
+                    "-n",
+                    "50",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
             # Special handling for kernel logs
-            if service_name == "kernel" or service_name == "dmesg":
+            elif service_name == "kernel" or service_name == "dmesg":
                 # Use journalctl -k -f for kernel logs (kernel messages, follow mode)
                 process = await asyncio.create_subprocess_exec(
                     "journalctl",
                     "-k",
                     "-f",
                     "--no-pager",
+                    "--no-hostname",
+                    "--output", "short",
                     "-n",
                     "50",
                     stdout=asyncio.subprocess.PIPE,
@@ -397,6 +417,8 @@ async def stream_service_logs(service_name: str):
                     "-fu",
                     service_name,
                     "--no-pager",
+                    "--no-hostname",
+                    "--output", "short",
                     "-n",
                     "50",
                     stdout=asyncio.subprocess.PIPE,
@@ -427,188 +449,3 @@ async def stream_service_logs(service_name: str):
         media_type="text/plain",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Content-Type": "text/event-stream"},
     )
-
-
-class RebootProtectionStatus(BaseModel):
-    """Reboot protection status model."""
-
-    enabled: bool
-    services: List[str] = Field(default_factory=list, description="Services with reboot protection")
-
-
-class RebootProtectionToggle(BaseModel):
-    """Reboot protection toggle model."""
-
-    enabled: bool
-
-
-async def get_services_with_reboot_action() -> List[str]:
-    """Get list of services that have StartLimitAction=reboot configured."""
-    services_to_check = ["radiotracking", "soundscapepipe"]
-    services_with_reboot = []
-
-    for service in services_to_check:
-        try:
-            result = await run_subprocess_async(
-                ["systemctl", "cat", f"{service}.service"], capture_output=True, text=True, timeout=10
-            )
-
-            if result.returncode == 0 and "StartLimitAction=reboot" in result.stdout:
-                services_with_reboot.append(service)
-        except Exception:
-            continue
-
-    return services_with_reboot
-
-
-def is_reboot_protection_enabled() -> bool:
-    """Check if reboot protection is currently enabled by checking for override directories."""
-    services_to_check = ["radiotracking", "soundscapepipe"]
-
-    for service in services_to_check:
-        override_dir = Path(f"/etc/systemd/system/{service}.service.d")
-        override_file = override_dir / "reboot-protection.conf"
-
-        if override_file.exists():
-            try:
-                content = override_file.read_text()
-                if "StartLimitAction=none" in content:
-                    return True
-            except Exception:
-                continue
-
-    return False
-
-
-async def create_service_override(service_name: str) -> bool:
-    """Create a systemd service override to disable reboot action."""
-    try:
-        override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
-        override_file = override_dir / "reboot-protection.conf"
-
-        # Create override directory
-        result = await run_subprocess_async(["mkdir", "-p", str(override_dir)], capture_output=True, text=True, timeout=10)
-
-        if result.returncode != 0:
-            return False
-
-        # Create override file content
-        override_content = """[Service]
-StartLimitAction=none
-"""
-
-        # Write override file
-        process = await asyncio.create_subprocess_exec(
-            "tee",
-            str(override_file),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(override_content.encode()),
-            timeout=10.0
-        )
-        returncode = await process.wait()
-
-        return returncode == 0
-
-    except Exception:
-        return False
-
-
-async def remove_service_override(service_name: str) -> bool:
-    """Remove systemd service override file."""
-    try:
-        override_dir = Path(f"/etc/systemd/system/{service_name}.service.d")
-        override_file = override_dir / "reboot-protection.conf"
-
-        # Remove override file
-        if override_file.exists():
-            result = await run_subprocess_async(["rm", str(override_file)], capture_output=True, text=True, timeout=10)
-
-            if result.returncode != 0:
-                return False
-
-        # Remove directory if empty
-        try:
-            override_dir.rmdir()
-        except OSError:
-            # Directory not empty, that's fine
-            pass
-
-        return True
-
-    except Exception:
-        return False
-
-
-@router.get("/reboot-protection", response_model=RebootProtectionStatus)
-async def get_reboot_protection_status():
-    """Get current reboot protection status."""
-    try:
-        enabled = is_reboot_protection_enabled()
-        services_with_reboot = await get_services_with_reboot_action()
-
-        return RebootProtectionStatus(enabled=enabled, services=services_with_reboot)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get reboot protection status: {str(e)}")
-
-
-@router.post("/reboot-protection")
-async def toggle_reboot_protection(toggle: RebootProtectionToggle):
-    """Enable or disable reboot protection for services."""
-    try:
-        services_to_protect = ["radiotracking", "soundscapepipe"]
-        success = True
-        errors = []
-
-        for service in services_to_protect:
-            if toggle.enabled:
-                if not await create_service_override(service):
-                    success = False
-                    errors.append(f"Failed to create override for {service}")
-            else:
-                if not await remove_service_override(service):
-                    success = False
-                    errors.append(f"Failed to remove override for {service}")
-
-        if not success:
-            raise HTTPException(status_code=500, detail=f"Some operations failed: {', '.join(errors)}")
-
-        # Reload systemd daemon
-        result = await run_subprocess_async(["systemctl", "daemon-reload"], capture_output=True, text=True, timeout=30)
-
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail="Failed to reload systemd daemon")
-
-        # Restart services to apply changes
-        for service in services_to_protect:
-            try:
-                # Check if service exists and is active before restarting
-                status_result = await run_subprocess_async(
-                    ["systemctl", "is-active", service], capture_output=True, text=True, timeout=10
-                )
-
-                if status_result.returncode == 0:  # Service is active
-                    restart_result = await run_subprocess_async(
-                        ["systemctl", "restart", service], capture_output=True, text=True, timeout=30
-                    )
-
-                    if restart_result.returncode != 0:
-                        errors.append(f"Failed to restart {service}")
-            except Exception as e:
-                errors.append(f"Error restarting {service}: {str(e)}")
-
-        if errors:
-            return {
-                "message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} with warnings",
-                "warnings": errors,
-            }
-
-        return {"message": f"Reboot protection {'enabled' if toggle.enabled else 'disabled'} successfully"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to toggle reboot protection: {str(e)}")
