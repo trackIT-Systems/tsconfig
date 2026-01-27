@@ -44,6 +44,10 @@ export function statusPage() {
         userLocationCircle: null,
         userLocationLine: null,
         showUserLocation: false,
+        // Soundscapepipe properties
+        soundscapepipeConfig: null,
+        soundscapepipeLoading: false,
+        soundscapepipeService: null,
 
         async initStatus() {
             // Don't initialize in server mode
@@ -57,6 +61,12 @@ export function statusPage() {
             await this.loadSystemConfig();
             await this.refreshStatus();
             await this.loadServices();
+            // Load soundscapepipe config and service status
+            await this.loadSoundscapepipeConfig();
+            // Subscribe to service updates to refresh soundscapepipe status
+            serviceManager.subscribe(() => {
+                this.updateSoundscapepipeService();
+            });
             // Load geolocation
             await this.loadGeolocation();
             // Auto-refresh using configured interval when status tab is active
@@ -66,6 +76,7 @@ export function statusPage() {
                 if (currentHash === 'status' || (currentHash === '' && this.activeConfig === 'status')) {
                     this.refreshStatus();
                     this.loadServices();
+                    this.loadSoundscapepipeConfig();
                 }
             }, this.refreshIntervalSeconds * 1000);
         },
@@ -136,6 +147,12 @@ export function statusPage() {
                 
                 // Update local services data from the forced refresh
                 this.services = serviceManager.services;
+                // Update soundscapepipe service status
+                this.updateSoundscapepipeService();
+                // Load soundscapepipe config if service exists
+                if (this.soundscapepipeService) {
+                    await this.loadSoundscapepipeConfig();
+                }
             } catch (err) {
                 this.showToast(`Failed to load system status: ${err.message}`, 'error', { title: 'System Status Error' });
                 console.error('Status refresh error:', err);
@@ -381,6 +398,15 @@ export function statusPage() {
                     if (pathAfterMnt) {
                         return `<a href="/data/files/${pathAfterMnt}/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
                     }
+                } else if (mp === '/data') {
+                    // Link /data mountpoint directly to filebrowser root
+                    return `<a href="/data/files/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
+                } else if (mp.startsWith('/data/')) {
+                    // Extract the path after /data/ and create a link
+                    const pathAfterData = mp.substring(6); // Remove '/data/' prefix
+                    if (pathAfterData) {
+                        return `<a href="/data/files/${pathAfterData}/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
+                    }
                 }
                 return mp;
             });
@@ -574,6 +600,69 @@ export function statusPage() {
                     ${distanceText}
                 </div>
             `);
+        },
+
+        // Soundscapepipe methods
+        async loadSoundscapepipeConfig() {
+            // Load config if service exists (regardless of active state)
+            this.updateSoundscapepipeService();
+            if (!this.soundscapepipeService) {
+                this.soundscapepipeConfig = null;
+                return;
+            }
+
+            this.soundscapepipeLoading = true;
+            try {
+                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe') || apiUrl('/api/soundscapepipe');
+                const response = await fetch(url);
+                if (response.ok) {
+                    this.soundscapepipeConfig = await response.json();
+                } else {
+                    // If config doesn't exist or service isn't configured, clear it
+                    this.soundscapepipeConfig = null;
+                }
+            } catch (err) {
+                console.error('Failed to load soundscapepipe config:', err);
+                this.soundscapepipeConfig = null;
+            } finally {
+                this.soundscapepipeLoading = false;
+            }
+        },
+
+        updateSoundscapepipeService() {
+            this.soundscapepipeService = serviceManager.findService('soundscapepipe');
+        },
+
+        getEnabledDetectors() {
+            if (!this.soundscapepipeConfig || !this.soundscapepipeConfig.detectors) {
+                return [];
+            }
+            // Extract detector names from the detectors object
+            // Detectors are enabled if they exist in the config
+            return Object.keys(this.soundscapepipeConfig.detectors).filter(detector => {
+                const detectorConfig = this.soundscapepipeConfig.detectors[detector];
+                // Include detector if it has configuration (not null/undefined)
+                // Filter out if explicitly disabled
+                return detectorConfig && detectorConfig.enabled !== false;
+            });
+        },
+
+        getDetectorTasks(detectorName) {
+            if (!this.soundscapepipeConfig || !this.soundscapepipeConfig.detectors) {
+                return [];
+            }
+            const detector = this.soundscapepipeConfig.detectors[detectorName];
+            if (!detector || !detector.tasks || !Array.isArray(detector.tasks)) {
+                return [];
+            }
+            return detector.tasks.map(task => task.name || 'Unnamed').filter(Boolean);
+        },
+
+        getRecordingGroups() {
+            if (!this.soundscapepipeConfig || !this.soundscapepipeConfig.groups) {
+                return [];
+            }
+            return Object.keys(this.soundscapepipeConfig.groups);
         }
     }
 }
