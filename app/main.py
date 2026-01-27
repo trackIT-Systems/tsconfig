@@ -277,7 +277,6 @@ Get comprehensive system status information including:
 - CPU usage, load averages, and processor information
 - Memory (RAM) and swap usage statistics
 - Disk usage for all mounted filesystems
-- Network connections and I/O statistics
 - Temperature sensors (when available)
 - System uptime and current time
 
@@ -324,15 +323,6 @@ async def get_system_status():
         # Disk information - consolidate devices with multiple mountpoints
         disk_usage = _get_consolidated_disk_usage()
 
-        # Network information
-        try:
-            network_connections = len(psutil.net_connections())
-        except (psutil.AccessDenied, PermissionError):
-            # Network connections require elevated permissions on some systems
-            network_connections = None
-
-        network_io = psutil.net_io_counters()._asdict() if psutil.net_io_counters() else {}
-
         # Temperature sensors (if available)
         temperatures = {}
         try:
@@ -377,7 +367,6 @@ async def get_system_status():
             },
             "memory": {"virtual": memory, "swap": swap},
             "disk": disk_usage,
-            "network": {"connections": network_connections, "io_counters": network_io},
             "temperatures": temperatures,
         }
 
@@ -672,6 +661,85 @@ def _parse_timedatectl_status(status_output):
                     timedatectl_info[key_snake] = value
 
     return timedatectl_info
+
+
+@app.get(
+    "/api/network-connectivity",
+    tags=["system"],
+    summary="Get network connectivity status",
+    description="""
+Get network connectivity state using the `nmcli networking connectivity` command.
+
+Returns the connectivity state which can be one of:
+- `full` - The host is connected to a network and has full access to the Internet
+- `limited` - The host is connected to a network, but it has no access to the Internet
+- `none` - The host is not connected to any network
+- `portal` - The host is behind a captive portal and cannot reach the full Internet
+- `unknown` - The connectivity status cannot be found out
+
+This endpoint checks if `nmcli` is available and returns the current connectivity state.
+    """,
+    response_description="Network connectivity status information",
+)
+async def get_network_connectivity():
+    """Get network connectivity status using nmcli."""
+    # Disable network connectivity in server mode
+    if config_loader.is_server_mode():
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Network connectivity status is not available in server mode"},
+        )
+
+    try:
+        network_connectivity_status = {
+            "available": False,
+            "connectivity": None,
+            "error": None,
+            "timestamp": datetime.datetime.now().isoformat(),
+        }
+
+        # Check if nmcli command is available
+        try:
+            test_result = await run_subprocess_async(["nmcli", "--version"], capture_output=True, text=True, timeout=5)
+            network_connectivity_status["available"] = test_result.returncode == 0
+        except (subprocess.TimeoutExpired, asyncio.TimeoutError, FileNotFoundError):
+            network_connectivity_status["available"] = False
+            network_connectivity_status["error"] = "nmcli command not found"
+            return JSONResponse(content=network_connectivity_status)
+
+        if not network_connectivity_status["available"]:
+            network_connectivity_status["error"] = "nmcli command not available"
+            return JSONResponse(content=network_connectivity_status)
+
+        # Get network connectivity status
+        try:
+            connectivity_result = await run_subprocess_async(
+                ["nmcli", "networking", "connectivity"], capture_output=True, text=True, timeout=10
+            )
+
+            if connectivity_result.returncode == 0:
+                # Parse the output - should be a single line with the state
+                connectivity_state = connectivity_result.stdout.strip().lower()
+                # Validate the state is one of the expected values
+                valid_states = ["full", "limited", "none", "portal", "unknown"]
+                if connectivity_state in valid_states:
+                    network_connectivity_status["connectivity"] = connectivity_state
+                else:
+                    network_connectivity_status["error"] = f"Unexpected connectivity state: {connectivity_state}"
+            else:
+                network_connectivity_status["error"] = f"nmcli networking connectivity failed: {connectivity_result.stderr.strip()}"
+        except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+            network_connectivity_status["error"] = "nmcli networking connectivity command timed out"
+        except Exception as e:
+            network_connectivity_status["error"] = f"Error executing nmcli networking connectivity: {str(e)}"
+
+        return JSONResponse(content=network_connectivity_status)
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get network connectivity status: {str(e)}"},
+        )
 
 
 @app.get(

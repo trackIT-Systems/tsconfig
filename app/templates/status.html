@@ -325,9 +325,9 @@
                                                 <div class="d-flex justify-content-between mb-1">
                                                     <span>Load Average:</span>
                                                     <span>
-                                                        <span class="badge bg-success me-1" x-text="`1m: ${systemInfo.cpu.load_avg[0].toFixed(2)}`"></span>
-                                                        <span class="badge bg-primary me-1" x-text="`5m: ${systemInfo.cpu.load_avg[1].toFixed(2)}`"></span>
-                                                        <span class="badge bg-warning" x-text="`15m: ${systemInfo.cpu.load_avg[2].toFixed(2)}`"></span>
+                                                        <span class="badge text-bg-success me-1" x-text="`1m: ${systemInfo.cpu.load_avg[0].toFixed(2)}`"></span>
+                                                        <span class="badge text-bg-primary me-1" x-text="`5m: ${systemInfo.cpu.load_avg[1].toFixed(2)}`"></span>
+                                                        <span class="badge text-bg-warning" x-text="`15m: ${systemInfo.cpu.load_avg[2].toFixed(2)}`"></span>
                                                     </span>
                                                 </div>
                                                 <span x-text="`Cores: ${systemInfo.cpu.count_physical} physical, ${systemInfo.cpu.count_logical} logical`"></span>
@@ -378,9 +378,9 @@
                                                 <div class="d-flex justify-content-between mb-1">
                                                     <span>Memory:</span>
                                                     <span>
-                                                        <span class="badge bg-success me-1" x-text="`Used: ${formatBytes((systemInfo.memory.virtual.used || 0) - (systemInfo.memory.virtual.buffers || 0) - (systemInfo.memory.virtual.cached || 0))}`"></span>
-                                                        <span class="badge bg-primary me-1" x-text="`Buffers: ${formatBytes(systemInfo.memory.virtual.buffers || 0)}`"></span>
-                                                        <span class="badge bg-warning" x-text="`Cache: ${formatBytes(systemInfo.memory.virtual.cached || 0)}`"></span>
+                                                        <span class="badge text-bg-success me-1" x-text="`Used: ${formatBytes((systemInfo.memory.virtual.used || 0) - (systemInfo.memory.virtual.buffers || 0) - (systemInfo.memory.virtual.cached || 0))}`"></span>
+                                                        <span class="badge text-bg-primary me-1" x-text="`Buffers: ${formatBytes(systemInfo.memory.virtual.buffers || 0)}`"></span>
+                                                        <span class="badge text-bg-warning" x-text="`Cache: ${formatBytes(systemInfo.memory.virtual.cached || 0)}`"></span>
                                                     </span>
                                                 </div>
                                                 <span x-text="`${formatBytes(systemInfo.memory.virtual.used || 0)} / ${formatBytes(systemInfo.memory.virtual.total || 0)} (${(systemInfo.memory.virtual.percent || 0).toFixed(1)}%)`"></span>
@@ -427,28 +427,95 @@
                                 </div>
                             </div>
 
-                            <!-- Network, Temperature & Time Status -->
+                            <!-- Network Connectivity, Temperature & Time Status -->
                             <div class="row">
                                 <div class="col-lg-4 col-md-6 mb-3">
-                                    <h6 class="text-muted mb-3"><i class="fas fa-network-wired me-2"></i>Network</h6>
-                                    <table class="table table-borderless table-sm small">
-                                        <tr>
-                                            <td class="fw-bold">Active Connections:</td>
-                                            <td x-text="systemInfo?.network?.connections !== null ? systemInfo?.network?.connections : 'Permission denied'"></td>
-                                        </tr>
-                                        <template x-if="systemInfo?.network?.io_counters?.bytes_sent">
-                                            <tr>
-                                                <td class="fw-bold">Bytes Sent:</td>
-                                                <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_sent)"></td>
-                                            </tr>
-                                        </template>
-                                        <template x-if="systemInfo?.network?.io_counters?.bytes_recv">
-                                            <tr>
-                                                <td class="fw-bold">Bytes Received:</td>
-                                                <td x-text="formatBytes(systemInfo?.network?.io_counters?.bytes_recv)"></td>
-                                            </tr>
-                                        </template>
-                                    </table>
+                                    <h6 class="text-muted mb-3"><i class="fas fa-network-wired me-2"></i>Network Connectivity</h6>
+                                    <template x-if="networkConnectivity?.available && networkConnectivity?.connectivity">
+                                        <div>
+                                            <table class="table table-borderless table-sm small">
+                                                <tr>
+                                                    <td class="fw-bold">Network Connectivity:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'text-bg-success': networkConnectivity.connectivity === 'full',
+                                                                  'text-bg-warning': networkConnectivity.connectivity === 'limited' || networkConnectivity.connectivity === 'portal',
+                                                                  'text-bg-danger': networkConnectivity.connectivity === 'none',
+                                                                  'text-bg-secondary': networkConnectivity.connectivity === 'unknown' || !networkConnectivity.connectivity
+                                                              }"
+                                                              x-text="networkConnectivity.connectivity ? networkConnectivity.connectivity.charAt(0).toUpperCase() + networkConnectivity.connectivity.slice(1) : 'Unknown'"></span>
+                                                    </td>
+                                                </tr>
+                                                <template x-if="modemInfo && modemInfo.operator_name">
+                                                    <tr>
+                                                        <td class="fw-bold">Operator:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-primary" x-text="modemInfo.operator_name"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <template x-if="modemInfo && modemInfo.access_technology">
+                                                    <tr>
+                                                        <td class="fw-bold">Technology:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-primary" x-text="modemInfo.access_technology"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <tr>
+                                                    <td class="fw-bold">Modem State:</td>
+                                                    <td class="text-end">
+                                                        <template x-if="modemInfo && modemInfo.state">
+                                                            <span class="badge small" 
+                                                                  :class="{
+                                                                      'text-bg-success': modemInfo.state === 'connected' || modemInfo.state === 'registered',
+                                                                      'text-bg-warning': modemInfo.state === 'connecting' || modemInfo.state === 'registering',
+                                                                      'text-bg-danger': modemInfo.state === 'disconnected' || modemInfo.state === 'failed',
+                                                                      'text-bg-secondary': modemInfo.state === 'unknown' || modemInfo.state === 'locked' || modemInfo.state === 'disabled'
+                                                                  }"
+                                                                  x-text="modemInfo.state"></span>
+                                                        </template>
+                                                        <template x-if="!modemInfo || !modemInfo.state">
+                                                            <span class="badge small text-bg-secondary">No modem found</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                                <template x-if="modemInfo && (modemInfo.signal_strength_percent !== null || modemInfo.signal_strength_dbm !== null)">
+                                                    <tr>
+                                                        <td class="fw-bold">Signal Strength:</td>
+                                                        <td class="text-end">
+                                                            <template x-if="modemInfo.signal_strength_percent !== null">
+                                                                <span class="badge small" 
+                                                                      :class="{
+                                                                          'text-bg-success': modemInfo.signal_strength_percent >= 60,
+                                                                          'text-bg-warning': modemInfo.signal_strength_percent >= 40 && modemInfo.signal_strength_percent < 60,
+                                                                          'text-bg-danger': modemInfo.signal_strength_percent < 40
+                                                                      }"
+                                                                      x-text="`${modemInfo.signal_strength_percent}%`"></span>
+                                                            </template>
+                                                            <template x-if="modemInfo.signal_strength_percent === null && modemInfo.signal_strength_dbm !== null">
+                                                                <span class="badge small text-bg-secondary" 
+                                                                      x-text="`${modemInfo.signal_strength_dbm} dBm`"></span>
+                                                            </template>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </table>
+                                        </div>
+                                    </template>
+                                    <template x-if="networkConnectivityError">
+                                        <div class="text-danger small">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            <span x-text="networkConnectivityError"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!networkConnectivity?.available && !networkConnectivityError">
+                                        <div class="text-muted small">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Network connectivity status not available
+                                        </div>
+                                    </template>
                                 </div>
                                 <div class="col-lg-4 col-md-6 mb-3" x-show="Object.keys(systemInfo?.temperatures || {}).length > 0">
                                     <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
@@ -457,13 +524,14 @@
                                             <template x-for="sensor in sensors" :key="sensor.label">
                                                 <tr>
                                                     <td class="fw-bold text-capitalize" x-text="`${sensor.label}:`"></td>
-                                                    <td>
-                                                        <span x-text="`${sensor.current.toFixed(1)}°C`" 
-                                                                :class="{
-                                                                    'text-success': sensor.current < 60,
-                                                                    'text-warning': sensor.current >= 60 && sensor.current < 80,
-                                                                    'text-danger': sensor.current >= 80
-                                                                }"></span>
+                                                    <td class="text-end">
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'text-bg-success': sensor.current < 60,
+                                                                  'text-bg-warning': sensor.current >= 60 && sensor.current < 80,
+                                                                  'text-bg-danger': sensor.current >= 80
+                                                              }"
+                                                              x-text="`${sensor.current.toFixed(1)}°C`"></span>
                                                     </td>
                                                 </tr>
                                             </template>
@@ -481,31 +549,31 @@
                                             <table class="table table-borderless table-sm small">
                                                 <tr>
                                                     <td class="fw-bold">Local Time:</td>
-                                                    <td x-text="timedatectlStatus.status.local_time"></td>
+                                                    <td class="text-end" x-text="timedatectlStatus.status.local_time"></td>
                                                 </tr>
                                                 <tr>
                                                     <td class="fw-bold">Time Zone:</td>
-                                                    <td x-text="timedatectlStatus.status.time_zone"></td>
+                                                    <td class="text-end" x-text="timedatectlStatus.status.time_zone"></td>
                                                 </tr>
                                                 <tr>
                                                     <td class="fw-bold">NTP Service:</td>
-                                                    <td>
+                                                    <td class="text-end">
                                                         <span class="badge small" 
                                                               :class="{
-                                                                  'bg-success': timedatectlStatus.status.ntp_service === 'active',
-                                                                  'bg-warning': timedatectlStatus.status.ntp_service === 'inactive',
-                                                                  'bg-secondary': timedatectlStatus.status.ntp_service === 'n/a'
+                                                                  'text-bg-success': timedatectlStatus.status.ntp_service === 'active',
+                                                                  'text-bg-warning': timedatectlStatus.status.ntp_service === 'inactive',
+                                                                  'text-bg-secondary': timedatectlStatus.status.ntp_service === 'n/a'
                                                               }"
                                                               x-text="timedatectlStatus.status.ntp_service"></span>
                                                     </td>
                                                 </tr>
                                                 <tr>
                                                     <td class="fw-bold">Clock Synchronized:</td>
-                                                    <td>
+                                                    <td class="text-end">
                                                         <span class="badge small" 
                                                               :class="{
-                                                                  'bg-success': timedatectlStatus.status.system_clock_synchronized === true,
-                                                                  'bg-danger': timedatectlStatus.status.system_clock_synchronized === false
+                                                                  'text-bg-success': timedatectlStatus.status.system_clock_synchronized === true,
+                                                                  'text-bg-danger': timedatectlStatus.status.system_clock_synchronized === false
                                                               }"
                                                               x-text="timedatectlStatus.status.system_clock_synchronized ? 'Yes' : 'No'"></span>
                                                     </td>

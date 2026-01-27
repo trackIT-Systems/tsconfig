@@ -28,6 +28,12 @@ export function statusPage() {
         timedatectlStatus: null,
         timedatectlLoading: false,
         timedatectlError: null,
+        // Network connectivity status properties
+        networkConnectivity: null,
+        networkConnectivityError: null,
+        // Modem information properties
+        modemInfo: null,
+        modemError: null,
         // Geolocation properties
         geolocation: null,
         geolocationMap: null,
@@ -73,11 +79,13 @@ export function statusPage() {
             }
             
             try {
-                // Refresh system status, services, and timedatectl in parallel
+                // Refresh system status, services, timedatectl, network connectivity, and modem info in parallel
                 // Force refresh services since this is a manual refresh
-                const [statusResponse, timedatectlResponse] = await Promise.all([
+                const [statusResponse, timedatectlResponse, networkConnectivityResponse, modemResponse] = await Promise.all([
                     fetch(apiUrl('/api/system-status')),
                     fetch(apiUrl('/api/timedatectl-status')),
+                    fetch(apiUrl('/api/network-connectivity')),
+                    fetch(apiUrl('/api/network/modem')),
                     serviceManager.getServices(true) // Force refresh
                 ]);
                 
@@ -103,6 +111,27 @@ export function statusPage() {
                 } else {
                     this.timedatectlError = `Failed to load timedatectl status: HTTP ${timedatectlResponse.status}`;
                     console.error('Timedatectl status error:', this.timedatectlError);
+                }
+                
+                // Handle network connectivity status
+                if (networkConnectivityResponse.ok) {
+                    const networkConnectivityData = await networkConnectivityResponse.json();
+                    this.networkConnectivity = networkConnectivityData;
+                    this.networkConnectivityError = null;
+                } else {
+                    this.networkConnectivityError = `Failed to load network connectivity status: HTTP ${networkConnectivityResponse.status}`;
+                    console.error('Network connectivity status error:', this.networkConnectivityError);
+                }
+                
+                // Handle modem information
+                if (modemResponse.ok) {
+                    const modemData = await modemResponse.json();
+                    // Modem endpoint returns null if no modem found, which is valid
+                    this.modemInfo = modemData;
+                    this.modemError = null;
+                } else {
+                    this.modemError = `Failed to load modem information: HTTP ${modemResponse.status}`;
+                    console.error('Modem information error:', this.modemError);
                 }
                 
                 // Update local services data from the forced refresh
