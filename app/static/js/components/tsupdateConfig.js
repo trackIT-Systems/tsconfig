@@ -325,10 +325,20 @@ export function tsupdateConfig() {
                     throw new Error(errorMessage);
                 }
                 const data = await response.json();
-                this.showMessage(data.message, false);  // false means not an error, so it will be success
+                
+                // Only show message in tracker mode (server mode will show messages in the mixin)
+                if (!this.serverMode) {
+                    this.showMessage(data.message, false);  // false means not an error, so it will be success
+                }
             };
             
-            await this.handleSaveConfig(configSaveFunction);
+            // In server mode, save and deploy; in tracker mode, just save
+            if (this.serverMode) {
+                const configGroup = window.serverModeManager?.getCurrentConfigGroup();
+                await this.handleSaveAndDeployConfig(configSaveFunction, configGroup);
+            } else {
+                await this.handleSaveConfig(configSaveFunction);
+            }
         },
 
         async saveAndRestartService() {

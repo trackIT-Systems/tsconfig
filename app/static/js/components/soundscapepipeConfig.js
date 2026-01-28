@@ -419,7 +419,10 @@ export function soundscapepipeConfig() {
                 });
                 
                 if (response.ok) {
-                    this.showMessage('Soundscapepipe configuration saved successfully!', false);
+                    // Only show message in tracker mode (server mode will show messages in the mixin)
+                    if (!this.serverMode) {
+                        this.showMessage('Soundscapepipe configuration saved successfully!', false);
+                    }
                 } else {
                     const error = await response.json();
                     let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
@@ -430,7 +433,13 @@ export function soundscapepipeConfig() {
                 }
             };
             
-            await this.handleSaveConfig(configSaveFunction);
+            // In server mode, save and deploy; in tracker mode, just save
+            if (this.serverMode) {
+                const configGroup = window.serverModeManager?.getCurrentConfigGroup();
+                await this.handleSaveAndDeployConfig(configSaveFunction, configGroup);
+            } else {
+                await this.handleSaveConfig(configSaveFunction);
+            }
         },
 
         async saveAndRestartService() {

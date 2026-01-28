@@ -2,6 +2,7 @@ import { apiUrl } from '../utils/apiUtils.js';
 import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
+import { triggerDeployment, formatDeploymentMessage } from '../utils/deploymentUtils.js';
 
 export function sshKeysConfig() {
     return {
@@ -156,6 +157,9 @@ export function sshKeysConfig() {
                 this.keys = data.keys || [];
                 this.newKey = '';
                 this.showMessage('SSH key added and saved successfully', 'success');
+                
+                // Trigger deployment in server mode
+                await this.triggerDeploymentIfServerMode();
             } catch (error) {
                 this.showMessage(error.message || 'Failed to add SSH key', 'error');
             } finally {
@@ -197,6 +201,9 @@ export function sshKeysConfig() {
                 const data = await response.json();
                 this.keys = data.keys || [];
                 this.showMessage('SSH key removed successfully', 'success');
+                
+                // Trigger deployment in server mode
+                await this.triggerDeploymentIfServerMode();
             } catch (error) {
                 this.showMessage(error.message || 'Failed to remove SSH key', 'error');
             } finally {
@@ -248,6 +255,9 @@ export function sshKeysConfig() {
                 
                 // Show detailed message with counts
                 this.showMessage(data.message || 'SSH keys imported successfully', 'success');
+                
+                // Trigger deployment in server mode
+                await this.triggerDeploymentIfServerMode();
             } catch (error) {
                 this.showMessage(error.message || `Failed to import SSH keys from ${platform}`, 'error');
             } finally {
@@ -261,6 +271,33 @@ export function sshKeysConfig() {
                 const title = type === 'success' ? 'SSH Keys - Success' : 
                              type === 'error' ? 'SSH Keys - Error' : 'SSH Keys';
                 window.toastManager.show(msg, type, { title });
+            }
+        },
+
+        async triggerDeploymentIfServerMode() {
+            // Only trigger deployment in server mode
+            if (!this.serverMode) {
+                return;
+            }
+
+            const configGroup = window.serverModeManager?.getCurrentConfigGroup();
+            if (!configGroup) {
+                console.warn('No config group available for deployment');
+                return;
+            }
+
+            try {
+                const deploymentResult = await triggerDeployment(configGroup);
+                const deploymentMessage = formatDeploymentMessage(deploymentResult);
+                
+                if (window.toastManager) {
+                    window.toastManager.success(deploymentMessage);
+                }
+            } catch (deployError) {
+                console.error('Deployment error:', deployError);
+                if (window.toastManager) {
+                    window.toastManager.error(`Deployment failed: ${deployError.message}`);
+                }
             }
         },
 

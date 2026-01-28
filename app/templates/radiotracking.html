@@ -669,14 +669,14 @@
                                     class="btn"
                                     :class="{
                                         'btn-success': saveState === 'idle',
-                                        'btn-primary': saveState === 'saving',
-                                        'btn-outline-success': saveState === 'saved'
+                                        'btn-primary': saveState === 'saving' || saveState === 'deploying',
+                                        'btn-outline-success': saveState === 'saved' || saveState === 'deployed'
                                     }"
-                                    :disabled="!configLoaded || saveState === 'saving'">
+                                    :disabled="!configLoaded || saveState === 'saving' || saveState === 'deploying'">
                                 <template x-if="saveState === 'idle'">
                                     <div class="d-flex align-items-center">
                                         <i class="fas fa-save me-1"></i>
-                                        Save
+                                        <span x-text="serverMode ? 'Save & Deploy' : 'Save'"></span>
                                     </div>
                                 </template>
                                 <template x-if="saveState === 'saving'">
@@ -685,10 +685,22 @@
                                         Saving...
                                     </div>
                                 </template>
+                                <template x-if="saveState === 'deploying'">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        Deploying...
+                                    </div>
+                                </template>
                                 <template x-if="saveState === 'saved'">
                                     <div class="d-flex align-items-center">
                                         <i class="fas fa-check me-1"></i>
                                         Saved!
+                                    </div>
+                                </template>
+                                <template x-if="saveState === 'deployed'">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-check me-1"></i>
+                                        Deployed!
                                     </div>
                                 </template>
                             </button>
