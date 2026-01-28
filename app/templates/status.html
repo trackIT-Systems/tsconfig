@@ -275,6 +275,7 @@
             </div>
 
             <!-- Radiotracking Status Panel -->
+            {% if 'radiotracking' in available_services %}
             <div class="row mt-4" x-show="isServiceAvailable('radiotracking')" x-cloak>
                 <div class="col">
                     <div class="card">
@@ -436,8 +437,10 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
 
             <!-- Soundscapepipe Status Panel -->
+            {% if 'soundscapepipe' in available_services %}
             <div class="row mt-4" x-show="isServiceAvailable('soundscapepipe')" x-cloak>
                 <div class="col">
                     <div class="card">
@@ -716,7 +719,7 @@
                     </div>
                 </div>
             </div>
-            </div>
+            {% endif %}
 
             <!-- Comprehensive System Information -->
             <div class="row mt-4" x-show="systemInfo">
