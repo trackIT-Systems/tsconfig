@@ -19,6 +19,7 @@
     </div>
 
     <!-- Radio Tracking Section -->
+    {% if 'radiotracking' in available_services %}
     <div x-show="activeConfig === 'radiotracking' && isServiceAvailable('radiotracking')" x-cloak>
         <template x-if="activeConfig === 'radiotracking' && isServiceAvailable('radiotracking')">
             <div>
@@ -26,8 +27,10 @@
             </div>
         </template>
     </div>
+    {% endif %}
 
     <!-- Soundscapepipe Section -->
+    {% if 'soundscapepipe' in available_services %}
     <div x-show="activeConfig === 'soundscapepipe' && isServiceAvailable('soundscapepipe')" x-cloak>
         <template x-if="activeConfig === 'soundscapepipe' && isServiceAvailable('soundscapepipe')">
             <div>
@@ -35,5 +38,6 @@
             </div>
         </template>
     </div>
+    {% endif %}
 </div>
 {% endblock %} 

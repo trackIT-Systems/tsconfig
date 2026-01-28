@@ -742,6 +742,39 @@ async def get_network_connectivity():
         )
 
 
+def _get_available_services_for_template(config_group: str = None) -> list:
+    """Helper function to get available services for template rendering.
+    
+    Returns a list of service names that have configuration files available.
+    """
+    available_services = []
+    
+    # Determine config directory
+    config_dir = None
+    if config_group:
+        config_dir = config_loader.get_config_group_dir(config_group)
+        if not config_dir:
+            return available_services
+    
+    # Check radiotracking configuration
+    try:
+        radiotracking_config = RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
+        if radiotracking_config.config_file.exists():
+            available_services.append("radiotracking")
+    except Exception:
+        pass
+    
+    # Check soundscapepipe configuration
+    try:
+        soundscapepipe_config = SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
+        if soundscapepipe_config.config_file.exists():
+            available_services.append("soundscapepipe")
+    except Exception:
+        pass
+    
+    return available_services
+
+
 @app.get(
     "/",
     include_in_schema=False,
@@ -765,6 +798,9 @@ async def home(request: Request, config_group: str = None):
                     "available": available_groups,
                 },
             )
+    
+    # Get available services for conditional rendering
+    available_services = _get_available_services_for_template(config_group)
 
     return templates.TemplateResponse(
         "index.html",
@@ -775,5 +811,6 @@ async def home(request: Request, config_group: str = None):
             "config_group": config_group,
             "is_server_mode": config_loader.is_server_mode(),
             "config_loader": config_loader,
+            "available_services": available_services,
         },
     )
