@@ -45,6 +45,12 @@ export function statusPage() {
         soundscapepipeConfig: null,
         soundscapepipeLoading: false,
         soundscapepipeService: null,
+        // Radiotracking properties
+        radiotrackingConfig: null,
+        radiotrackingLoading: false,
+        radiotrackingService: null,
+        // Available services (for checking if service configs exist)
+        availableServices: [],
 
         async initStatus() {
             // Don't initialize in server mode
@@ -54,13 +60,22 @@ export function statusPage() {
             
             // Load system configuration first to get refresh interval
             await this.loadSystemConfig();
+            // Load available services to check which services are configured
+            await this.loadAvailableServices();
             await this.refreshStatus();
             await this.loadServices();
-            // Load soundscapepipe config and service status
-            await this.loadSoundscapepipeConfig();
-            // Subscribe to service updates to refresh soundscapepipe status
+            // Load soundscapepipe config and service status only if service is available
+            if (this.isServiceAvailable('soundscapepipe')) {
+                await this.loadSoundscapepipeConfig();
+            }
+            // Load radiotracking config and service status only if service is available
+            if (this.isServiceAvailable('radiotracking')) {
+                await this.loadRadiotrackingConfig();
+            }
+            // Subscribe to service updates to refresh service status
             serviceManager.subscribe(() => {
                 this.updateSoundscapepipeService();
+                this.updateRadiotrackingService();
             });
             // Load geolocation
             await this.loadGeolocation();
@@ -71,7 +86,14 @@ export function statusPage() {
                 if (currentHash === 'status' || (currentHash === '' && this.activeConfig === 'status')) {
                     this.refreshStatus();
                     this.loadServices();
-                    this.loadSoundscapepipeConfig();
+                    // Only load soundscapepipe config if service is available
+                    if (this.isServiceAvailable('soundscapepipe')) {
+                        this.loadSoundscapepipeConfig();
+                    }
+                    // Only load radiotracking config if service is available
+                    if (this.isServiceAvailable('radiotracking')) {
+                        this.loadRadiotrackingConfig();
+                    }
                 }
             }, this.refreshIntervalSeconds * 1000);
         },
@@ -144,9 +166,19 @@ export function statusPage() {
                 this.services = serviceManager.services;
                 // Update soundscapepipe service status
                 this.updateSoundscapepipeService();
-                // Load soundscapepipe config if service exists
-                if (this.soundscapepipeService) {
+                // Load soundscapepipe config only if service is available
+                if (this.isServiceAvailable('soundscapepipe')) {
                     await this.loadSoundscapepipeConfig();
+                } else {
+                    // Clear config if service is no longer available
+                    this.soundscapepipeConfig = null;
+                }
+                // Load radiotracking config only if service is available
+                if (this.isServiceAvailable('radiotracking')) {
+                    await this.loadRadiotrackingConfig();
+                } else {
+                    // Clear config if service is no longer available
+                    this.radiotrackingConfig = null;
                 }
             } catch (err) {
                 this.showToast(`Failed to load system status: ${err.message}`, 'error', { title: 'System Status Error' });
@@ -545,14 +577,43 @@ export function statusPage() {
             `);
         },
 
+        // Available services methods
+        async loadAvailableServices() {
+            try {
+                // Build URL with config_group parameter if in server mode
+                let url = '/api/available-services';
+                if (window.serverModeManager?.isEnabled() && window.serverModeManager?.getCurrentConfigGroup()) {
+                    url += `?config_group=${encodeURIComponent(window.serverModeManager.getCurrentConfigGroup())}`;
+                }
+                
+                const response = await fetch(apiUrl(url));
+                if (response.ok) {
+                    const data = await response.json();
+                    this.availableServices = data.available_services || [];
+                } else {
+                    console.error('Failed to load available services');
+                    this.availableServices = [];
+                }
+            } catch (error) {
+                console.error('Error loading available services:', error);
+                this.availableServices = [];
+            }
+        },
+
+        isServiceAvailable(serviceName) {
+            return this.availableServices.includes(serviceName);
+        },
+
         // Soundscapepipe methods
         async loadSoundscapepipeConfig() {
-            // Load config if service exists (regardless of active state)
-            this.updateSoundscapepipeService();
-            if (!this.soundscapepipeService) {
+            // Don't load if service is not available
+            if (!this.isServiceAvailable('soundscapepipe')) {
                 this.soundscapepipeConfig = null;
                 return;
             }
+
+            // Update service status
+            this.updateSoundscapepipeService();
 
             this.soundscapepipeLoading = true;
             try {
@@ -574,6 +635,39 @@ export function statusPage() {
 
         updateSoundscapepipeService() {
             this.soundscapepipeService = serviceManager.findService('soundscapepipe');
+        },
+
+        // Radiotracking methods
+        async loadRadiotrackingConfig() {
+            // Don't load if service is not available
+            if (!this.isServiceAvailable('radiotracking')) {
+                this.radiotrackingConfig = null;
+                return;
+            }
+
+            // Update service status
+            this.updateRadiotrackingService();
+
+            this.radiotrackingLoading = true;
+            try {
+                const url = window.serverModeManager?.buildApiUrl('/api/radiotracking') || apiUrl('/api/radiotracking');
+                const response = await fetch(url);
+                if (response.ok) {
+                    this.radiotrackingConfig = await response.json();
+                } else {
+                    // If config doesn't exist or service isn't configured, clear it
+                    this.radiotrackingConfig = null;
+                }
+            } catch (err) {
+                console.error('Failed to load radiotracking config:', err);
+                this.radiotrackingConfig = null;
+            } finally {
+                this.radiotrackingLoading = false;
+            }
+        },
+
+        updateRadiotrackingService() {
+            this.radiotrackingService = serviceManager.findService('radiotracking');
         },
 
         getEnabledDetectors() {
