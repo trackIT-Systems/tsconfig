@@ -3,6 +3,8 @@
  * Handles triggering deployment to tracker stations via the external deployment API
  */
 
+import { apiUrl } from './apiUtils.js';
+
 /**
  * Trigger deployment for a configuration group
  * @param {string} configGroupId - The ID of the configuration group to deploy
@@ -17,10 +19,10 @@ export async function triggerDeployment(configGroupId) {
         throw new Error('Config group ID is required for deployment');
     }
 
-    // Both tsconfig and ecohub API are on the same domain
-    // The full API path is /api/config-groups/{id}/deploy
-    // Using relative URL means same origin = no CORS issues
-    const deployUrl = `/api/config-groups/${configGroupId}/deploy`;
+    // Call the backend proxy endpoint which forwards to the deployment API
+    // The deployment API is behind a firewall, so we proxy through our backend
+    // Use apiUrl() to ensure the base URL prefix is included (e.g., /tsconfig)
+    const deployUrl = apiUrl(`/api/deploy/${configGroupId}`);
     console.log('[DeploymentUtils] Deployment URL:', deployUrl);
 
     try {
@@ -39,15 +41,22 @@ export async function triggerDeployment(configGroupId) {
             if (response.status === 404) {
                 const errorData = await response.json();
                 console.error('[DeploymentUtils] 404 error data:', errorData);
-                throw new Error(errorData.error || `Config group "${configGroupId}" not found in deployment system`);
+                // FastAPI returns errors in 'detail' field
+                throw new Error(errorData.detail || errorData.error || `Config group "${configGroupId}" not found in deployment system`);
             }
             
             // Try to get error details from response
             try {
                 const errorData = await response.json();
                 console.error('[DeploymentUtils] Error response data:', errorData);
-                throw new Error(errorData.error || errorData.message || `Deployment failed with status ${response.status}`);
+                // FastAPI returns errors in 'detail' field
+                const errorMessage = errorData.detail || errorData.error || errorData.message || `Deployment failed with status ${response.status}`;
+                throw new Error(errorMessage);
             } catch (parseError) {
+                // If parseError is our thrown Error, re-throw it
+                if (parseError instanceof Error && parseError.message && !parseError.message.includes('JSON')) {
+                    throw parseError;
+                }
                 console.error('[DeploymentUtils] Failed to parse error response:', parseError);
                 throw new Error(`Deployment failed with status ${response.status}`);
             }
@@ -61,7 +70,7 @@ export async function triggerDeployment(configGroupId) {
         // Handle network errors
         if (error instanceof TypeError && error.message.includes('fetch')) {
             console.error('[DeploymentUtils] Network/fetch error detected');
-            throw new Error('Deployment service unavailable. Please check if the deployment API is running on localhost:8000.');
+            throw new Error('Deployment service unavailable. Please check your network connection.');
         }
         throw error;
     }

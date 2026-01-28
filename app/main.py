@@ -19,7 +19,6 @@ from app import __version__
 from app.auth.middleware import AuthenticationMiddleware
 from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
-from app.utils.subprocess_async import run_subprocess_async
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.geolocation import GeolocationConfig
 from app.configs.radiotracking import RadioTrackingConfig
@@ -31,6 +30,7 @@ from app.routers import (
     auth,
     authorized_keys,
     configs,
+    deployment,
     network,
     radiotracking,
     schedule,
@@ -39,6 +39,7 @@ from app.routers import (
     systemd,
     tsupdate,
 )
+from app.utils.subprocess_async import run_subprocess_async
 
 # Set up logging for the main application
 setup_logging()
@@ -149,6 +150,7 @@ app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
 app.include_router(configs.router)
 app.include_router(tsupdate.router)
+app.include_router(deployment.router)  # Deployment proxy (for server mode)
 
 # Only include system-specific routers in tracker mode (default mode)
 # These are disabled in server mode since they require direct hardware access
@@ -827,7 +829,9 @@ async def get_network_connectivity():
                 else:
                     network_connectivity_status["error"] = f"Unexpected connectivity state: {connectivity_state}"
             else:
-                network_connectivity_status["error"] = f"nmcli networking connectivity failed: {connectivity_result.stderr.strip()}"
+                network_connectivity_status["error"] = (
+                    f"nmcli networking connectivity failed: {connectivity_result.stderr.strip()}"
+                )
         except (subprocess.TimeoutExpired, asyncio.TimeoutError):
             network_connectivity_status["error"] = "nmcli networking connectivity command timed out"
         except Exception as e:
@@ -844,18 +848,18 @@ async def get_network_connectivity():
 
 def _get_available_services_for_template(config_group: str = None) -> list:
     """Helper function to get available services for template rendering.
-    
+
     Returns a list of service names that have configuration files available.
     """
     available_services = []
-    
+
     # Determine config directory
     config_dir = None
     if config_group:
         config_dir = config_loader.get_config_group_dir(config_group)
         if not config_dir:
             return available_services
-    
+
     # Check radiotracking configuration
     try:
         radiotracking_config = RadioTrackingConfig(config_dir) if config_dir else RadioTrackingConfig()
@@ -863,7 +867,7 @@ def _get_available_services_for_template(config_group: str = None) -> list:
             available_services.append("radiotracking")
     except Exception:
         pass
-    
+
     # Check soundscapepipe configuration
     try:
         soundscapepipe_config = SoundscapepipeConfig(config_dir) if config_dir else SoundscapepipeConfig()
@@ -871,7 +875,7 @@ def _get_available_services_for_template(config_group: str = None) -> list:
             available_services.append("soundscapepipe")
     except Exception:
         pass
-    
+
     return available_services
 
 
@@ -898,7 +902,7 @@ async def home(request: Request, config_group: str = None):
                     "available": available_groups,
                 },
             )
-    
+
     # Get available services for conditional rendering
     available_services = _get_available_services_for_template(config_group)
 
