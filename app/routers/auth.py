@@ -10,7 +10,6 @@ from fastapi.templating import Jinja2Templates
 
 from app.auth.dependencies import get_current_user, get_optional_user
 from app.auth.oidc_config import oidc_config
-from app.auth.oidc_handler import oidc_handler
 from app.config_loader import config_loader
 from app.logging_config import get_logger
 
@@ -46,6 +45,16 @@ async def login(return_to: Optional[str] = Query(None, description="URL to retur
         )
 
     try:
+        # Lazy import to avoid loading auth modules in tracker mode
+        from app.auth.oidc_handler import get_oidc_handler
+        
+        oidc_handler = get_oidc_handler()
+        if oidc_handler is None:
+            raise HTTPException(
+                status_code=503,
+                detail="OIDC handler is not available",
+            )
+        
         # Initiate login flow
         authorization_url, state, code_verifier = await oidc_handler.initiate_login(return_to)
 
@@ -93,6 +102,16 @@ async def callback(
         )
 
     try:
+        # Lazy import to avoid loading auth modules in tracker mode
+        from app.auth.oidc_handler import get_oidc_handler
+        
+        oidc_handler = get_oidc_handler()
+        if oidc_handler is None:
+            raise HTTPException(
+                status_code=503,
+                detail="OIDC handler is not available",
+            )
+        
         # Exchange code for tokens
         token_response = await oidc_handler.handle_callback(code, state, code_verifier)
 

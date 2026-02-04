@@ -5,9 +5,6 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
 import httpx
-from authlib.jose import JsonWebKey, jwt
-from authlib.jose.errors import JoseError
-from itsdangerous import URLSafeTimedSerializer
 
 from app.auth.oidc_config import oidc_config
 from app.logging_config import get_logger
@@ -19,6 +16,14 @@ class OIDCHandler:
     """OIDC authentication handler."""
 
     def __init__(self):
+        # Lazy import of itsdangerous to avoid import errors when auth group is not installed
+        try:
+            from itsdangerous import URLSafeTimedSerializer
+        except ImportError:
+            raise ImportError(
+                "Auth dependencies are not installed. Install them with: pdm install -G auth"
+            )
+        
         # Secret for signing state parameters (CSRF protection)
         # In production, this should be loaded from an environment variable
         self.state_secret = secrets.token_urlsafe(32)
@@ -184,6 +189,15 @@ class OIDCHandler:
         Raises:
             ValueError: If token validation fails
         """
+        # Lazy import of authlib to avoid import errors when auth group is not installed
+        try:
+            from authlib.jose import JsonWebKey, jwt
+            from authlib.jose.errors import JoseError
+        except ImportError:
+            raise ValueError(
+                "Auth dependencies are not installed. Install them with: pdm install -G auth"
+            )
+        
         try:
             # Get JWKS for signature validation
             jwks_data = await self._get_jwks()
@@ -262,5 +276,26 @@ class OIDCHandler:
         return False, f"User is not in any required groups. Required: {required_groups}, User has: {user_groups}"
 
 
-# Global instance
-oidc_handler = OIDCHandler()
+# Global instance - only created in server mode
+_oidc_handler_instance: Optional[OIDCHandler] = None
+
+
+def get_oidc_handler() -> Optional[OIDCHandler]:
+    """
+    Get the OIDC handler instance.
+    
+    Returns None in tracker mode, or the handler instance in server mode.
+    """
+    global _oidc_handler_instance
+    
+    if _oidc_handler_instance is None:
+        from app.config_loader import config_loader
+        if config_loader.is_server_mode():
+            _oidc_handler_instance = OIDCHandler()
+    
+    return _oidc_handler_instance
+
+
+# For backward compatibility, provide oidc_handler that can be None
+# This allows existing code to check `if oidc_handler:` before using it
+oidc_handler: Optional[OIDCHandler] = None

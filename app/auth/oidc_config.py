@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from app.config_loader import config_loader
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -19,8 +20,16 @@ class OIDCConfig:
         self.client_id: Optional[str] = None
         self.client_secret: Optional[str] = None
         self.redirect_uri: Optional[str] = None
+        self.domain: Optional[str] = None
         self.scopes: str = "openid profile email"
-        self._load_from_env()
+        
+        # Only load OIDC configuration in server mode
+        if config_loader.is_server_mode():
+            self._load_from_env()
+        else:
+            # In tracker mode, leave all attributes as None/empty
+            # This ensures is_configured() returns False
+            pass
 
     def _load_from_env(self):
         """Load OIDC settings from environment variables."""

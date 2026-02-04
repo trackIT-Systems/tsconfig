@@ -10,7 +10,6 @@ from starlette.responses import RedirectResponse
 
 from app import __version__
 from app.auth.oidc_config import oidc_config
-from app.auth.oidc_handler import oidc_handler
 from app.config_loader import config_loader
 from app.logging_config import get_logger
 
@@ -145,6 +144,18 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         # Validate token
         try:
+            # Lazy import to avoid loading auth modules in tracker mode
+            from app.auth.oidc_handler import get_oidc_handler
+            
+            oidc_handler = get_oidc_handler()
+            if oidc_handler is None:
+                logger.error("OIDC handler is not available")
+                return Response(
+                    content='{"detail":"Authentication service unavailable"}',
+                    status_code=503,
+                    media_type="application/json",
+                )
+            
             token_claims = await oidc_handler.validate_token(token)
             user_info = oidc_handler.extract_user_claims(token_claims)
 
