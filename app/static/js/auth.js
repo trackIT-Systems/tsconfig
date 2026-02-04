@@ -78,6 +78,5 @@ export const authManager = {
 // Initialize authentication on page load
 document.addEventListener('DOMContentLoaded', async () => {
     await authManager.initialize();
-    authManager.displayUserInfo();
 });
 
