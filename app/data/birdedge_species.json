@@ -1,0 +1,1577 @@
+{
+  "0": {
+    "scientific": "Acanthis cabaret",
+    "english": "Lesser Redpoll",
+    "german": "Alpenbirkenzeisig"
+  },
+  "1": {
+    "scientific": "Acanthis hornemanni",
+    "english": "Arctic Redpoll",
+    "german": "Polarbirkenzeisig"
+  },
+  "2": {
+    "scientific": "Accipiter gentilis",
+    "english": "Northern Goshawk",
+    "german": "Habicht"
+  },
+  "3": {
+    "scientific": "Accipiter nisus",
+    "english": "Eurasian Sparrowhawk",
+    "german": "Sperber"
+  },
+  "4": {
+    "scientific": "Acrocephalus arundinaceus",
+    "english": "Great Reed Warbler",
+    "german": "Drosselrohrsänger"
+  },
+  "5": {
+    "scientific": "Acrocephalus paludicola",
+    "english": "Aquatic Warbler",
+    "german": "Seggenrohrsänger"
+  },
+  "6": {
+    "scientific": "Acrocephalus palustris",
+    "english": "Marsh Warbler",
+    "german": "Sumpfrohrsänger"
+  },
+  "7": {
+    "scientific": "Acrocephalus schoenobaenus",
+    "english": "Sedge Warbler",
+    "german": "Schilfrohrsänger"
+  },
+  "8": {
+    "scientific": "Acrocephalus scirpaceus",
+    "english": "Eurasian Reed Warbler",
+    "german": "Teichrohrsänger"
+  },
+  "9": {
+    "scientific": "Actitis hypoleucos",
+    "english": "Common Sandpiper",
+    "german": "Flussuferläufer"
+  },
+  "10": {
+    "scientific": "Aegithalos caudatus",
+    "english": "Long-tailed Tit",
+    "german": "Schwanzmeise"
+  },
+  "11": {
+    "scientific": "Aegolius funereus",
+    "english": "Boreal Owl",
+    "german": "Raufußkauz"
+  },
+  "12": {
+    "scientific": "Aix galericulata",
+    "english": "Mandarin Duck",
+    "german": "Mandarinente"
+  },
+  "13": {
+    "scientific": "Aix sponsa",
+    "english": "Wood Duck",
+    "german": "Brautente"
+  },
+  "14": {
+    "scientific": "Alauda arvensis",
+    "english": "Eurasian Skylark",
+    "german": "Feldlerche"
+  },
+  "15": {
+    "scientific": "Alca torda",
+    "english": "Razorbill",
+    "german": "Tordalk"
+  },
+  "16": {
+    "scientific": "Alcedo atthis",
+    "english": "Common Kingfisher",
+    "german": "Eisvogel"
+  },
+  "17": {
+    "scientific": "Alectoris graeca",
+    "english": "Rock Partridge",
+    "german": "Steinhuhn"
+  },
+  "18": {
+    "scientific": "Alle alle",
+    "english": "Little Auk",
+    "german": "Krabbentaucher"
+  },
+  "19": {
+    "scientific": "Alopochen aegyptiaca",
+    "english": "Egyptian Goose",
+    "german": "Nilgans"
+  },
+  "20": {
+    "scientific": "Anas acuta",
+    "english": "Northern Pintail",
+    "german": "Spießente"
+  },
+  "21": {
+    "scientific": "Anas crecca",
+    "english": "Eurasian Teal",
+    "german": "Krickente"
+  },
+  "22": {
+    "scientific": "Anas platyrhynchos",
+    "english": "Mallard",
+    "german": "Stockente"
+  },
+  "23": {
+    "scientific": "Anser albifrons",
+    "english": "Greater White-fronted Goose",
+    "german": "Blässgans"
+  },
+  "24": {
+    "scientific": "Anser anser",
+    "english": "Greylag Goose",
+    "german": "Graugans"
+  },
+  "25": {
+    "scientific": "Anser brachyrhynchus",
+    "english": "Pink-footed Goose",
+    "german": "Kurzschnabelgans"
+  },
+  "26": {
+    "scientific": "Anser erythropus",
+    "english": "Lesser White-fronted Goose",
+    "german": "Zwerggans"
+  },
+  "27": {
+    "scientific": "Anser fabalis",
+    "english": "Taiga Bean Goose",
+    "german": "Waldsaatgans"
+  },
+  "28": {
+    "scientific": "Anser serrirostris",
+    "english": "Tundra Bean Goose",
+    "german": "Tundrasaatgans"
+  },
+  "29": {
+    "scientific": "Anthus campestris",
+    "english": "Tawny Pipit",
+    "german": "Brachpieper"
+  },
+  "30": {
+    "scientific": "Anthus cervinus",
+    "english": "Red-throated Pipit",
+    "german": "Rotkehlpieper"
+  },
+  "31": {
+    "scientific": "Anthus petrosus",
+    "english": "Rock Pipit",
+    "german": "Strandpieper"
+  },
+  "32": {
+    "scientific": "Anthus pratensis",
+    "english": "Meadow Pipit",
+    "german": "Wiesenpieper"
+  },
+  "33": {
+    "scientific": "Anthus richardi",
+    "english": "Richard's Pipit",
+    "german": "Spornpieper"
+  },
+  "34": {
+    "scientific": "Anthus spinoletta",
+    "english": "Water Pipit",
+    "german": "Bergpieper"
+  },
+  "35": {
+    "scientific": "Anthus trivialis",
+    "english": "Tree Pipit",
+    "german": "Baumpieper"
+  },
+  "36": {
+    "scientific": "Apus apus",
+    "english": "Common Swift",
+    "german": "Mauersegler"
+  },
+  "37": {
+    "scientific": "Apus melba",
+    "english": "Alpine Swift",
+    "german": "Alpensegler"
+  },
+  "38": {
+    "scientific": "Aquila chrysaetos",
+    "english": "Golden Eagle",
+    "german": "Steinadler"
+  },
+  "39": {
+    "scientific": "Ardea alba",
+    "english": "Great White Egret",
+    "german": "Silberreiher"
+  },
+  "40": {
+    "scientific": "Ardea cinerea",
+    "english": "Grey Heron",
+    "german": "Graureiher"
+  },
+  "41": {
+    "scientific": "Ardea purpurea",
+    "english": "Purple Heron",
+    "german": "Purpurreiher"
+  },
+  "42": {
+    "scientific": "Ardenna grisea",
+    "english": "Sooty Shearwater",
+    "german": "Dunkelsturmtaucher"
+  },
+  "43": {
+    "scientific": "Arenaria interpres",
+    "english": "Ruddy Turnstone",
+    "german": "Steinwälzer"
+  },
+  "44": {
+    "scientific": "Asio flammeus",
+    "english": "Short-eared Owl",
+    "german": "Sumpfohreule"
+  },
+  "45": {
+    "scientific": "Asio otus",
+    "english": "Long-eared Owl",
+    "german": "Waldohreule"
+  },
+  "46": {
+    "scientific": "Athene noctua",
+    "english": "Little Owl",
+    "german": "Steinkauz"
+  },
+  "47": {
+    "scientific": "Aythya ferina",
+    "english": "Common Pochard",
+    "german": "Tafelente"
+  },
+  "48": {
+    "scientific": "Aythya fuligula",
+    "english": "Tufted Duck",
+    "german": "Reiherente"
+  },
+  "49": {
+    "scientific": "Aythya marila",
+    "english": "Greater Scaup",
+    "german": "Bergente"
+  },
+  "50": {
+    "scientific": "Aythya nyroca",
+    "english": "Ferruginous Duck",
+    "german": "Moorente"
+  },
+  "51": {
+    "scientific": "Bombycilla garrulus",
+    "english": "Bohemian Waxwing",
+    "german": "Seidenschwanz"
+  },
+  "52": {
+    "scientific": "Botaurus stellaris",
+    "english": "Great Bittern",
+    "german": "Rohrdommel"
+  },
+  "53": {
+    "scientific": "Branta bernicla",
+    "english": "Brent Goose",
+    "german": "Ringelgans"
+  },
+  "54": {
+    "scientific": "Branta canadensis",
+    "english": "Canada Goose",
+    "german": "Kanadagans"
+  },
+  "55": {
+    "scientific": "Branta leucopsis",
+    "english": "Barnacle Goose",
+    "german": "Weißwangengans"
+  },
+  "56": {
+    "scientific": "Branta ruficollis",
+    "english": "Red-breasted Goose",
+    "german": "Rothalsgans"
+  },
+  "57": {
+    "scientific": "Bubo bubo",
+    "english": "Eurasian Eagle-Owl",
+    "german": "Uhu"
+  },
+  "58": {
+    "scientific": "Bucephala clangula",
+    "english": "Common Goldeneye",
+    "german": "Schellente"
+  },
+  "59": {
+    "scientific": "Burhinus oedicnemus",
+    "english": "Eurasian Stone-curlew",
+    "german": "Triel"
+  },
+  "60": {
+    "scientific": "Buteo buteo",
+    "english": "Common Buzzard",
+    "german": "Mäusebussard"
+  },
+  "61": {
+    "scientific": "Buteo lagopus",
+    "english": "Rough-legged Buzzard",
+    "german": "Raufußbussard"
+  },
+  "62": {
+    "scientific": "Calcarius lapponicus",
+    "english": "Lapland Longspur",
+    "german": "Spornammer"
+  },
+  "63": {
+    "scientific": "Calidris alba",
+    "english": "Sanderling",
+    "german": "Sanderling"
+  },
+  "64": {
+    "scientific": "Calidris alpina",
+    "english": "Dunlin",
+    "german": "Alpenstrandläufer"
+  },
+  "65": {
+    "scientific": "Calidris canutus",
+    "english": "Red Knot",
+    "german": "Knutt"
+  },
+  "66": {
+    "scientific": "Calidris falcinellus",
+    "english": "Broad-billed Sandpiper",
+    "german": "Sumpfläufer"
+  },
+  "67": {
+    "scientific": "Calidris ferruginea",
+    "english": "Curlew Sandpiper",
+    "german": "Sichelstrandläufer"
+  },
+  "68": {
+    "scientific": "Calidris maritima",
+    "english": "Purple Sandpiper",
+    "german": "Meerstrandläufer"
+  },
+  "69": {
+    "scientific": "Calidris minuta",
+    "english": "Little Stint",
+    "german": "Zwergstrandläufer"
+  },
+  "70": {
+    "scientific": "Calidris pugnax",
+    "english": "Ruff",
+    "german": "Kampfläufer"
+  },
+  "71": {
+    "scientific": "Calidris temminckii",
+    "english": "Temminck's Stint",
+    "german": "Temminckstrandläufer"
+  },
+  "72": {
+    "scientific": "Caprimulgus europaeus",
+    "english": "European Nightjar",
+    "german": "Nachtschwalbe"
+  },
+  "73": {
+    "scientific": "Carduelis carduelis",
+    "english": "European Goldfinch",
+    "german": "Stieglitz"
+  },
+  "74": {
+    "scientific": "Carduelis citrinella",
+    "english": "Citril Finch",
+    "german": "Zitronenzeisig"
+  },
+  "75": {
+    "scientific": "Carpodacus erythrinus",
+    "english": "Common Rosefinch",
+    "german": "Karmingimpel"
+  },
+  "76": {
+    "scientific": "Cepphus grylle",
+    "english": "Black Guillemot",
+    "german": "Gryllteiste"
+  },
+  "77": {
+    "scientific": "Certhia brachydactyla",
+    "english": "Short-toed Treecreeper",
+    "german": "Gartenbaumläufer"
+  },
+  "78": {
+    "scientific": "Certhia familiaris",
+    "english": "Eurasian Treecreeper",
+    "german": "Waldbaumläufer"
+  },
+  "79": {
+    "scientific": "Charadrius alexandrinus",
+    "english": "Kentish Plover",
+    "german": "Seeregenpfeifer"
+  },
+  "80": {
+    "scientific": "Charadrius dubius",
+    "english": "Little Ringed Plover",
+    "german": "Flussregenpfeifer"
+  },
+  "81": {
+    "scientific": "Charadrius hiaticula",
+    "english": "Common Ringed Plover",
+    "german": "Sandregenpfeifer"
+  },
+  "82": {
+    "scientific": "Charadrius morinellus",
+    "english": "Eurasian Dotterel",
+    "german": "Mornellregenpfeifer"
+  },
+  "83": {
+    "scientific": "Chlidonias hybrida",
+    "english": "Whiskered Tern",
+    "german": "Weißbart-Seeschwalbe"
+  },
+  "84": {
+    "scientific": "Chlidonias leucopterus",
+    "english": "White-winged Tern",
+    "german": "Weißflügel-Seeschwalbe"
+  },
+  "85": {
+    "scientific": "Chlidonias niger",
+    "english": "Black Tern",
+    "german": "Trauerseeschwalbe"
+  },
+  "86": {
+    "scientific": "Chloris chloris",
+    "english": "European Greenfinch",
+    "german": "Grünfink"
+  },
+  "87": {
+    "scientific": "Chroicocephalus ridibundus",
+    "english": "Black-headed Gull",
+    "german": "Lachmöwe"
+  },
+  "88": {
+    "scientific": "Ciconia ciconia",
+    "english": "White Stork",
+    "german": "Weißstorch"
+  },
+  "89": {
+    "scientific": "Ciconia nigra",
+    "english": "Black Stork",
+    "german": "Schwarzstorch"
+  },
+  "90": {
+    "scientific": "Cinclus cinclus",
+    "english": "White-throated Dipper",
+    "german": "Wasseramsel"
+  },
+  "91": {
+    "scientific": "Circus aeruginosus",
+    "english": "Western Marsh Harrier",
+    "german": "Rohrweihe"
+  },
+  "92": {
+    "scientific": "Circus cyaneus",
+    "english": "Hen Harrier",
+    "german": "Kornweihe"
+  },
+  "93": {
+    "scientific": "Circus pygargus",
+    "english": "Montagu's Harrier",
+    "german": "Wiesenweihe"
+  },
+  "94": {
+    "scientific": "Clanga pomarina",
+    "english": "Lesser Spotted Eagle",
+    "german": "Schreiadler"
+  },
+  "95": {
+    "scientific": "Clangula hyemalis",
+    "english": "Long-tailed Duck",
+    "german": "Eisente"
+  },
+  "96": {
+    "scientific": "Coccothraustes coccothraustes",
+    "english": "Hawfinch",
+    "german": "Kernbeißer"
+  },
+  "97": {
+    "scientific": "Columba livia",
+    "english": "Rock Dove",
+    "german": "Felsentaube"
+  },
+  "98": {
+    "scientific": "Columba oenas",
+    "english": "Stock Dove",
+    "german": "Hohltaube"
+  },
+  "99": {
+    "scientific": "Columba palumbus",
+    "english": "Common Wood Pigeon",
+    "german": "Ringeltaube"
+  },
+  "100": {
+    "scientific": "Corvus corax",
+    "english": "Common Raven",
+    "german": "Kolkrabe"
+  },
+  "101": {
+    "scientific": "Corvus cornix",
+    "english": "Hooded Crow",
+    "german": "Nebelkrähe"
+  },
+  "102": {
+    "scientific": "Corvus corone",
+    "english": "Carrion Crow",
+    "german": "Rabenkrähe"
+  },
+  "103": {
+    "scientific": "Corvus frugilegus",
+    "english": "Rook",
+    "german": "Saatkrähe"
+  },
+  "104": {
+    "scientific": "Corvus monedula",
+    "english": "Western Jackdaw",
+    "german": "Dohle"
+  },
+  "105": {
+    "scientific": "Coturnix coturnix",
+    "english": "Common Quail",
+    "german": "Wachtel"
+  },
+  "106": {
+    "scientific": "Crex crex",
+    "english": "Corn Crake",
+    "german": "Wachtelkönig"
+  },
+  "107": {
+    "scientific": "Cuculus canorus",
+    "english": "Common Cuckoo",
+    "german": "Kuckuck"
+  },
+  "108": {
+    "scientific": "Curruca communis",
+    "english": "Common Whitethroat",
+    "german": "Dorngrasmücke"
+  },
+  "109": {
+    "scientific": "Curruca curruca",
+    "english": "Lesser Whitethroat",
+    "german": "Klappergrasmücke"
+  },
+  "110": {
+    "scientific": "Curruca nisoria",
+    "english": "Barred Warbler",
+    "german": "Sperbergrasmücke"
+  },
+  "111": {
+    "scientific": "Cyanistes caeruleus",
+    "english": "Eurasian Blue Tit",
+    "german": "Blaumeise"
+  },
+  "112": {
+    "scientific": "Cygnus atratus",
+    "english": "Black Swan",
+    "german": "Schwarzschwan"
+  },
+  "113": {
+    "scientific": "Cygnus columbianus",
+    "english": "Tundra Swan",
+    "german": "Zwergschwan"
+  },
+  "114": {
+    "scientific": "Cygnus cygnus",
+    "english": "Whooper Swan",
+    "german": "Singschwan"
+  },
+  "115": {
+    "scientific": "Cygnus olor",
+    "english": "Mute Swan",
+    "german": "Höckerschwan"
+  },
+  "116": {
+    "scientific": "Delichon urbicum",
+    "english": "Common House Martin",
+    "german": "Mehlschwalbe"
+  },
+  "117": {
+    "scientific": "Dendrocopos leucotos",
+    "english": "White-backed Woodpecker",
+    "german": "Weißrückenspecht"
+  },
+  "118": {
+    "scientific": "Dendrocopos major",
+    "english": "Great Spotted Woodpecker",
+    "german": "Buntspecht"
+  },
+  "119": {
+    "scientific": "Dendrocoptes medius",
+    "english": "Middle Spotted Woodpecker",
+    "german": "Mittelspecht"
+  },
+  "120": {
+    "scientific": "Dryobates minor",
+    "english": "Lesser Spotted Woodpecker",
+    "german": "Kleinspecht"
+  },
+  "121": {
+    "scientific": "Dryocopus martius",
+    "english": "Black Woodpecker",
+    "german": "Schwarzspecht"
+  },
+  "122": {
+    "scientific": "Egretta garzetta",
+    "english": "Little Egret",
+    "german": "Seidenreiher"
+  },
+  "123": {
+    "scientific": "Emberiza calandra",
+    "english": "Corn Bunting",
+    "german": "Grauammer"
+  },
+  "124": {
+    "scientific": "Emberiza cia",
+    "english": "Rock Bunting",
+    "german": "Zippammer"
+  },
+  "125": {
+    "scientific": "Emberiza cirlus",
+    "english": "Cirl Bunting",
+    "german": "Zaunammer"
+  },
+  "126": {
+    "scientific": "Emberiza citrinella",
+    "english": "Yellowhammer",
+    "german": "Goldammer"
+  },
+  "127": {
+    "scientific": "Emberiza hortulana",
+    "english": "Ortolan Bunting",
+    "german": "Ortolan"
+  },
+  "128": {
+    "scientific": "Emberiza schoeniclus",
+    "english": "Common Reed Bunting",
+    "german": "Rohrammer"
+  },
+  "129": {
+    "scientific": "Eremophila alpestris",
+    "english": "Horned Lark",
+    "german": "Ohrenlerche"
+  },
+  "130": {
+    "scientific": "Erithacus rubecula",
+    "english": "European Robin",
+    "german": "Rotkehlchen"
+  },
+  "131": {
+    "scientific": "Falco columbarius",
+    "english": "Merlin",
+    "german": "Merlin"
+  },
+  "132": {
+    "scientific": "Falco peregrinus",
+    "english": "Peregrine Falcon",
+    "german": "Wanderfalke"
+  },
+  "133": {
+    "scientific": "Falco subbuteo",
+    "english": "Eurasian Hobby",
+    "german": "Baumfalke"
+  },
+  "134": {
+    "scientific": "Falco tinnunculus",
+    "english": "Common Kestrel",
+    "german": "Turmfalke"
+  },
+  "135": {
+    "scientific": "Falco vespertinus",
+    "english": "Red-footed Falcon",
+    "german": "Rotfußfalke"
+  },
+  "136": {
+    "scientific": "Ficedula albicollis",
+    "english": "Collared Flycatcher",
+    "german": "Halsbandschnäpper"
+  },
+  "137": {
+    "scientific": "Ficedula hypoleuca",
+    "english": "European Pied Flycatcher",
+    "german": "Trauerschnäpper"
+  },
+  "138": {
+    "scientific": "Ficedula parva",
+    "english": "Red-breasted Flycatcher",
+    "german": "Zwergschnäpper"
+  },
+  "139": {
+    "scientific": "Fringilla coelebs",
+    "english": "Common Chaffinch",
+    "german": "Buchfink"
+  },
+  "140": {
+    "scientific": "Fringilla montifringilla",
+    "english": "Brambling",
+    "german": "Bergfink"
+  },
+  "141": {
+    "scientific": "Fulica atra",
+    "english": "Eurasian Coot",
+    "german": "Blässhuhn"
+  },
+  "142": {
+    "scientific": "Fulmarus glacialis",
+    "english": "Northern Fulmar",
+    "german": "Eissturmvogel"
+  },
+  "143": {
+    "scientific": "Galerida cristata",
+    "english": "Crested Lark",
+    "german": "Haubenlerche"
+  },
+  "144": {
+    "scientific": "Gallinago gallinago",
+    "english": "Common Snipe",
+    "german": "Bekassine"
+  },
+  "145": {
+    "scientific": "Gallinula chloropus",
+    "english": "Common Moorhen",
+    "german": "Teichhuhn"
+  },
+  "146": {
+    "scientific": "Garrulus glandarius",
+    "english": "Eurasian Jay",
+    "german": "Eichelhäher"
+  },
+  "147": {
+    "scientific": "Gavia arctica",
+    "english": "Arctic Loon",
+    "german": "Prachttaucher"
+  },
+  "148": {
+    "scientific": "Gavia immer",
+    "english": "Common Loon",
+    "german": "Eistaucher"
+  },
+  "149": {
+    "scientific": "Gavia stellata",
+    "english": "Red-throated Loon",
+    "german": "Sterntaucher"
+  },
+  "150": {
+    "scientific": "Gelochelidon nilotica",
+    "english": "Gull-billed Tern",
+    "german": "Lachseeschwalbe"
+  },
+  "151": {
+    "scientific": "Geronticus eremita",
+    "english": "Northern Bald Ibis",
+    "german": "Waldrapp"
+  },
+  "152": {
+    "scientific": "Glaucidium passerinum",
+    "english": "Eurasian Pygmy Owl",
+    "german": "Sperlingskauz"
+  },
+  "153": {
+    "scientific": "Grus grus",
+    "english": "Common Crane",
+    "german": "Kranich"
+  },
+  "154": {
+    "scientific": "Gypaetus barbatus",
+    "english": "Bearded Vulture",
+    "german": "Bartgeier"
+  },
+  "155": {
+    "scientific": "Haematopus ostralegus",
+    "english": "Eurasian Oystercatcher",
+    "german": "Austernfischer"
+  },
+  "156": {
+    "scientific": "Haliaeetus albicilla",
+    "english": "White-tailed Eagle",
+    "german": "Seeadler"
+  },
+  "157": {
+    "scientific": "Himantopus himantopus",
+    "english": "Black-winged Stilt",
+    "german": "Stelzenläufer"
+  },
+  "158": {
+    "scientific": "Hippolais icterina",
+    "english": "Icterine Warbler",
+    "german": "Gelbspötter"
+  },
+  "159": {
+    "scientific": "Hippolais polyglotta",
+    "english": "Melodious Warbler",
+    "german": "Orpheusspötter"
+  },
+  "160": {
+    "scientific": "Hirundo rustica",
+    "english": "Barn Swallow",
+    "german": "Rauchschwalbe"
+  },
+  "161": {
+    "scientific": "Hydrobates leucorhous",
+    "english": "Leach's Storm Petrel",
+    "german": "Wellenläufer"
+  },
+  "162": {
+    "scientific": "Hydrocoloeus minutus",
+    "english": "Little Gull",
+    "german": "Zwergmöwe"
+  },
+  "163": {
+    "scientific": "Hydroprogne caspia",
+    "english": "Caspian Tern",
+    "german": "Raubseeschwalbe"
+  },
+  "164": {
+    "scientific": "Ichthyaetus melanocephalus",
+    "english": "Mediterranean Gull",
+    "german": "Schwarzkopfmöwe"
+  },
+  "165": {
+    "scientific": "Ixobrychus minutus",
+    "english": "Little Bittern",
+    "german": "Zwergdommel"
+  },
+  "166": {
+    "scientific": "Jynx torquilla",
+    "english": "Eurasian Wryneck",
+    "german": "Wendehals"
+  },
+  "167": {
+    "scientific": "Lagopus muta",
+    "english": "Rock Ptarmigan",
+    "german": "Alpenschneehuhn"
+  },
+  "168": {
+    "scientific": "Lanius collurio",
+    "english": "Red-backed Shrike",
+    "german": "Neuntöter"
+  },
+  "169": {
+    "scientific": "Lanius excubitor",
+    "english": "Great Grey Shrike",
+    "german": "Raubwürger"
+  },
+  "170": {
+    "scientific": "Lanius senator",
+    "english": "Woodchat Shrike",
+    "german": "Rotkopfwürger"
+  },
+  "171": {
+    "scientific": "Larus argentatus",
+    "english": "Herring Gull",
+    "german": "Silbermöwe"
+  },
+  "172": {
+    "scientific": "Larus cachinnans",
+    "english": "Caspian Gull",
+    "german": "Steppenmöwe"
+  },
+  "173": {
+    "scientific": "Larus canus",
+    "english": "Common Gull",
+    "german": "Sturmmöwe"
+  },
+  "174": {
+    "scientific": "Larus fuscus",
+    "english": "Lesser Black-backed Gull",
+    "german": "Heringsmöwe"
+  },
+  "175": {
+    "scientific": "Larus marinus",
+    "english": "Great Black-backed Gull",
+    "german": "Mantelmöwe"
+  },
+  "176": {
+    "scientific": "Larus michahellis",
+    "english": "Yellow-legged Gull",
+    "german": "Mittelmeermöwe"
+  },
+  "177": {
+    "scientific": "Limosa lapponica",
+    "english": "Bar-tailed Godwit",
+    "german": "Pfuhlschnepfe"
+  },
+  "178": {
+    "scientific": "Limosa limosa",
+    "english": "Black-tailed Godwit",
+    "german": "Uferschnepfe"
+  },
+  "179": {
+    "scientific": "Linaria cannabina",
+    "english": "Common Linnet",
+    "german": "Bluthänfling"
+  },
+  "180": {
+    "scientific": "Linaria flavirostris",
+    "english": "Twite",
+    "german": "Berghänfling"
+  },
+  "181": {
+    "scientific": "Locustella fluviatilis",
+    "english": "River Warbler",
+    "german": "Schlagschwirl"
+  },
+  "182": {
+    "scientific": "Locustella luscinioides",
+    "english": "Savi's Warbler",
+    "german": "Rohrschwirl"
+  },
+  "183": {
+    "scientific": "Locustella naevia",
+    "english": "Common Grasshopper Warbler",
+    "german": "Feldschwirl"
+  },
+  "184": {
+    "scientific": "Lophophanes cristatus",
+    "english": "Crested Tit",
+    "german": "Haubenmeise"
+  },
+  "185": {
+    "scientific": "Loxia curvirostra",
+    "english": "Red Crossbill",
+    "german": "Fichtenkreuzschnabel"
+  },
+  "186": {
+    "scientific": "Lullula arborea",
+    "english": "Wood Lark",
+    "german": "Heidelerche"
+  },
+  "187": {
+    "scientific": "Luscinia luscinia",
+    "english": "Thrush Nightingale",
+    "german": "Sprosser"
+  },
+  "188": {
+    "scientific": "Luscinia megarhynchos",
+    "english": "Common Nightingale",
+    "german": "Nachtigall"
+  },
+  "189": {
+    "scientific": "Luscinia svecica",
+    "english": "Bluethroat",
+    "german": "Blaukehlchen"
+  },
+  "190": {
+    "scientific": "Lymnocryptes minimus",
+    "english": "Jack Snipe",
+    "german": "Zwergschnepfe"
+  },
+  "191": {
+    "scientific": "Lyrurus tetrix",
+    "english": "Black Grouse",
+    "german": "Birkhuhn"
+  },
+  "192": {
+    "scientific": "Mareca penelope",
+    "english": "Eurasian Wigeon",
+    "german": "Pfeifente"
+  },
+  "193": {
+    "scientific": "Mareca strepera",
+    "english": "Gadwall",
+    "german": "Schnatterente"
+  },
+  "194": {
+    "scientific": "Melanitta fusca",
+    "english": "Velvet Scoter",
+    "german": "Samtente"
+  },
+  "195": {
+    "scientific": "Melanitta nigra",
+    "english": "Common Scoter",
+    "german": "Trauerente"
+  },
+  "196": {
+    "scientific": "Mergellus albellus",
+    "english": "Smew",
+    "german": "Zwergsäger"
+  },
+  "197": {
+    "scientific": "Mergus merganser",
+    "english": "Common Merganser",
+    "german": "Gänsesäger"
+  },
+  "198": {
+    "scientific": "Mergus serrator",
+    "english": "Red-breasted Merganser",
+    "german": "Mittelsäger"
+  },
+  "199": {
+    "scientific": "Merops apiaster",
+    "english": "European Bee-eater",
+    "german": "Bienenfresser"
+  },
+  "200": {
+    "scientific": "Milvus migrans",
+    "english": "Black Kite",
+    "german": "Schwarzmilan"
+  },
+  "201": {
+    "scientific": "Milvus milvus",
+    "english": "Red Kite",
+    "german": "Rotmilan"
+  },
+  "202": {
+    "scientific": "Monticola saxatilis",
+    "english": "Rufous-tailed Rock Thrush",
+    "german": "Steinrötel"
+  },
+  "203": {
+    "scientific": "Montifringilla nivalis",
+    "english": "White-winged Snowfinch",
+    "german": "Schneesperling"
+  },
+  "204": {
+    "scientific": "Morus bassanus",
+    "english": "Northern Gannet",
+    "german": "Basstölpel"
+  },
+  "205": {
+    "scientific": "Motacilla alba",
+    "english": "White Wagtail",
+    "german": "Bachstelze"
+  },
+  "206": {
+    "scientific": "Motacilla cinerea",
+    "english": "Grey Wagtail",
+    "german": "Gebirgsstelze"
+  },
+  "207": {
+    "scientific": "Motacilla flava",
+    "english": "Western Yellow Wagtail",
+    "german": "Schafstelze"
+  },
+  "208": {
+    "scientific": "Muscicapa striata",
+    "english": "Spotted Flycatcher",
+    "german": "Grauschnäpper"
+  },
+  "209": {
+    "scientific": "Netta rufina",
+    "english": "Red-crested Pochard",
+    "german": "Kolbenente"
+  },
+  "210": {
+    "scientific": "Nucifraga caryocatactes",
+    "english": "Spotted Nutcracker",
+    "german": "Tannenhäher"
+  },
+  "211": {
+    "scientific": "Numenius arquata",
+    "english": "Eurasian Curlew",
+    "german": "Brachvogel"
+  },
+  "212": {
+    "scientific": "Numenius phaeopus",
+    "english": "Whimbrel",
+    "german": "Regenbrachvogel"
+  },
+  "213": {
+    "scientific": "Nycticorax nycticorax",
+    "english": "Black-crowned Night Heron",
+    "german": "Nachtreiher"
+  },
+  "214": {
+    "scientific": "Oenanthe oenanthe",
+    "english": "Northern Wheatear",
+    "german": "Steinschmätzer"
+  },
+  "215": {
+    "scientific": "Oriolus oriolus",
+    "english": "Eurasian Golden Oriole",
+    "german": "Pirol"
+  },
+  "216": {
+    "scientific": "Otis tarda",
+    "english": "Great Bustard",
+    "german": "Großtrappe"
+  },
+  "217": {
+    "scientific": "Pandion haliaetus",
+    "english": "Osprey",
+    "german": "Fischadler"
+  },
+  "218": {
+    "scientific": "Panurus biarmicus",
+    "english": "Bearded Reedling",
+    "german": "Bartmeise"
+  },
+  "219": {
+    "scientific": "Parus major",
+    "english": "Great Tit",
+    "german": "Kohlmeise"
+  },
+  "220": {
+    "scientific": "Passer domesticus",
+    "english": "House Sparrow",
+    "german": "Haussperling"
+  },
+  "221": {
+    "scientific": "Passer montanus",
+    "english": "Eurasian Tree Sparrow",
+    "german": "Feldsperling"
+  },
+  "222": {
+    "scientific": "Perdix perdix",
+    "english": "Grey Partridge",
+    "german": "Rebhuhn"
+  },
+  "223": {
+    "scientific": "Periparus ater",
+    "english": "Coal Tit",
+    "german": "Tannenmeise"
+  },
+  "224": {
+    "scientific": "Pernis apivorus",
+    "english": "European Honey Buzzard",
+    "german": "Wespenbussard"
+  },
+  "225": {
+    "scientific": "Phalacrocorax carbo",
+    "english": "Great Cormorant",
+    "german": "Kormoran"
+  },
+  "226": {
+    "scientific": "Phalaropus fulicarius",
+    "english": "Red Phalarope",
+    "german": "Thorshühnchen"
+  },
+  "227": {
+    "scientific": "Phalaropus lobatus",
+    "english": "Red-necked Phalarope",
+    "german": "Odinshühnchen"
+  },
+  "228": {
+    "scientific": "Phasianus colchicus",
+    "english": "Common Pheasant",
+    "german": "Jagdfasan"
+  },
+  "229": {
+    "scientific": "Phoenicurus ochruros",
+    "english": "Black Redstart",
+    "german": "Hausrotschwanz"
+  },
+  "230": {
+    "scientific": "Phoenicurus phoenicurus",
+    "english": "Common Redstart",
+    "german": "Gartenrotschwanz"
+  },
+  "231": {
+    "scientific": "Phylloscopus bonelli",
+    "english": "Western Bonelli's Warbler",
+    "german": "Berglaubsänger"
+  },
+  "232": {
+    "scientific": "Phylloscopus collybita",
+    "english": "Common Chiffchaff",
+    "german": "Zilpzalp"
+  },
+  "233": {
+    "scientific": "Phylloscopus inornatus",
+    "english": "Yellow-browed Warbler",
+    "german": "Gelbbrauen-Laubsänger"
+  },
+  "234": {
+    "scientific": "Phylloscopus sibilatrix",
+    "english": "Wood Warbler",
+    "german": "Waldlaubsänger"
+  },
+  "235": {
+    "scientific": "Phylloscopus trochiloides",
+    "english": "Greenish Warbler",
+    "german": "Grünlaubsänger"
+  },
+  "236": {
+    "scientific": "Phylloscopus trochilus",
+    "english": "Willow Warbler",
+    "german": "Fitis"
+  },
+  "237": {
+    "scientific": "Pica pica",
+    "english": "Eurasian Magpie",
+    "german": "Elster"
+  },
+  "238": {
+    "scientific": "Picoides tridactylus",
+    "english": "Eurasian Three-toed Woodpecker",
+    "german": "Dreizehenspecht"
+  },
+  "239": {
+    "scientific": "Picus canus",
+    "english": "Grey-headed Woodpecker",
+    "german": "Grauspecht"
+  },
+  "240": {
+    "scientific": "Picus viridis",
+    "english": "European Green Woodpecker",
+    "german": "Grünspecht"
+  },
+  "241": {
+    "scientific": "Platalea leucorodia",
+    "english": "Eurasian Spoonbill",
+    "german": "Löffler"
+  },
+  "242": {
+    "scientific": "Plectrophenax nivalis",
+    "english": "Snow Bunting",
+    "german": "Schneeammer"
+  },
+  "243": {
+    "scientific": "Pluvialis apricaria",
+    "english": "European Golden Plover",
+    "german": "Goldregenpfeifer"
+  },
+  "244": {
+    "scientific": "Pluvialis squatarola",
+    "english": "Grey Plover",
+    "german": "Kiebitzregenpfeifer"
+  },
+  "245": {
+    "scientific": "Podiceps auritus",
+    "english": "Horned Grebe",
+    "german": "Ohrentaucher"
+  },
+  "246": {
+    "scientific": "Podiceps cristatus",
+    "english": "Great Crested Grebe",
+    "german": "Haubentaucher"
+  },
+  "247": {
+    "scientific": "Podiceps grisegena",
+    "english": "Red-necked Grebe",
+    "german": "Rothalstaucher"
+  },
+  "248": {
+    "scientific": "Podiceps nigricollis",
+    "english": "Black-necked Grebe",
+    "german": "Schwarzhalstaucher"
+  },
+  "249": {
+    "scientific": "Poecile montanus",
+    "english": "Willow Tit",
+    "german": "Weidenmeise"
+  },
+  "250": {
+    "scientific": "Poecile palustris",
+    "english": "Marsh Tit",
+    "german": "Sumpfmeise"
+  },
+  "251": {
+    "scientific": "Porzana porzana",
+    "english": "Spotted Crake",
+    "german": "Tüpfelsumpfhuhn"
+  },
+  "252": {
+    "scientific": "Prunella collaris",
+    "english": "Alpine Accentor",
+    "german": "Alpenbraunelle"
+  },
+  "253": {
+    "scientific": "Prunella modularis",
+    "english": "Dunnock",
+    "german": "Heckenbraunelle"
+  },
+  "254": {
+    "scientific": "Psittacula krameri",
+    "english": "Rose-ringed Parakeet",
+    "german": "Halsbandsittich"
+  },
+  "255": {
+    "scientific": "Ptyonoprogne rupestris",
+    "english": "Eurasian Crag Martin",
+    "german": "Felsenschwalbe"
+  },
+  "256": {
+    "scientific": "Pyrrhocorax graculus",
+    "english": "Alpine Chough",
+    "german": "Alpendohle"
+  },
+  "257": {
+    "scientific": "Pyrrhula pyrrhula",
+    "english": "Eurasian Bullfinch",
+    "german": "Gimpel"
+  },
+  "258": {
+    "scientific": "Rallus aquaticus",
+    "english": "Water Rail",
+    "german": "Wasserralle"
+  },
+  "259": {
+    "scientific": "Recurvirostra avosetta",
+    "english": "Pied Avocet",
+    "german": "Säbelschnäbler"
+  },
+  "260": {
+    "scientific": "Regulus ignicapilla",
+    "english": "Firecrest",
+    "german": "Sommergoldhähnchen"
+  },
+  "261": {
+    "scientific": "Regulus regulus",
+    "english": "Goldcrest",
+    "german": "Wintergoldhähnchen"
+  },
+  "262": {
+    "scientific": "Remiz pendulinus",
+    "english": "Eurasian Penduline Tit",
+    "german": "Beutelmeise"
+  },
+  "263": {
+    "scientific": "Rhea americana",
+    "english": "Greater Rhea",
+    "german": "Nandu"
+  },
+  "264": {
+    "scientific": "Riparia riparia",
+    "english": "Sand Martin",
+    "german": "Uferschwalbe"
+  },
+  "265": {
+    "scientific": "Rissa tridactyla",
+    "english": "Black-legged Kittiwake",
+    "german": "Dreizehenmöwe"
+  },
+  "266": {
+    "scientific": "Saxicola rubetra",
+    "english": "Whinchat",
+    "german": "Braunkehlchen"
+  },
+  "267": {
+    "scientific": "Saxicola rubicola",
+    "english": "European Stonechat",
+    "german": "Schwarzkehlchen"
+  },
+  "268": {
+    "scientific": "Scolopax rusticola",
+    "english": "Eurasian Woodcock",
+    "german": "Waldschnepfe"
+  },
+  "269": {
+    "scientific": "Serinus serinus",
+    "english": "European Serin",
+    "german": "Girlitz"
+  },
+  "270": {
+    "scientific": "Sitta europaea",
+    "english": "Eurasian Nuthatch",
+    "german": "Kleiber"
+  },
+  "271": {
+    "scientific": "Somateria mollissima",
+    "english": "Common Eider",
+    "german": "Eiderente"
+  },
+  "272": {
+    "scientific": "Spatula clypeata",
+    "english": "Northern Shoveler",
+    "german": "Löffelente"
+  },
+  "273": {
+    "scientific": "Spatula querquedula",
+    "english": "Garganey",
+    "german": "Knäkente"
+  },
+  "274": {
+    "scientific": "Spinus spinus",
+    "english": "Eurasian Siskin",
+    "german": "Erlenzeisig"
+  },
+  "275": {
+    "scientific": "Stercorarius longicaudus",
+    "english": "Long-tailed Jaeger",
+    "german": "Falkenraubmöwe"
+  },
+  "276": {
+    "scientific": "Stercorarius parasiticus",
+    "english": "Parasitic Jaeger",
+    "german": "Schmarotzerraubmöwe"
+  },
+  "277": {
+    "scientific": "Stercorarius pomarinus",
+    "english": "Pomarine Jaeger",
+    "german": "Spatelraubmöwe"
+  },
+  "278": {
+    "scientific": "Stercorarius skua",
+    "english": "Great Skua",
+    "german": "Skua"
+  },
+  "279": {
+    "scientific": "Sterna hirundo",
+    "english": "Common Tern",
+    "german": "Flussseeschwalbe"
+  },
+  "280": {
+    "scientific": "Sterna paradisaea",
+    "english": "Arctic Tern",
+    "german": "Küstenseeschwalbe"
+  },
+  "281": {
+    "scientific": "Sternula albifrons",
+    "english": "Little Tern",
+    "german": "Zwergseeschwalbe"
+  },
+  "282": {
+    "scientific": "Streptopelia decaocto",
+    "english": "Eurasian Collared Dove",
+    "german": "Türkentaube"
+  },
+  "283": {
+    "scientific": "Streptopelia turtur",
+    "english": "European Turtle Dove",
+    "german": "Turteltaube"
+  },
+  "284": {
+    "scientific": "Strix aluco",
+    "english": "Tawny Owl",
+    "german": "Waldkauz"
+  },
+  "285": {
+    "scientific": "Strix uralensis",
+    "english": "Ural Owl",
+    "german": "Habichtskauz"
+  },
+  "286": {
+    "scientific": "Sturnus vulgaris",
+    "english": "European Starling",
+    "german": "Star"
+  },
+  "287": {
+    "scientific": "Sylvia atricapilla",
+    "english": "Eurasian Blackcap",
+    "german": "Mönchsgrasmücke"
+  },
+  "288": {
+    "scientific": "Sylvia borin",
+    "english": "Garden Warbler",
+    "german": "Gartengrasmücke"
+  },
+  "289": {
+    "scientific": "Tachybaptus ruficollis",
+    "english": "Little Grebe",
+    "german": "Zwergtaucher"
+  },
+  "290": {
+    "scientific": "Tadorna ferruginea",
+    "english": "Ruddy Shelduck",
+    "german": "Rostgans"
+  },
+  "291": {
+    "scientific": "Tadorna tadorna",
+    "english": "Common Shelduck",
+    "german": "Brandgans"
+  },
+  "292": {
+    "scientific": "Tetrao urogallus",
+    "english": "Western Capercaillie",
+    "german": "Auerhuhn"
+  },
+  "293": {
+    "scientific": "Tetrastes bonasia",
+    "english": "Hazel Grouse",
+    "german": "Haselhuhn"
+  },
+  "294": {
+    "scientific": "Thalasseus sandvicensis",
+    "english": "Sandwich Tern",
+    "german": "Brandseeschwalbe"
+  },
+  "295": {
+    "scientific": "Tichodroma muraria",
+    "english": "Wallcreeper",
+    "german": "Mauerläufer"
+  },
+  "296": {
+    "scientific": "Tringa erythropus",
+    "english": "Spotted Redshank",
+    "german": "Dunkelwasserläufer"
+  },
+  "297": {
+    "scientific": "Tringa glareola",
+    "english": "Wood Sandpiper",
+    "german": "Bruchwasserläufer"
+  },
+  "298": {
+    "scientific": "Tringa nebularia",
+    "english": "Common Greenshank",
+    "german": "Grünschenkel"
+  },
+  "299": {
+    "scientific": "Tringa ochropus",
+    "english": "Green Sandpiper",
+    "german": "Waldwasserläufer"
+  },
+  "300": {
+    "scientific": "Tringa stagnatilis",
+    "english": "Marsh Sandpiper",
+    "german": "Teichwasserläufer"
+  },
+  "301": {
+    "scientific": "Tringa totanus",
+    "english": "Common Redshank",
+    "german": "Rotschenkel"
+  },
+  "302": {
+    "scientific": "Troglodytes troglodytes",
+    "english": "Eurasian Wren",
+    "german": "Zaunkönig"
+  },
+  "303": {
+    "scientific": "Turdus iliacus",
+    "english": "Redwing",
+    "german": "Rotdrossel"
+  },
+  "304": {
+    "scientific": "Turdus merula",
+    "english": "Common Blackbird",
+    "german": "Amsel"
+  },
+  "305": {
+    "scientific": "Turdus philomelos",
+    "english": "Song Thrush",
+    "german": "Singdrossel"
+  },
+  "306": {
+    "scientific": "Turdus pilaris",
+    "english": "Fieldfare",
+    "german": "Wacholderdrossel"
+  },
+  "307": {
+    "scientific": "Turdus torquatus",
+    "english": "Ring Ouzel",
+    "german": "Ringdrossel"
+  },
+  "308": {
+    "scientific": "Turdus viscivorus",
+    "english": "Mistle Thrush",
+    "german": "Misteldrossel"
+  },
+  "309": {
+    "scientific": "Tyto alba",
+    "english": "Barn Owl",
+    "german": "Schleiereule"
+  },
+  "310": {
+    "scientific": "Upupa epops",
+    "english": "Eurasian Hoopoe",
+    "german": "Wiedehopf"
+  },
+  "311": {
+    "scientific": "Uria aalge",
+    "english": "Common Murre",
+    "german": "Trottellumme"
+  },
+  "312": {
+    "scientific": "Vanellus vanellus",
+    "english": "Northern Lapwing",
+    "german": "Kiebitz"
+  },
+  "313": {
+    "scientific": "Zapornia parva",
+    "english": "Little Crake",
+    "german": "Kleinsumpfhuhn"
+  },
+  "314": {
+    "scientific": "Zapornia pusilla",
+    "english": "Baillon's Crake",
+    "german": "Zwergsumpfhuhn"
+  }
+}

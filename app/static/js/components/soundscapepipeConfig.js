@@ -813,7 +813,8 @@ export function soundscapepipeConfig() {
         async loadSpeciesData() {
             this.loadingSpecies = true;
             try {
-                const response = await fetch(apiUrl('/api/soundscapepipe/species'));
+                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe/species') || apiUrl('/api/soundscapepipe/species');
+                const response = await fetch(url);
                 if (response.ok) {
                     this.speciesData = await response.json();
                 } else {
@@ -893,12 +894,13 @@ export function soundscapepipeConfig() {
                 // Get the selected YoloBat model path
                 const modelPath = this.config.detectors.yolobat?.model_path;
                 if (!modelPath) {
-                    // No model selected, keep yolobat labels empty
-                    this.speciesData.yolobat = [];
+                    // No model selected, keep existing yolobat labels (from fallback JSON)
+                    // Don't clear it - preserve fallback data
                     return;
                 }
 
-                const response = await fetch(apiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`));
+                const url = window.serverModeManager?.buildApiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`) || apiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`);
+                const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
                     // Use enhanced labels if available, otherwise fallback to basic labels
@@ -912,7 +914,7 @@ export function soundscapepipeConfig() {
                             searchable: enhanced.searchable,
                             modelLabel: data.labels[index] // Store the original model label (e.g., "Ppip")
                         }));
-                    } else {
+                    } else if (data.labels && data.labels.length > 0) {
                         // Fallback to basic labels if no enhanced data available
                         this.speciesData.yolobat = data.labels.map(label => ({
                             scientific: label,
@@ -923,13 +925,16 @@ export function soundscapepipeConfig() {
                             modelLabel: label
                         }));
                     }
+                    // If response is ok but no labels, preserve existing data (from fallback JSON)
                 } else {
-                    console.error('Failed to load YoloBat labels');
-                    this.speciesData.yolobat = [];
+                    // Failed to load from model metadata - preserve existing fallback data
+                    console.warn('Failed to load YoloBat labels from model metadata, using fallback data');
+                    // Don't clear this.speciesData.yolobat - keep the fallback from loadSpeciesData()
                 }
             } catch (error) {
-                console.error('Error loading YoloBat labels:', error);
-                this.speciesData.yolobat = [];
+                // Error loading from model metadata - preserve existing fallback data
+                console.warn('Error loading YoloBat labels from model metadata, using fallback data:', error);
+                // Don't clear this.speciesData.yolobat - keep the fallback from loadSpeciesData()
             }
         },
 

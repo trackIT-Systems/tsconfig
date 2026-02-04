@@ -596,6 +596,37 @@ async def get_species() -> Dict[str, Any]:
                 # Continue to next path if this one fails
                 continue
 
+    # Fallback: Load BirdEdge species from JSON file if paths don't exist
+    if not species_data["birdedge"]:
+        try:
+            birdedge_species_path = os.path.join(os.path.dirname(__file__), "..", "data", "birdedge_species.json")
+            if os.path.exists(birdedge_species_path):
+                with open(birdedge_species_path, "r", encoding="utf-8") as f:
+                    birdedge_species_mapping = json.load(f)
+
+                # Create species list with display information
+                birdedge_species_list = []
+                for birdedge_id, data in birdedge_species_mapping.items():
+                    scientific = data.get("scientific", "")
+                    english = data.get("english", "")
+                    german = data.get("german", "")
+
+                    species_entry = {
+                        "scientific": scientific,
+                        "english": english,
+                        "german": german,
+                        "display": f"{scientific}"
+                        + (f" ({english})" if english else "")
+                        + (f" / {german}" if german else ""),
+                        "searchable": " ".join(filter(None, [scientific, english, german])).lower(),
+                    }
+                    birdedge_species_list.append(species_entry)
+
+                species_data["birdedge"] = sorted(birdedge_species_list, key=lambda x: x["scientific"])
+        except (json.JSONDecodeError, IOError):
+            # If loading fails, keep birdedge empty
+            species_data["birdedge"] = []
+
     # Load YoloBat species from JSON file (now with abbreviations as keys)
     try:
         yolobat_species_path = os.path.join(os.path.dirname(__file__), "..", "data", "yolobat_species.json")
