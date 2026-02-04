@@ -16,7 +16,7 @@ COPY app/ ./app/
 COPY configs/ ./configs/
 
 # Install the project in editable mode with dependencies
-RUN pip install --no-cache-dir -e .[auth]
+RUN pip install --group auth --no-cache-dir -e .
 
 # Create groups directory for server mode config storage
 RUN mkdir -p /app/groups
