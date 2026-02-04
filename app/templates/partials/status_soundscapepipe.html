@@ -1,0 +1,280 @@
+            <!-- Soundscapepipe Status Panel -->
+            <div class="row mt-4" x-show="isServiceAvailable('soundscapepipe')" x-cloak>
+                <div class="col">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-volume-up me-2"></i>Soundscapepipe
+                            </h5>
+                            <a class="btn btn-outline-primary btn-sm" 
+                               href="#soundscapepipe"
+                               @click.prevent="activeConfig = 'soundscapepipe'"
+                               title="Open Soundscapepipe Configuration">
+                                <i class="fas fa-cog me-1"></i>
+                                <span class="d-none d-sm-inline">Configure</span>
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <!-- Loading state - only show on initial load -->
+                            <template x-if="soundscapepipeLoading && !soundscapepipeConfig">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading soundscapepipe configuration...</p>
+                                </div>
+                            </template>
+                            
+                            <!-- Configuration info -->
+                            <div x-show="soundscapepipeConfig" x-cloak>
+                                <div>
+                                    <!-- Configuration Information -->
+                                    <div x-data="{ 
+                                        streamAvailable: false, 
+                                        checkingStream: true,
+                                        streamCheckInterval: null,
+                                        pauseTimer: null,
+                                        audioConnected: true,
+                                        async checkStreamAvailability(force = false, showChecking = false) {
+                                            if (!force && soundscapepipeService && soundscapepipeService.active === false) {
+                                                this.streamAvailable = false;
+                                                this.checkingStream = false;
+                                                return;
+                                            }
+                                            // Only show checking state if explicitly requested (initial load)
+                                            if (showChecking) {
+                                                this.checkingStream = true;
+                                            }
+                                            try {
+                                                const response = await fetch('/stream.mp3', {
+                                                    method: 'HEAD',
+                                                    cache: 'no-cache'
+                                                });
+                                                this.streamAvailable = response.ok;
+                                            } catch (error) {
+                                                this.streamAvailable = false;
+                                            }
+                                            this.checkingStream = false;
+                                        },
+                                        startStreamChecking() {
+                                            this.streamCheckInterval = setInterval(() => {
+                                                // Don't show checking state on periodic checks to avoid flicker
+                                                this.checkStreamAvailability(false, false);
+                                            }, 5000);
+                                        },
+                                        stopStreamChecking() {
+                                            if (this.streamCheckInterval) {
+                                                clearInterval(this.streamCheckInterval);
+                                                this.streamCheckInterval = null;
+                                            }
+                                            this.streamAvailable = false;
+                                        },
+                                        handleAudioPause() {
+                                            this.pauseTimer = setTimeout(() => {
+                                                this.disconnectAudio();
+                                            }, 5000);
+                                        },
+                                        handleAudioPlay() {
+                                            if (this.pauseTimer) {
+                                                clearTimeout(this.pauseTimer);
+                                                this.pauseTimer = null;
+                                            }
+                                            if (!this.audioConnected) {
+                                                const audio = this.$refs.audioPlayer;
+                                                if (audio) {
+                                                    audio.pause();
+                                                }
+                                                this.reconnectAudio();
+                                            }
+                                        },
+                                        disconnectAudio() {
+                                            const audio = this.$refs.audioPlayer;
+                                            if (audio) {
+                                                audio.pause();
+                                                this.audioConnected = false;
+                                            }
+                                        },
+                                        reconnectAudio() {
+                                            const audio = this.$refs.audioPlayer; 
+                                            if (audio) {
+                                                audio.src = '/stream.mp3?' + Date.now();
+                                                audio.load();
+                                                this.audioConnected = true;
+                                                setTimeout(() => {
+                                                    audio.play().catch(() => {});
+                                                }, 100);
+                                            }
+                                        },
+                                        cleanup() {
+                                            if (this.pauseTimer) {
+                                                clearTimeout(this.pauseTimer);
+                                                this.pauseTimer = null;
+                                            }
+                                            this.stopStreamChecking();
+                                        }
+                                    }"
+                                    x-init="checkStreamAvailability(true, true); startStreamChecking()"
+                                    x-destroy="cleanup()">
+                                    <div class="mb-3">
+                                        <audio 
+                                            x-ref="audioPlayer"
+                                            controls 
+                                            preload="none"
+                                            class="w-100"
+                                            style="height: 40px; border-radius: 0.375rem;"
+                                            src="/stream.mp3"
+                                            @pause="handleAudioPause()"
+                                            @play="handleAudioPlay()"
+                                            @ended="handleAudioPause()"
+                                            @error="void 0"
+                                            :disabled="!streamAvailable || (soundscapepipeService && soundscapepipeService.active === false)"
+                                            :style="{ opacity: (streamAvailable && !(soundscapepipeService && soundscapepipeService.active === false)) ? '1' : '0.5', pointerEvents: (streamAvailable && !(soundscapepipeService && soundscapepipeService.active === false)) ? 'auto' : 'none' }">
+                                            Your browser does not support the audio element.
+                                        </audio>
+                                    </div>
+                                    <div class="row">
+                                        <!-- Column 1: Input Device -->
+                                        <div class="col-md-4">
+                                            <h6 class="text-muted mb-3"><i class="fas fa-microphone me-2"></i>Input Device</h6>
+                                            <table class="table table-borderless table-sm small">
+                                                <tbody>
+                                                <tr>
+                                                    <td class="fw-bold">Device:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="soundscapepipeConfig?.input_device_match || 'Not configured'"></span>
+                                                    </td>
+                                                </tr>
+                                                <template x-if="soundscapepipeConfig?.sample_rate">
+                                                    <tr>
+                                                        <td class="fw-bold">Sample Rate:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-secondary" x-text="`${soundscapepipeConfig?.sample_rate} Hz`"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <tr>
+                                                    <td class="fw-bold">Stream State:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small"
+                                                              :class="{
+                                                                  'text-bg-success': streamAvailable && !checkingStream,
+                                                                  'text-bg-warning': checkingStream,
+                                                                  'text-bg-secondary': soundscapepipeService && soundscapepipeService.active === false,
+                                                                  'text-bg-danger': !streamAvailable && !checkingStream && soundscapepipeService && soundscapepipeService.active !== false
+                                                              }"
+                                                              x-text="(soundscapepipeService && soundscapepipeService.active === false) ? 'Inactive' : (checkingStream ? 'Checking' : (streamAvailable ? 'Active' : 'Unavailable'))">
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        
+                                        <!-- Column 2: Detectors -->
+                                        <div class="col-md-4">
+                                            <h6 class="text-muted mb-3"><i class="fas fa-search me-2"></i>Detectors</h6>
+                                            <table class="table table-borderless table-sm small">
+                                                <!-- BirdEdge -->
+                                                <tr>
+                                                    <td class="fw-bold">BirdEdge:</td>
+                                                    <td class="text-end">
+                                                        <template x-if="soundscapepipeConfig?.detectors?.birdedge && soundscapepipeConfig?.detectors?.birdedge?.enabled !== false">
+                                                            <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                                                <template x-if="getDetectorTasks('birdedge').length > 0">
+                                                                    <template x-for="taskName in getDetectorTasks('birdedge')" :key="taskName">
+                                                                        <span class="badge small text-bg-primary" x-text="taskName"></span>
+                                                                    </template>
+                                                                </template>
+                                                                <template x-if="getDetectorTasks('birdedge').length === 0">
+                                                                    <span class="badge small text-bg-secondary">continuous</span>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="!soundscapepipeConfig?.detectors?.birdedge || soundscapepipeConfig?.detectors?.birdedge?.enabled === false">
+                                                            <span class="badge small text-bg-secondary">Not configured</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                                
+                                                <!-- YoloBat -->
+                                                <tr>
+                                                    <td class="fw-bold">YoloBat:</td>
+                                                    <td class="text-end">
+                                                        <template x-if="soundscapepipeConfig?.detectors?.yolobat && soundscapepipeConfig?.detectors?.yolobat?.enabled !== false">
+                                                            <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                                                <template x-if="getDetectorTasks('yolobat').length > 0">
+                                                                    <template x-for="taskName in getDetectorTasks('yolobat')" :key="taskName">
+                                                                        <span class="badge small text-bg-primary" x-text="taskName"></span>
+                                                                    </template>
+                                                                </template>
+                                                                <template x-if="getDetectorTasks('yolobat').length === 0">
+                                                                    <span class="badge small text-bg-secondary">continuous</span>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="!soundscapepipeConfig?.detectors?.yolobat || soundscapepipeConfig?.detectors?.yolobat?.enabled === false">
+                                                            <span class="badge small text-bg-secondary">Not configured</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                        
+                                        <!-- Column 3: Recording Settings -->
+                                        <div class="col-md-4">
+                                            <h6 class="text-muted mb-3"><i class="fas fa-record-vinyl me-2"></i>Recording Settings</h6>
+                                            <table class="table table-borderless table-sm small">
+                                                <template x-if="soundscapepipeConfig?.ratio !== undefined && soundscapepipeConfig?.ratio !== null">
+                                                    <tr>
+                                                        <td class="fw-bold">Default Ratio:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-secondary" x-text="(soundscapepipeConfig?.ratio || 0).toFixed(2)"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <template x-if="soundscapepipeConfig?.length_s !== undefined && soundscapepipeConfig?.length_s !== null">
+                                                    <tr>
+                                                        <td class="fw-bold">Length:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-secondary" x-text="`${soundscapepipeConfig?.length_s}s`"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <template x-if="soundscapepipeConfig?.maximize_confidence !== undefined && soundscapepipeConfig?.maximize_confidence !== null">
+                                                    <tr>
+                                                        <td class="fw-bold">Maximize Confidence:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small" :class="soundscapepipeConfig?.maximize_confidence ? 'text-bg-success' : 'text-bg-secondary'" x-text="soundscapepipeConfig?.maximize_confidence ? 'Yes' : 'No'"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <template x-if="soundscapepipeConfig && getRecordingGroups().length > 0">
+                                                    <tr>
+                                                        <td class="fw-bold">Groups:</td>
+                                                        <td class="text-end">
+                                                            <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                                                <template x-for="groupName in getRecordingGroups()" :key="groupName">
+                                                                    <span class="badge small text-bg-primary" x-text="groupName"></span>
+                                                                </template>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <template x-if="soundscapepipeConfig && getRecordingGroups().length === 0">
+                                                    <tr>
+                                                        <td class="fw-bold">Recording Groups:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-secondary">No groups</span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>

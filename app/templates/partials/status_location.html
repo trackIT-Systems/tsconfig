@@ -1,0 +1,37 @@
+            <!-- Tracker Location -->
+            <div class="row mb-4 mt-4">
+                <div class="col">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-map-marker-alt me-2"></i>Location
+                            </h5>
+                        </div>
+                        <!-- Location Info -->
+                        <template x-if="geolocation">
+                            <div id="geolocationMap" class="map-container"></div>
+                        </template>
+                        <!-- No Location -->
+                        <template x-if="!geolocation && !loading">
+                            <div class="card-body">
+                                <div class="text-center py-4 text-muted">
+                                    <i class="fas fa-map-marker-slash fa-3x mb-3"></i>
+                                    <p>No geolocation information available</p>
+                                    <small>Upload a geolocation file to set tracker position</small>
+                                </div>
+                            </div>
+                        </template>
+                        <!-- Loading -->
+                        <template x-if="!geolocation && loading">
+                            <div class="card-body">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading location...</p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>

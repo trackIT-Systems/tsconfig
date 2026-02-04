@@ -1,0 +1,323 @@
+            <!-- Comprehensive System Information -->
+            <div class="row mt-4" x-show="systemInfo">
+                <div class="col">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-chart-bar me-2"></i>System Resources
+                            </h5>
+                            <button class="btn btn-outline-danger btn-sm" 
+                                    @click="rebootSystem()"
+                                    :disabled="rebootLoading">
+                                <i class="fas fa-power-off me-1" :class="{ 'fa-spin': rebootLoading }"></i>
+                                <span x-text="rebootLoading ? 'Rebooting...' : 'Reboot System'"></span>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <!-- CPU Information -->
+                            <div class="row mb-4" x-show="expertMode">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-microchip me-2"></i>CPU Load</h6>
+                                    <template x-if="systemInfo?.cpu?.load_avg">
+                                        <div>
+                                            <!-- Layered Load Average Progress Bar (matching memory bar colors) -->
+                                            <div class="progress mb-2" style="position: relative; overflow: hidden;">
+                                                <!-- 15min load (bottom/background layer) -->
+                                                <div class="progress-bar bg-warning" 
+                                                        :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[2] / systemInfo.cpu.count_logical * 100))}%; height: 100%; position: absolute; top: 0; left: 0;`">
+                                                </div>
+                                                <!-- 5min load (middle layer) -->
+                                                <div class="progress-bar bg-primary" 
+                                                        :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[1] / systemInfo.cpu.count_logical * 100))}%; height: 100%; position: absolute; top: 0; left: 0;`">
+                                                </div>
+                                                <!-- 1min load (top/foreground layer) -->
+                                                <div class="progress-bar bg-success" 
+                                                        :style="`width: ${Math.min(100, (systemInfo.cpu.load_avg[0] / systemInfo.cpu.count_logical * 100))}%; height: 100%; position: absolute; top: 0; left: 0;`">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">
+                                                <div class="d-flex justify-content-between mb-1">
+                                                    <span>Load Average:</span>
+                                                    <span>
+                                                        <span class="badge text-bg-success me-1" x-text="`1m: ${systemInfo.cpu.load_avg[0].toFixed(2)}`"></span>
+                                                        <span class="badge text-bg-primary me-1" x-text="`5m: ${systemInfo.cpu.load_avg[1].toFixed(2)}`"></span>
+                                                        <span class="badge text-bg-warning" x-text="`15m: ${systemInfo.cpu.load_avg[2].toFixed(2)}`"></span>
+                                                    </span>
+                                                </div>
+                                                <span x-text="`Cores: ${systemInfo.cpu.count_physical} physical, ${systemInfo.cpu.count_logical} logical`"></span>
+                                            </small>
+                                        </div>
+                                    </template>
+                                    <template x-if="!systemInfo?.cpu?.load_avg">
+                                        <div>
+                                            <!-- Fallback to CPU percentage if load average not available -->
+                                            <div class="progress mb-2">
+                                                <div class="progress-bar" 
+                                                        :style="`width: ${systemInfo?.cpu?.percent || 0}%`" 
+                                                        :class="{
+                                                            'bg-success': (systemInfo?.cpu?.percent || 0) < 50,
+                                                            'bg-warning': (systemInfo?.cpu?.percent || 0) >= 50 && (systemInfo?.cpu?.percent || 0) < 80,
+                                                            'bg-danger': (systemInfo?.cpu?.percent || 0) >= 80
+                                                        }">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">
+                                                <span x-text="`Usage: ${(systemInfo?.cpu?.percent || 0).toFixed(1)}%`"></span><br>
+                                                <span x-text="`Cores: ${systemInfo?.cpu?.count_physical} physical, ${systemInfo?.cpu?.count_logical} logical`"></span><br>
+                                                <span class="text-warning">Load averages not available on this system</span>
+                                            </small>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-memory me-2"></i>Memory</h6>
+                                    <template x-if="systemInfo?.memory?.virtual">
+                                        <div>
+                                            <!-- htop-style Memory Progress Bar -->
+                                            <div class="progress mb-2">
+                                                <!-- Actual Used memory (green) -->
+                                                <div class="progress-bar bg-success" 
+                                                        :style="`width: ${Math.min(100, Math.max(0, ((systemInfo.memory.virtual.used || 0) - (systemInfo.memory.virtual.buffers || 0) - (systemInfo.memory.virtual.cached || 0)) / Math.max(1, systemInfo.memory.virtual.total || 1) * 100))}%`">
+                                                </div>
+                                                <!-- Buffers (blue) -->
+                                                <div class="progress-bar bg-primary" 
+                                                        :style="`width: ${Math.min(100, Math.max(0, (systemInfo.memory.virtual.buffers || 0) / Math.max(1, systemInfo.memory.virtual.total || 1) * 100))}%`">
+                                                </div>
+                                                <!-- Cache (yellow/orange) -->
+                                                <div class="progress-bar bg-warning" 
+                                                        :style="`width: ${Math.min(100, Math.max(0, (systemInfo.memory.virtual.cached || 0) / Math.max(1, systemInfo.memory.virtual.total || 1) * 100))}%`">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">
+                                                <div class="d-flex justify-content-between mb-1">
+                                                    <span>Memory:</span>
+                                                    <span>
+                                                        <span class="badge text-bg-success me-1" x-text="`Used: ${formatBytes((systemInfo.memory.virtual.used || 0) - (systemInfo.memory.virtual.buffers || 0) - (systemInfo.memory.virtual.cached || 0))}`"></span>
+                                                        <span class="badge text-bg-primary me-1" x-text="`Buffers: ${formatBytes(systemInfo.memory.virtual.buffers || 0)}`"></span>
+                                                        <span class="badge text-bg-warning" x-text="`Cache: ${formatBytes(systemInfo.memory.virtual.cached || 0)}`"></span>
+                                                    </span>
+                                                </div>
+                                                <span x-text="`${formatBytes(systemInfo.memory.virtual.used || 0)} / ${formatBytes(systemInfo.memory.virtual.total || 0)} (${(systemInfo.memory.virtual.percent || 0).toFixed(1)}%)`"></span>
+                                            </small>
+                                        </div>
+                                    </template>
+                                    <template x-if="!systemInfo?.memory?.virtual">
+                                        <div>
+                                            <div class="progress mb-2">
+                                                <div class="progress-bar bg-secondary" style="width: 0%"></div>
+                                            </div>
+                                            <small class="text-muted">Loading memory information...</small>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Disk Usage -->
+                            <div class="row mb-4" x-show="getFilteredDisks(expertMode).length > 0">
+                                <div class="col-12">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-hdd me-2"></i>Disk Usage</h6>
+                                    <template x-for="(disk, diskIndex) in expertMode ? getFilteredDisks(expertMode) : getFilteredDisks(expertMode).slice(0, 1)" :key="`${disk.device}-${disk.mountpoint}-${diskIndex}`">
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="small">
+                                                    <span x-text="disk.device"></span> 
+                                                    (<span x-html="formatMountpointsWithLinks(disk.mountpoints || [disk.mountpoint])"></span>)
+                                                </span>
+                                                <span x-text="`${disk.percent.toFixed(1)}%`" class="small"></span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar" 
+                                                        :style="`width: ${disk.percent}%`" 
+                                                        :class="{
+                                                            'bg-success': disk.percent < 50,
+                                                            'bg-warning': disk.percent >= 50 && disk.percent < 80,
+                                                            'bg-danger': disk.percent >= 80
+                                                        }">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted" x-text="`${formatBytes(disk.used)} / ${formatBytes(disk.total)} (${formatBytes(disk.free)} free)`"></small>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Network Connectivity, Temperature & Time Status -->
+                            <div class="row">
+                                <div class="col-lg-4 col-md-6">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-network-wired me-2"></i>Network Connectivity</h6>
+                                    <template x-if="networkConnectivity?.available && networkConnectivity?.connectivity">
+                                        <div>
+                                            <table class="table table-borderless table-sm small">
+                                                <tbody>
+                                                <tr>
+                                                    <td class="fw-bold">Network Connectivity:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'text-bg-success': networkConnectivity.connectivity === 'full',
+                                                                  'text-bg-warning': networkConnectivity.connectivity === 'limited' || networkConnectivity.connectivity === 'portal',
+                                                                  'text-bg-danger': networkConnectivity.connectivity === 'none',
+                                                                  'text-bg-secondary': networkConnectivity.connectivity === 'unknown' || !networkConnectivity.connectivity
+                                                              }"
+                                                              x-text="networkConnectivity.connectivity ? networkConnectivity.connectivity.charAt(0).toUpperCase() + networkConnectivity.connectivity.slice(1) : 'Unknown'"></span>
+                                                    </td>
+                                                </tr>
+                                                <template x-if="modemInfo && modemInfo.operator_name">
+                                                    <tr>
+                                                        <td class="fw-bold">Operator:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-primary" x-text="modemInfo.operator_name"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <template x-if="modemInfo && modemInfo.access_technology">
+                                                    <tr>
+                                                        <td class="fw-bold">Technology:</td>
+                                                        <td class="text-end">
+                                                            <span class="badge small text-bg-primary" x-text="modemInfo.access_technology"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                <tr>
+                                                    <td class="fw-bold">Modem State:</td>
+                                                    <td class="text-end">
+                                                        <template x-if="modemInfo && modemInfo.state">
+                                                            <span class="badge small" 
+                                                                  :class="{
+                                                                      'text-bg-success': modemInfo.state === 'connected' || modemInfo.state === 'registered',
+                                                                      'text-bg-warning': modemInfo.state === 'connecting' || modemInfo.state === 'registering',
+                                                                      'text-bg-danger': modemInfo.state === 'disconnected' || modemInfo.state === 'failed',
+                                                                      'text-bg-secondary': modemInfo.state === 'unknown' || modemInfo.state === 'locked' || modemInfo.state === 'disabled'
+                                                                  }"
+                                                                  x-text="modemInfo.state"></span>
+                                                        </template>
+                                                        <template x-if="!modemInfo || !modemInfo.state">
+                                                            <span class="badge small text-bg-secondary">No modem found</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                                <template x-if="modemInfo && (modemInfo.signal_strength_percent !== null || modemInfo.signal_strength_dbm !== null)">
+                                                    <tr>
+                                                        <td class="fw-bold">Signal Strength:</td>
+                                                        <td class="text-end">
+                                                            <template x-if="modemInfo.signal_strength_percent !== null">
+                                                                <span class="badge small" 
+                                                                      :class="{
+                                                                          'text-bg-success': modemInfo.signal_strength_percent >= 60,
+                                                                          'text-bg-warning': modemInfo.signal_strength_percent >= 40 && modemInfo.signal_strength_percent < 60,
+                                                                          'text-bg-danger': modemInfo.signal_strength_percent < 40
+                                                                      }"
+                                                                      x-text="`${modemInfo.signal_strength_percent}%`"></span>
+                                                            </template>
+                                                            <template x-if="modemInfo.signal_strength_percent === null && modemInfo.signal_strength_dbm !== null">
+                                                                <span class="badge small text-bg-secondary" 
+                                                                      x-text="`${modemInfo.signal_strength_dbm} dBm`"></span>
+                                                            </template>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </template>
+                                    <template x-if="networkConnectivityError">
+                                        <div class="text-danger small">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            <span x-text="networkConnectivityError"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!networkConnectivity?.available && !networkConnectivityError">
+                                        <div class="text-muted small">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Network connectivity status not available
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="col-lg-4 col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length > 0">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                    <div>
+                                        <table class="table table-borderless table-sm small">
+                                            <tbody>
+                                                <template x-for="(sensors, sensorName) in systemInfo?.temperatures || {}" :key="sensorName">
+                                                    <template x-for="sensor in sensors" :key="sensor.label">
+                                                        <tr>
+                                                            <td class="fw-bold text-capitalize" x-text="`${sensor.label}:`"></td>
+                                                            <td class="text-end">
+                                                                <span class="badge small" 
+                                                                      :class="{
+                                                                          'text-bg-success': sensor.current < 60,
+                                                                          'text-bg-warning': sensor.current >= 60 && sensor.current < 80,
+                                                                          'text-bg-danger': sensor.current >= 80
+                                                                      }"
+                                                                      x-text="`${sensor.current.toFixed(1)}°C`"></span>
+                                                            </td>
+                                                        </tr>
+                                                    </template>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="col-lg-4 col-md-6" x-show="Object.keys(systemInfo?.temperatures || {}).length === 0">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-thermometer-half me-2"></i>Temperature</h6>
+                                    <div class="text-muted small">Temperature sensors not available</div>
+                                </div>
+                                <div class="col-lg-4 col-md-6">
+                                    <h6 class="text-muted mb-3"><i class="fas fa-clock me-2"></i>Time & Date</h6>
+                                    <template x-if="timedatectlStatus?.available && timedatectlStatus?.status">
+                                        <div>
+                                            <table class="table table-borderless table-sm small">
+                                                <tbody>
+                                                <tr>
+                                                    <td class="fw-bold">Local Time:</td>
+                                                    <td class="text-end" x-text="timedatectlStatus.status.local_time"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="fw-bold">Time Zone:</td>
+                                                    <td class="text-end" x-text="timedatectlStatus.status.time_zone"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="fw-bold">NTP Service:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'text-bg-success': timedatectlStatus.status.ntp_service === 'active',
+                                                                  'text-bg-warning': timedatectlStatus.status.ntp_service === 'inactive',
+                                                                  'text-bg-secondary': timedatectlStatus.status.ntp_service === 'n/a'
+                                                              }"
+                                                              x-text="timedatectlStatus.status.ntp_service"></span>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="fw-bold">Clock Synchronized:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small" 
+                                                              :class="{
+                                                                  'text-bg-success': timedatectlStatus.status.system_clock_synchronized === true,
+                                                                  'text-bg-danger': timedatectlStatus.status.system_clock_synchronized === false
+                                                              }"
+                                                              x-text="timedatectlStatus.status.system_clock_synchronized ? 'Yes' : 'No'"></span>
+                                                    </td>
+                                                </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </template>
+                                    <template x-if="timedatectlError">
+                                        <div class="text-danger small">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            <span x-text="timedatectlError"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!timedatectlStatus?.available && !timedatectlError">
+                                        <div class="text-muted small">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Timedatectl not available
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>

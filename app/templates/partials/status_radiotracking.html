@@ -1,0 +1,162 @@
+            <!-- Radiotracking Status Panel -->
+            <div class="row mt-4" x-show="isServiceAvailable('radiotracking')" x-cloak>
+                <div class="col">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-broadcast-tower me-2"></i>Radiotracking
+                            </h5>
+                            <a class="btn btn-outline-primary btn-sm" 
+                               href="#radiotracking"
+                               @click.prevent="activeConfig = 'radiotracking'"
+                               title="Open Radiotracking Configuration">
+                                <i class="fas fa-cog me-1"></i>
+                                <span class="d-none d-sm-inline">Configure</span>
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <!-- Loading state - only show on initial load -->
+                            <template x-if="radiotrackingLoading && !radiotrackingConfig">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading radiotracking configuration...</p>
+                                </div>
+                            </template>
+                            
+                            <!-- Configuration info -->
+                            <div x-show="radiotrackingConfig" x-cloak>
+                                <div class="row">
+                                    <!-- Column 1: RTL-SDR Settings -->
+                                    <div class="col-md-4">
+                                        <h6 class="text-muted mb-3"><i class="fas fa-microchip me-2"></i>RTL-SDR</h6>
+                                        <table class="table table-borderless table-sm small">
+                                            <tbody>
+                                            <template x-if="radiotrackingConfig?.['rtl-sdr']?.device && radiotrackingConfig['rtl-sdr'].device.length > 0">
+                                                <tr>
+                                                    <td class="fw-bold">Device:</td>
+                                                    <td class="text-end">
+                                                        <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                                            <template x-for="device in radiotrackingConfig['rtl-sdr'].device" :key="device">
+                                                                <span class="badge small text-bg-primary" x-text="device"></span>
+                                                            </template>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.['rtl-sdr']?.center_freq">
+                                                <tr>
+                                                    <td class="fw-bold">Center Freq:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${(radiotrackingConfig['rtl-sdr'].center_freq / 1000000).toFixed(3)} MHz`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.['rtl-sdr']?.sample_rate">
+                                                <tr>
+                                                    <td class="fw-bold">Sample Rate:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${(radiotrackingConfig['rtl-sdr'].sample_rate / 1000).toFixed(0)} kHz`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.['rtl-sdr']?.gain !== undefined && radiotrackingConfig?.['rtl-sdr']?.gain !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Gain:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig['rtl-sdr'].gain} dB`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <!-- Column 2: Analysis Settings -->
+                                    <div class="col-md-4">
+                                        <h6 class="text-muted mb-3"><i class="fas fa-wave-square me-2"></i>Analysis</h6>
+                                        <table class="table table-borderless table-sm small">
+                                            <tbody>
+                                            <template x-if="radiotrackingConfig?.analysis?.signal_threshold_dbw !== undefined && radiotrackingConfig?.analysis?.signal_threshold_dbw !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Signal Threshold:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.analysis.signal_threshold_dbw} dBW`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.analysis?.snr_threshold_db !== undefined && radiotrackingConfig?.analysis?.snr_threshold_db !== null">
+                                                <tr>
+                                                    <td class="fw-bold">SNR Threshold:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.analysis.snr_threshold_db} dB`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.analysis?.signal_min_duration_ms !== undefined && radiotrackingConfig?.analysis?.signal_min_duration_ms !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Min Duration:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.analysis.signal_min_duration_ms} ms`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.analysis?.signal_max_duration_ms !== undefined && radiotrackingConfig?.analysis?.signal_max_duration_ms !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Max Duration:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.analysis.signal_max_duration_ms} ms`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <!-- Column 3: Signal Matching -->
+                                    <div class="col-md-4">
+                                        <h6 class="text-muted mb-3"><i class="fas fa-link me-2"></i>Signal Matching</h6>
+                                        <table class="table table-borderless table-sm small">
+                                            <tbody>
+                                            <template x-if="radiotrackingConfig?.matching?.matching_timeout_s !== undefined && radiotrackingConfig?.matching?.matching_timeout_s !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Timeout:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.matching.matching_timeout_s}s`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.matching?.matching_time_diff_s !== undefined && radiotrackingConfig?.matching?.matching_time_diff_s !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Time Diff:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.matching.matching_time_diff_s}s`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.matching?.matching_bandwidth_hz !== undefined && radiotrackingConfig?.matching?.matching_bandwidth_hz !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Bandwidth:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${(radiotrackingConfig.matching.matching_bandwidth_hz / 1000).toFixed(1)} kHz`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="radiotrackingConfig?.matching?.matching_duration_diff_ms !== undefined && radiotrackingConfig?.matching?.matching_duration_diff_ms !== null">
+                                                <tr>
+                                                    <td class="fw-bold">Duration Diff:</td>
+                                                    <td class="text-end">
+                                                        <span class="badge small text-bg-secondary" x-text="`${radiotrackingConfig.matching.matching_duration_diff_ms} ms`"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
