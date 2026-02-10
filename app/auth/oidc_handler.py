@@ -157,6 +157,53 @@ class OIDCHandler:
         logger.info("Successfully exchanged authorization code for tokens")
         return token_response
 
+    async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
+        """
+        Exchange refresh token for new access/ID tokens.
+
+        Args:
+            refresh_token: Refresh token from previous authentication
+
+        Returns:
+            dict: Token response containing new access_token, id_token, etc.
+
+        Raises:
+            ValueError: If refresh token is invalid or refresh fails
+        """
+        if not refresh_token:
+            raise ValueError("Refresh token is required")
+
+        token_endpoint = await oidc_config.get_token_endpoint()
+
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": oidc_config.client_id,
+        }
+
+        # Add client_secret if configured
+        if oidc_config.client_secret:
+            data["client_secret"] = oidc_config.client_secret
+
+        logger.debug("Refreshing access token using refresh token")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                token_endpoint,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=10.0,
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Token refresh failed: {response.status_code} {response.text}")
+                raise ValueError(f"Token refresh failed: {response.status_code}")
+
+            token_response = response.json()
+
+        logger.info("Successfully refreshed access token")
+        return token_response
+
     async def _get_jwks(self) -> Dict[str, Any]:
         """Fetch JWKS (JSON Web Key Set) from the issuer."""
         if self._jwks_cache is not None:

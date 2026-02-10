@@ -45,6 +45,10 @@ async def get_current_user(
             detail="Authentication is not configured",
         )
 
+    # Use user from request state if middleware already validated (incl. after refresh)
+    if hasattr(request.state, "user") and request.state.user is not None:
+        return request.state.user
+
     # Extract token from Authorization header or cookie
     token = None
     if authorization and authorization.startswith("Bearer "):

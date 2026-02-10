@@ -38,6 +38,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         default_public = [
             "/auth/login",
             "/auth/callback",
+            "/auth/status",  # Needed by auth.js to check authentication status
+            "/api/server-mode",  # Needed by auth.js to check if OIDC is enabled
             "/docs",
             "/redoc",
             "/openapi.json",
@@ -59,9 +61,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         """Check if the request path is public (doesn't require authentication)."""
         for public_path in self.public_paths:
             if path.startswith(public_path):
-                logger.debug(f"AuthMiddleware: Path {path} matches public path {public_path}")
                 return True
-        logger.debug(f"AuthMiddleware: Path {path} does not match any public paths: {self.public_paths}")
         return False
 
     def _is_browser_request(self, request: Request) -> bool:
@@ -80,7 +80,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return False
         if "application/json" in accept:
             return False
-        # Default to browser for ambiguous cases
+        # Check for fetch requests (they typically have Accept: */* or specific types)
+        # If no Accept header or Accept: */*, treat as API to avoid CORS issues
+        if not accept or accept.strip() in ["*/*", "*"]:
+            return False
+        # Default to browser for other cases (like Accept: image/*, etc.)
         return True
 
     async def _get_token_from_request(self, request: Request) -> str | None:
@@ -112,11 +116,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Check if path is public (doesn't require authentication)
-        # FastAPI's root_path is already stripped from request.url.path
         path = request.url.path
-        logger.debug(f"AuthMiddleware: Checking path: {path}")
         if self._is_public_path(path):
-            logger.debug(f"AuthMiddleware: Path {path} is public, allowing")
             return await call_next(request)
 
         # For all other paths, require authentication
@@ -128,10 +129,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 # Redirect to login page
                 login_url = f"{self.base_url}/auth/login"
                 # Include return_to parameter to redirect back after login
-                # Use public URL from proxy middleware if available, otherwise use request.url
                 return_to = getattr(request.state, "public_url", str(request.url))
                 redirect_url = f"{login_url}?return_to={return_to}"
-                logger.debug(f"Redirecting to login: {redirect_url}")
                 return RedirectResponse(url=redirect_url, status_code=302)
             else:
                 # API request, return 401
@@ -197,9 +196,72 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         except ValueError as e:
-            # Token validation failed
+            # Token validation failed - try to refresh before giving up
             logger.warning(f"Token validation failed: {e}")
 
+            # Check if we have a refresh token to attempt refresh
+            refresh_token = request.cookies.get("refresh_token")
+            
+            if refresh_token:
+                try:
+                    # Attempt to refresh the token
+                    from app.auth.oidc_handler import get_oidc_handler
+                    
+                    oidc_handler = get_oidc_handler()
+                    if oidc_handler:
+                        token_response = await oidc_handler.refresh_access_token(refresh_token)
+                        
+                        # Get new token
+                        id_token = token_response.get("id_token")
+                        access_token = token_response.get("access_token")
+                        new_token = id_token or access_token
+                        
+                        if new_token:
+                            # Validate the new token
+                            token_claims = await oidc_handler.validate_token(new_token)
+                            user_info = oidc_handler.extract_user_claims(token_claims)
+                            
+                            # Validate user groups
+                            required_groups = [f"tenant_{oidc_config.domain}", "ts_admin", "ts_staff"]
+                            is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
+                            
+                            if is_authorized:
+                                # Success! Attach user info to request state
+                                request.state.user = user_info
+                                
+                                # Continue with the request
+                                response = await call_next(request)
+                                
+                                # Update cookies in the response
+                                response.set_cookie(
+                                    key="auth_token",
+                                    value=new_token,
+                                    httponly=True,
+                                    secure=True,
+                                    samesite="lax",
+                                    max_age=token_response.get("expires_in", 3600),
+                                )
+                                
+                                # Update refresh token if rotated
+                                new_refresh_token = token_response.get("refresh_token", refresh_token)
+                                response.set_cookie(
+                                    key="refresh_token",
+                                    value=new_refresh_token,
+                                    httponly=True,
+                                    secure=True,
+                                    samesite="lax",
+                                    max_age=30 * 24 * 60 * 60,
+                                )
+                                
+                                logger.info(f"Successfully refreshed token for user: {user_info.get('email')}")
+                                return response
+                            else:
+                                logger.warning(f"User authorization failed after token refresh: {error_msg}")
+                except Exception as refresh_error:
+                    logger.warning(f"Token refresh failed in middleware: {refresh_error}")
+                    # Fall through to normal error handling
+            
+            # Refresh failed or no refresh token available - redirect/return error
             if self._is_browser_request(request):
                 # Redirect to login page
                 login_url = f"{self.base_url}/auth/login"

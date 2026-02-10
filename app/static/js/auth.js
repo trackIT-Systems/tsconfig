@@ -8,6 +8,8 @@ import { apiUrl } from './utils/apiUtils.js';
 export const authManager = {
     user: null,
     initialized: false,
+    refreshInterval: null,
+    isRefreshing: false,
 
     /**
      * Initialize authentication and fetch user info if authenticated
@@ -41,6 +43,8 @@ export const authManager = {
                 const authStatus = await authStatusResponse.json();
                 if (authStatus.authenticated) {
                     this.user = authStatus.user;
+                    // Start proactive token refresh
+                    this.startTokenRefresh();
                 }
             }
         } catch (error) {
@@ -48,6 +52,67 @@ export const authManager = {
         }
 
         this.initialized = true;
+    },
+
+    /**
+     * Start proactive token refresh timer
+     * Refreshes token every 4 minutes (before typical 5-minute expiration)
+     */
+    startTokenRefresh() {
+        // Clear any existing interval
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+
+        // Refresh token every 4 minutes (240 seconds)
+        // This is before the typical 5-minute (300s) token expiration
+        this.refreshInterval = setInterval(async () => {
+            if (this.isAuthenticated() && !this.isRefreshing) {
+                await this.refreshToken();
+            }
+        }, 4 * 60 * 1000); // 4 minutes
+    },
+
+    /**
+     * Refresh the authentication token
+     * @returns {Promise<boolean>} True if refresh succeeded
+     */
+    async refreshToken() {
+        if (this.isRefreshing) {
+            return false;
+        }
+
+        this.isRefreshing = true;
+        
+        try {
+            const response = await fetch(apiUrl('/auth/refresh'), {
+                method: 'POST',
+                credentials: 'same-origin',
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.user) {
+                    this.user = data.user;
+                }
+                return true;
+            } else {
+                console.warn('Token refresh failed, redirecting to login');
+                // Clear interval before redirect
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+                // Redirect to login
+                window.location.href = apiUrl('/auth/login?return_to=' + encodeURIComponent(window.location.href));
+                return false;
+            }
+        } catch (error) {
+            console.error('Token refresh error:', error);
+            return false;
+        } finally {
+            this.isRefreshing = false;
+        }
     },
 
     /**
@@ -71,6 +136,11 @@ export const authManager = {
      * Redirects to the logout endpoint which handles OIDC logout
      */
     logout() {
+        // Clear refresh interval
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
         window.location.href = apiUrl('/auth/logout');
     },
 };
@@ -79,4 +149,44 @@ export const authManager = {
 document.addEventListener('DOMContentLoaded', async () => {
     await authManager.initialize();
 });
+
+// Global fetch interceptor for automatic token refresh on 401 errors
+(function() {
+    const originalFetch = window.fetch;
+    const requestsInRetry = new WeakSet();
+
+    window.fetch = async function(...args) {
+        let response = await originalFetch(...args);
+        
+        // If we get a 401 and user is authenticated, try to refresh and retry
+        if (response.status === 401 && authManager.isAuthenticated() && !requestsInRetry.has(args[0])) {
+            // Don't intercept auth endpoints - they handle their own flow
+            const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+            if (url && url.includes('/auth/')) {
+                return response;
+            }
+
+            
+            // Mark this request to prevent infinite retry loops
+            requestsInRetry.add(args[0]);
+            
+            try {
+                // Attempt to refresh the token
+                const refreshed = await authManager.refreshToken();
+                
+                if (refreshed) {
+                    // Retry the original request with the new token
+                    response = await originalFetch(...args);
+                }
+            } catch (error) {
+                console.error('Error during token refresh retry:', error);
+            } finally {
+                // Clean up the retry marker after a delay
+                setTimeout(() => requestsInRetry.delete(args[0]), 5000);
+            }
+        }
+        
+        return response;
+    };
+})();
 

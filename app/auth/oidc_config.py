@@ -21,7 +21,7 @@ class OIDCConfig:
         self.client_secret: Optional[str] = None
         self.redirect_uri: Optional[str] = None
         self.domain: Optional[str] = None
-        self.scopes: str = "openid profile email"
+        self.scopes: str = "openid profile email offline_access"
         
         # Only load OIDC configuration in server mode
         if config_loader.is_server_mode():
@@ -31,6 +31,7 @@ class OIDCConfig:
             # This ensures is_configured() returns False
             pass
 
+
     def _load_from_env(self):
         """Load OIDC settings from environment variables."""
         self.domain = os.environ.get("DOMAIN")
@@ -38,7 +39,7 @@ class OIDCConfig:
         self.client_id = f"{self.domain}/tsconfig"
         self.client_secret = os.environ.get("TSCONFIG_OAUTH_CLIENT_SECRET")
         self.redirect_uri = f"https://{self.domain}/tsconfig/auth/callback"
-        self.scopes = "openid profile email groups"
+        self.scopes = "openid profile email groups offline_access"
 
     def is_configured(self) -> bool:
         """Check if OIDC is properly configured."""
