@@ -18,9 +18,9 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["authentication"])
 templates = Jinja2Templates(directory="app/templates")
 
-# Store PKCE verifiers temporarily (in production, use Redis or similar)
-# Key: state, Value: code_verifier
-_pkce_store: dict[str, str] = {}
+# Store PKCE verifiers and return_to URLs temporarily (in production, use Redis or similar)
+# Key: state, Value: dict with code_verifier and return_to (both can be None)
+_pkce_store: dict[str, dict[str, Optional[str]]] = {}
 
 
 @router.get(
@@ -58,8 +58,11 @@ async def login(return_to: Optional[str] = Query(None, description="URL to retur
         # Initiate login flow
         authorization_url, state, code_verifier = await oidc_handler.initiate_login(return_to)
 
-        # Store code verifier for later use in callback
-        _pkce_store[state] = code_verifier
+        # Store code verifier and return_to for later use in callback
+        _pkce_store[state] = {
+            "code_verifier": code_verifier,
+            "return_to": return_to
+        }
 
         logger.info("Redirecting to OIDC provider for authentication")
         return RedirectResponse(url=authorization_url, status_code=302)
@@ -92,10 +95,25 @@ async def callback(
             detail="Authentication is only available in server mode",
         )
 
-    # Retrieve code verifier from store
-    code_verifier = _pkce_store.pop(state, None)
+    # Retrieve code verifier and return_to from store
+    stored_data = _pkce_store.pop(state, None)
+    if not stored_data:
+        logger.warning("State data not found for state parameter")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid state parameter",
+        )
+
+    # Handle both old format (string) and new format (dict) for backward compatibility
+    if isinstance(stored_data, str):
+        code_verifier = stored_data
+        return_to = None
+    else:
+        code_verifier = stored_data.get("code_verifier")
+        return_to = stored_data.get("return_to")
+
     if not code_verifier:
-        logger.warning("Code verifier not found for state parameter")
+        logger.warning("Code verifier not found in stored data")
         raise HTTPException(
             status_code=400,
             detail="Invalid state parameter",
