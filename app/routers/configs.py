@@ -10,7 +10,8 @@ from configparser import ConfigParser
 from datetime import datetime, timedelta, timezone
 from email.utils import formatdate
 from io import BytesIO
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 from fastapi import APIRouter, File, Form, HTTPException, Path as PathParam, Response, UploadFile
@@ -772,6 +773,99 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
             raise ValueError(f"Invalid geolocation file format: {str(e)}")
     else:
         raise ValueError(f"Unsupported file type: {filename}")
+
+
+def _apply_config_zip_from_path(
+    zip_path: Path,
+    force: bool = True,
+) -> Tuple[List[str], bool]:
+    """Apply configuration files from a local zip file.
+
+    Used by system reset to reset config from tsos-default-name_config.zip.
+    Does not restart services or reboot.
+
+    Args:
+        zip_path: Path to the zip file
+        force: If True, overwrite all files regardless of timestamps (default True)
+
+    Returns:
+        Tuple of (saved_files, cmdline_updated)
+        - saved_files: List of filenames that were successfully saved
+        - cmdline_updated: True if cmdline.txt was in saved_files
+
+    Raises:
+        FileNotFoundError: If zip file does not exist
+        ValueError: If zip is invalid or validation fails
+    """
+    if not isinstance(zip_path, Path):
+        zip_path = Path(zip_path)
+
+    if not zip_path.exists():
+        raise FileNotFoundError(f"Zip file not found: {zip_path}")
+
+    with open(zip_path, "rb") as f:
+        zip_buffer = BytesIO(f.read())
+
+    try:
+        with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+            zip_file.testzip()
+            file_list = zip_file.namelist()
+    except zipfile.BadZipFile:
+        raise ValueError("Invalid zip file")
+
+    zip_timestamps = extract_zip_file_timestamps(zip_buffer)
+
+    recognized_files = {}
+    with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+        for filename in file_list:
+            if filename.endswith("/"):
+                continue
+            basename = filename.split("/")[-1]
+            if basename in RECOGNIZED_CONFIG_FILES:
+                try:
+                    file_content = zip_file.read(filename).decode("utf-8")
+                    recognized_files[basename] = file_content
+                except UnicodeDecodeError:
+                    raise ValueError(f"File '{basename}' must be UTF-8 encoded text")
+
+    if not recognized_files:
+        raise ValueError(
+            f"No recognized configuration files found in zip. "
+            f"Supported files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}"
+        )
+
+    parsed_configs = {}
+    config_instances = {}
+    for filename, content in recognized_files.items():
+        config_type = RECOGNIZED_CONFIG_FILES[filename]
+        config_instance = get_config_instance(config_type, is_config_upload=True)
+        config_instances[filename] = config_instance
+        parsed_config = parse_config_file(filename, content)
+        validation_errors = config_instance.validate(parsed_config)
+        if validation_errors:
+            raise ValueError(f"Validation failed for {filename}: {'; '.join(validation_errors)}")
+        parsed_configs[filename] = parsed_config
+
+    timestamp_comparisons = compare_file_timestamps(config_instances, zip_timestamps)
+    files_to_save = (
+        list(recognized_files.keys())
+        if force
+        else [f for f in recognized_files.keys() if timestamp_comparisons.get(f, {}).get("should_update", True)]
+    )
+
+    saved_files = []
+    for filename in files_to_save:
+        config_instances[filename].save(parsed_configs[filename])
+        zip_timestamp = zip_timestamps.get(filename)
+        if zip_timestamp:
+            zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+            config_file_path = config_instances[filename].config_file
+            timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
+            os.utime(config_file_path, (timestamp, timestamp))
+        saved_files.append(filename)
+
+    cmdline_updated = "cmdline.txt" in saved_files
+    return saved_files, cmdline_updated
 
 
 @router.post(".zip")

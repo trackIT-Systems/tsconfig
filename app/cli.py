@@ -1,9 +1,10 @@
-"""Command-line interface for tsconfig configuration upload."""
+"""Command-line interface for tsconfig configuration upload and system reset."""
 
 import argparse
 import calendar
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -11,16 +12,22 @@ from io import BytesIO
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
+from app.config_loader import config_loader
 from app.logging_config import setup_logging, get_logger
 from app.routers.configs import (
     RECOGNIZED_CONFIG_FILES,
     SERVICE_MAPPING,
+    _apply_config_zip_from_path,
     extract_zip_file_timestamps,
     compare_file_timestamps,
     parse_config_file,
     get_config_instance,
     round_mtime_for_fat32,
 )
+
+DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
+OVERLAY_PATH = Path("/media/root-rw")
+WIREGUARD_CONF = Path("/boot/firmware/wireguard.conf")
 
 # Logger will be initialized in main() after logging setup
 logger = None
@@ -79,6 +86,78 @@ def schedule_reboot_sync() -> Tuple[bool, Optional[str]]:
         return False, "Reboot scheduling timed out"
     except Exception as e:
         return False, str(e)
+
+
+def process_system_reset(
+    keep_config: bool = False,
+    keep_overlay: bool = False,
+) -> None:
+    """Execute system reset: reset config and/or wipe overlay.
+
+    Args:
+        keep_config: If True, skip reset config step
+        keep_overlay: If True, skip wipe overlay step
+
+    Raises:
+        SystemExit: On validation errors or other failures
+    """
+    log = get_logger(__name__)
+
+    if config_loader.is_server_mode():
+        log.error("System reset is not available in server mode")
+        sys.exit(1)
+
+    if keep_config and keep_overlay:
+        log.error("No steps to execute: both --keep-config and --keep-overlay specified")
+        sys.exit(1)
+
+    reset_config = not keep_config
+    wipe_overlay = not keep_overlay
+    reboot_needed = False
+
+    if reset_config:
+        if not DEFAULT_CONFIG_ZIP.exists():
+            log.error(f"Default config zip not found: {DEFAULT_CONFIG_ZIP}")
+            sys.exit(1)
+        try:
+            saved_files, cmdline_updated = _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
+            log.info(f"Reset config: {', '.join(saved_files)}")
+            if cmdline_updated:
+                reboot_needed = True
+        except ValueError as e:
+            log.error(str(e))
+            sys.exit(1)
+
+        if WIREGUARD_CONF.exists():
+            try:
+                WIREGUARD_CONF.unlink()
+                log.info("Removed wireguard.conf")
+            except OSError as e:
+                log.warning(f"Failed to remove wireguard.conf: {e}")
+
+    if wipe_overlay:
+        if not OVERLAY_PATH.exists() or not OVERLAY_PATH.is_dir():
+            log.error(f"Overlay path does not exist or is not a directory: {OVERLAY_PATH}")
+            sys.exit(1)
+        try:
+            for item in OVERLAY_PATH.iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+            log.info("Wiped overlay filesystem")
+            reboot_needed = True
+        except OSError as e:
+            log.error(f"Failed to wipe overlay: {e}")
+            sys.exit(1)
+
+    if reboot_needed:
+        log.info("Scheduling system reboot...")
+        success, error = schedule_reboot_sync()
+        if success:
+            log.info("Reboot scheduled")
+        else:
+            log.warning(f"Failed to schedule reboot: {error}")
 
 
 def process_zip_upload(
@@ -509,6 +588,31 @@ def main():
         help="Reboot policy: 'forbid' (no reboot), 'allow' (default, reboot if requested), 'force' (always reboot)",
     )
 
+    # System reset command
+    reset_parser = subparsers.add_parser(
+        "system-reset",
+        help="Reset original config and/or wipe overlay filesystem",
+        description=(
+            "Execute system reset steps. By default performs full reset (reset config + wipe overlay).\n\n"
+            "Options:\n"
+            "  --keep-overlay   Only reset config, do not wipe overlay\n"
+            "  --keep-config    Only wipe overlay, do not reset config\n"
+            "  Both flags       Error (no steps to execute)\n\n"
+            "Reboot is scheduled if cmdline.txt was updated or overlay was wiped."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    reset_parser.add_argument(
+        "--keep-overlay",
+        action="store_true",
+        help="Skip wipe overlay step (only reset config)",
+    )
+    reset_parser.add_argument(
+        "--keep-config",
+        action="store_true",
+        help="Skip reset config step (only wipe overlay)",
+    )
+
     args = parser.parse_args()
 
     # Set up logging based on verbosity flags
@@ -537,6 +641,19 @@ def main():
             sys.exit(0)
         except KeyboardInterrupt:
             logger.warning("Upload interrupted by user")
+            sys.exit(130)
+        except Exception as e:
+            logger.exception(f"Unexpected error: {str(e)}")
+            sys.exit(1)
+    elif args.command == "system-reset":
+        try:
+            process_system_reset(
+                keep_config=args.keep_config,
+                keep_overlay=args.keep_overlay,
+            )
+            sys.exit(0)
+        except KeyboardInterrupt:
+            logger.warning("Reset interrupted by user")
             sys.exit(130)
         except Exception as e:
             logger.exception(f"Unexpected error: {str(e)}")

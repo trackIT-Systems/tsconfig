@@ -37,6 +37,7 @@ from app.routers import (
     shell,
     soundscapepipe,
     systemd,
+    system_reset,
     tsupdate,
 )
 from app.utils.subprocess_async import run_subprocess_async
@@ -156,6 +157,7 @@ app.include_router(deployment.router)  # Deployment proxy (for server mode)
 # These are disabled in server mode since they require direct hardware access
 if not config_loader.is_server_mode():
     app.include_router(systemd.router)
+    app.include_router(system_reset.router)
     app.include_router(shell.router)
     app.include_router(network.router)
 

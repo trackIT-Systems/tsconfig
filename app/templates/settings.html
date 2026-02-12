@@ -9,7 +9,7 @@
             const parts = hash.split('/');
                 if (parts[0] === 'settings' && parts.length > 1) {
                 const subtab = parts[1];
-                if (['schedule', 'sshkeys', 'updates', 'configupload', 'network'].includes(subtab)) {
+                if (['schedule', 'sshkeys', 'updates', 'configupload', 'reset', 'network'].includes(subtab)) {
                     return subtab;
                 }
             }
@@ -18,8 +18,8 @@
         
         this.systemTab = parseSubtab();
         
-        // If expert mode is off and we're on SSH keys tab, switch to schedule
-        if (!expertMode && this.systemTab === 'sshkeys') {
+        // If expert mode is off and we're on SSH keys or Reset tab, switch to schedule
+        if (!expertMode && (this.systemTab === 'sshkeys' || this.systemTab === 'reset')) {
             this.systemTab = 'schedule';
         }
         
@@ -32,9 +32,9 @@
             }
         });
         
-        // Watch for expert mode changes - switch away from SSH keys tab if expert mode is disabled
+        // Watch for expert mode changes - switch away from SSH keys or Reset tab if expert mode is disabled
         this.$watch('expertMode', (value) => {
-            if (!value && this.systemTab === 'sshkeys') {
+            if (!value && (this.systemTab === 'sshkeys' || this.systemTab === 'reset')) {
                 this.systemTab = 'schedule';
             }
         });
@@ -61,15 +61,6 @@
                         Schedule
                     </button>
                 </li>
-                <li class="nav-item" role="presentation" x-show="expertMode">
-                    <button class="nav-link" 
-                            :class="{ 'active': systemTab === 'sshkeys' }"
-                            @click="systemTab = 'sshkeys'"
-                            type="button">
-                        <i class="fas fa-key me-1"></i>
-                        SSH Keys
-                    </button>
-                </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" 
                             :class="{ 'active': systemTab === 'updates' }"
@@ -88,7 +79,25 @@
                         Network
                     </button>
                 </li>
-                <li class="nav-item ms-auto" role="presentation" x-show="!serverMode">
+                <li class="nav-item" role="presentation" x-show="expertMode">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'sshkeys' }"
+                            @click="systemTab = 'sshkeys'"
+                            type="button">
+                        <i class="fas fa-key me-1"></i>
+                        SSH Keys
+                    </button>
+                </li>
+                <li class="nav-item" :class="{ 'ms-auto': expertMode && !serverMode }" role="presentation" x-show="expertMode && !serverMode">
+                    <button class="nav-link" 
+                            :class="{ 'active': systemTab === 'reset' }"
+                            @click="systemTab = 'reset'"
+                            type="button">
+                        <i class="fas fa-undo me-1"></i>
+                        Reset
+                    </button>
+                </li>
+                <li class="nav-item" :class="{ 'ms-auto': !expertMode && !serverMode }" role="presentation" x-show="!serverMode">
                     <button class="nav-link" 
                             :class="{ 'active': systemTab === 'configupload' }"
                             @click="systemTab = 'configupload'"
@@ -1801,6 +1810,92 @@
                                 </template>
                             </div>
                         </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Reset Tab -->
+                <template x-if="expertMode && !serverMode">
+                    <div x-show="systemTab === 'reset'">
+                        <div class="card" x-data="resetConfig()" x-init="init()">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-undo me-2"></i>
+                                    System Reset
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-4">
+                                    Reset the system to its original state. Select the steps to execute.
+                                </p>
+
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-cog me-2"></i>
+                                        Reset Steps
+                                    </h6>
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="resetConfig"
+                                                   id="resetConfigCheck"
+                                                   :disabled="executing">
+                                            <label class="form-check-label" for="resetConfigCheck">
+                                                <strong>Reset original config</strong>
+                                            </label>
+                                        </div>
+                                        <div class="form-text ms-4">
+                                            Sets back to factory configuration. The system will get the default serial-number-based generated name and the connection to the current server will be removed.
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   x-model="wipeOverlay"
+                                                   id="wipeOverlayCheck"
+                                                   :disabled="executing">
+                                            <label class="form-check-label" for="wipeOverlayCheck">
+                                                <strong>Wipe overlay</strong>
+                                            </label>
+                                        </div>
+                                        <div class="form-text ms-4">
+                                            This deletes all runtime files, e.g. logs, temporary and cached files.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <template x-if="result">
+                                    <div class="alert alert-info mb-3" x-show="result">
+                                        <small>
+                                            <span x-text="result.reset_config_done ? 'Config reset. ' : ''"></span>
+                                            <span x-text="result.wipe_overlay_done ? 'Overlay wiped. ' : ''"></span>
+                                            <span x-text="result.reboot_initiated ? 'Reboot scheduled.' : ''"></span>
+                                        </small>
+                                    </div>
+                                </template>
+
+                                <div class="d-grid gap-2">
+                                    <button type="button" 
+                                            class="btn btn-danger"
+                                            @click="executeReset()"
+                                            :disabled="executing || !canExecute">
+                                        <template x-if="!executing">
+                                            <span>
+                                                <i class="fas fa-undo me-2"></i>
+                                                Execute Reset
+                                            </span>
+                                        </template>
+                                        <template x-if="executing">
+                                            <span>
+                                                <i class="fas fa-spinner fa-spin me-2"></i>
+                                                Executing...
+                                            </span>
+                                        </template>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </template>
