@@ -156,8 +156,94 @@ async def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.C
         raise HTTPException(status_code=503, detail="ModemManager (mmcli) not available")
 
 
+async def _get_hotspot_interface_phy() -> int | None:
+    """Get the phy index of the interface used by the hotspot connection.
+
+    Returns:
+        phy index (e.g., 0) or None if hotspot is not configured or interface unavailable
+    """
+    try:
+        props = await get_nmcli_connection_properties("hotspot", show_secrets=False)
+        interface = props.get("connection.interface-name", "").strip()
+        if not interface:
+            return None
+
+        result = await run_subprocess_async(
+            ["iw", "dev", interface, "info"], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return None
+
+        for line in result.stdout.split("\n"):
+            line = line.strip()
+            if line.startswith("wiphy "):
+                return int(line.split()[1])
+        return None
+    except (HTTPException, ValueError, IndexError):
+        return None
+
+
+def _parse_iw_phy_output(output: str) -> WiFiCapabilities:
+    """Parse iw phy output into WiFiCapabilities."""
+    bands_data = []
+    channel_widths = set()
+    current_band = None
+    current_channels = []
+
+    for line in output.split("\n"):
+        line = line.strip()
+
+        if line.startswith("Band "):
+            if current_band and current_channels:
+                bands_data.append(WiFiBandChannels(band=current_band, channels=current_channels))
+
+            current_channels = []
+            band_num = line.split()[1].rstrip(":")
+            if band_num == "1":
+                current_band = "2.4GHz"
+            elif band_num == "2":
+                current_band = "5GHz"
+            elif band_num == "3":
+                current_band = "6GHz"
+            else:
+                current_band = None
+
+        elif line.startswith("* ") and "MHz [" in line and current_band:
+            if "(disabled)" in line:
+                continue
+            try:
+                channel_start = line.index("[") + 1
+                channel_end = line.index("]", channel_start)
+                channel = int(line[channel_start:channel_end])
+                current_channels.append(channel)
+            except (ValueError, IndexError):
+                continue
+
+        elif "HT20" in line or "HT40" in line or "VHT80" in line or "VHT160" in line:
+            if "HT20" in line or "HT40" in line:
+                channel_widths.add("20")
+            if "HT40" in line:
+                channel_widths.add("40")
+            if "VHT80" in line or "80MHz" in line:
+                channel_widths.add("80")
+            if "VHT160" in line or "160MHz" in line:
+                channel_widths.add("160")
+
+    if current_band and current_channels:
+        bands_data.append(WiFiBandChannels(band=current_band, channels=current_channels))
+
+    if not channel_widths:
+        channel_widths.add("20")
+    sorted_widths = sorted(list(channel_widths), key=lambda x: int(x))
+
+    return WiFiCapabilities(bands=bands_data, channel_widths=sorted_widths)
+
+
 async def parse_wifi_capabilities() -> WiFiCapabilities:
-    """Parse WiFi capabilities from iw list command.
+    """Parse WiFi capabilities from the hotspot interface only.
+
+    Queries only the interface configured for the hotspot connection to avoid duplicate
+    bands when multiple WiFi interfaces are present.
 
     Returns:
         WiFiCapabilities with supported bands, channels, and widths
@@ -166,84 +252,25 @@ async def parse_wifi_capabilities() -> WiFiCapabilities:
         HTTPException: If command fails or capabilities cannot be determined
     """
     try:
-        # Run iw list to get device capabilities
-        result = await run_subprocess_async(["iw", "list"], capture_output=True, text=True, timeout=10)
-        
+        phy = await _get_hotspot_interface_phy()
+        if phy is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Hotspot not configured or interface unavailable. Configure hotspot first.",
+            )
+
+        result = await run_subprocess_async(
+            ["iw", "phy", f"phy{phy}", "info"], capture_output=True, text=True, timeout=10
+        )
+
         if result.returncode != 0:
             raise HTTPException(status_code=503, detail="WiFi device not available or iw command failed")
-        
-        output = result.stdout
-        bands_data = []
-        channel_widths = set()
-        
-        # Parse bands and channels
-        current_band = None
-        current_channels = []
-        
-        for line in output.split("\n"):
-            line = line.strip()
-            
-            # Detect band sections (e.g., "Band 1:", "Band 2:")
-            if line.startswith("Band "):
-                # Save previous band if exists
-                if current_band and current_channels:
-                    bands_data.append(WiFiBandChannels(band=current_band, channels=current_channels))
-                
-                current_channels = []
-                # Band 1 is 2.4GHz, Band 2 is 5GHz, Band 3+ would be 6GHz
-                band_num = line.split()[1].rstrip(":")
-                if band_num == "1":
-                    current_band = "2.4GHz"
-                elif band_num == "2":
-                    current_band = "5GHz"
-                elif band_num == "3":
-                    current_band = "6GHz"
-                else:
-                    current_band = None
-            
-            # Parse frequency/channel lines
-            # Format: "* 2412.0 MHz [1] (20.0 dBm)" or "* 5180.0 MHz [36] (20.0 dBm) (no IR)"
-            elif line.startswith("* ") and "MHz [" in line and current_band:
-                # Check if channel is disabled
-                if "(disabled)" in line:
-                    continue
-                
-                # Extract channel number from [N]
-                try:
-                    channel_start = line.index("[") + 1
-                    channel_end = line.index("]", channel_start)
-                    channel = int(line[channel_start:channel_end])
-                    current_channels.append(channel)
-                except (ValueError, IndexError):
-                    continue
-            
-            # Parse channel width capabilities
-            # Format: "Capabilities: 0x1062" followed by capability flags like "HT20/HT40"
-            elif "HT20" in line or "HT40" in line or "VHT80" in line or "VHT160" in line:
-                if "HT20" in line or "HT40" in line:
-                    channel_widths.add("20")
-                if "HT40" in line:
-                    channel_widths.add("40")
-                if "VHT80" in line or "80MHz" in line:
-                    channel_widths.add("80")
-                if "VHT160" in line or "160MHz" in line:
-                    channel_widths.add("160")
-        
-        # Save last band
-        if current_band and current_channels:
-            bands_data.append(WiFiBandChannels(band=current_band, channels=current_channels))
-        
-        # Default to 20MHz if no widths detected
-        if not channel_widths:
-            channel_widths.add("20")
-        
-        # Sort channel widths
-        sorted_widths = sorted(list(channel_widths), key=lambda x: int(x))
-        
-        if not bands_data:
+
+        capabilities = _parse_iw_phy_output(result.stdout)
+        if not capabilities.bands:
             raise HTTPException(status_code=503, detail="No WiFi bands detected")
-        
-        return WiFiCapabilities(bands=bands_data, channel_widths=sorted_widths)
+
+        return capabilities
         
     except (subprocess.TimeoutExpired, asyncio.TimeoutError):
         raise HTTPException(status_code=504, detail="WiFi capability detection timed out")
@@ -478,7 +505,10 @@ async def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection
 
 @router.get("/wifi/capabilities", summary="Get WiFi device capabilities", response_model=WiFiCapabilities)
 async def get_wifi_capabilities() -> WiFiCapabilities:
-    """Get WiFi device capabilities including supported bands, channels, and channel widths.
+    """Get WiFi capabilities of the hotspot interface (bands, channels, channel widths).
+
+    Queries only the interface configured for the hotspot connection to avoid duplicate
+    bands when multiple WiFi interfaces are present.
 
     Returns:
         WiFi capabilities with bands, channels, and widths
