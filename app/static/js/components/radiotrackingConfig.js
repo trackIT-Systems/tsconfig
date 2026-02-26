@@ -264,16 +264,26 @@ export function radiotrackingConfig() {
         },
 
         updateSampleRate() {
-            // Ensure the value is within valid ranges
+            // Ensure the value is within valid ranges (230-300 kHz or 900-3200 kHz)
+            // Only validate on blur to allow typing intermediate values (e.g. "1" when typing "1000")
             const value = this.sampleRateKHz;
-            if (value < 230 || (value > 300 && value < 900) || value > 3200) {
-                // If outside valid ranges, set to nearest valid value
-                if (value < 230) {
-                    this.sampleRateKHz = 230;
-                } else if (value > 300 && value < 900) {
-                    this.sampleRateKHz = 300;
-                } else if (value > 3200) {
-                    this.sampleRateKHz = 3200;
+            const num = Number(value);
+            if (Number.isNaN(num) || num < 230 || (num > 300 && num < 900) || num > 3200) {
+                const originalValue = Number.isNaN(num) ? 'empty' : `${num}`;
+                let clampedValue;
+                if (Number.isNaN(num) || num < 230) {
+                    clampedValue = 230;
+                } else if (num > 300 && num < 900) {
+                    clampedValue = 300;
+                } else {
+                    clampedValue = 3200;
+                }
+                this.sampleRateKHz = clampedValue;
+                if (window.toastManager) {
+                    const msg = originalValue === 'empty'
+                        ? `Sample rate adjusted to ${clampedValue} kHz (valid: 230-300 or 900-3200 kHz)`
+                        : `Sample rate ${originalValue} kHz is invalid. Adjusted to ${clampedValue} kHz (valid: 230-300 or 900-3200 kHz)`;
+                    window.toastManager.show(msg, 'warning', { title: 'Sample Rate' });
                 }
             }
         },
