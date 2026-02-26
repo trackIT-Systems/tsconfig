@@ -104,13 +104,8 @@ async def callback(
             detail="Invalid state parameter",
         )
 
-    # Handle both old format (string) and new format (dict) for backward compatibility
-    if isinstance(stored_data, str):
-        code_verifier = stored_data
-        return_to = None
-    else:
-        code_verifier = stored_data.get("code_verifier")
-        return_to = stored_data.get("return_to")
+    code_verifier = stored_data.get("code_verifier")
+    return_to = stored_data.get("return_to")
 
     if not code_verifier:
         logger.warning("Code verifier not found in stored data")
