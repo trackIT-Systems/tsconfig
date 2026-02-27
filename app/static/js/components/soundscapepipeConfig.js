@@ -51,7 +51,10 @@ export function soundscapepipeConfig() {
             soundfile_format: "flac",
             maximize_confidence: false,
             groups: {},
-            disk_reserve_mb: 512
+            disk_reserve_mb: 512,
+            frontend_gain: "low",
+            frontend_gain_pin_a: 23,
+            frontend_gain_pin_b: 13
         },
         configLoaded: false,
         serviceStatus: {
@@ -251,7 +254,10 @@ export function soundscapepipeConfig() {
                         soundfile_format: data.soundfile_format || "flac",
                         maximize_confidence: data.maximize_confidence || false,
                         groups: data.groups || {},
-                        disk_reserve_mb: Math.min(data.disk_reserve_mb || 512, this.getDataDiskSize())
+                        disk_reserve_mb: Math.min(data.disk_reserve_mb || 512, this.getDataDiskSize()),
+                        frontend_gain: data.frontend_gain || "low",
+                        frontend_gain_pin_a: data.frontend_gain_pin_a || 23,
+                        frontend_gain_pin_b: data.frontend_gain_pin_b || 13
                     };
                     
                     // Initialize group ratios and recording lengths with global values if not set

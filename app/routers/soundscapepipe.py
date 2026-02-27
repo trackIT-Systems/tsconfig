@@ -115,6 +115,11 @@ class SoundscapepipeConfigUpdate(BaseModel):
     # Optional arguments section
     disk_reserve_mb: Optional[int] = Field(None, ge=512)
 
+    # Analog frontend section
+    frontend_gain: Optional[str] = None          # min, low, mid, high
+    frontend_gain_pin_a: Optional[int] = Field(None, ge=0)
+    frontend_gain_pin_b: Optional[int] = Field(None, ge=0)
+
 
 # Create the router using the base class
 soundscapepipe_router = BaseConfigRouter(SoundscapepipeConfig, "soundscapepipe", "soundscapepipe")

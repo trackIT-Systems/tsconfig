@@ -136,7 +136,7 @@
                                 Input Device Settings
                             </h6>
                             <div class="row">
-                                <div class="col-12">
+                                <div class="col-md-8">
                                     <div class="mb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <div class="d-flex align-items-center gap-2">
@@ -169,6 +169,19 @@
                                                 <i class="fas fa-exclamation-triangle"></i> No input devices detected
                                             </div>
                                         </template>
+                                    </div>
+                                </div>
+                                <div class="col-md-4" x-show="config.input_device_match && config.input_device_match.includes('trackIT Analog Frontend')" x-transition>
+                                    <div class="mb-3">
+                                        <label class="form-label">Analog Frontend Gain: <span x-text="config.frontend_gain.charAt(0).toUpperCase() + config.frontend_gain.slice(1)"></span></label>
+                                        <input type="range" 
+                                                class="form-range" 
+                                                :value="config.frontend_gain === 'min' ? 0 : config.frontend_gain === 'low' ? 1 : config.frontend_gain === 'mid' ? 2 : 3"
+                                                @input="config.frontend_gain = ['min', 'low', 'mid', 'high'][parseInt($event.target.value)]"
+                                                min="0"
+                                                max="3"
+                                                step="1">
+                                        <div class="form-text">min: 0.9x (discouraged), low: 1x, mid: 5x, high: 10x (~twice as loud as low)</div>
                                     </div>
                                 </div>
                             </div>
@@ -220,6 +233,30 @@
                                             <option value="2">2 (Stereo)</option>
                                         </select>
                                         <div class="form-text">Number of audio channels</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Frontend Gain GPIO Pins Row (Expert Mode) -->
+                            <div class="row" x-show="expertMode && config.input_device_match && config.input_device_match.includes('trackIT Analog Frontend')" x-transition>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Gain Control Pin A <small class="text-muted">(Expert)</small></label>
+                                        <input type="number" 
+                                                class="form-control" 
+                                                x-model.number="config.frontend_gain_pin_a"
+                                                min="0">
+                                        <div class="form-text">GPIO pin A for gain control</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Gain Control Pin B <small class="text-muted">(Expert)</small></label>
+                                        <input type="number" 
+                                                class="form-control" 
+                                                x-model.number="config.frontend_gain_pin_b"
+                                                min="0">
+                                        <div class="form-text">GPIO pin B for gain control</div>
                                     </div>
                                 </div>
                             </div>

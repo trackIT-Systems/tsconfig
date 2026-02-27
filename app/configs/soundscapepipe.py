@@ -75,11 +75,16 @@ class SoundscapepipeConfig(BaseConfig):
                 data = yaml.safe_load(f)
                 if data is None:
                     raise FileNotFoundError("Configuration file is empty")
-                return data
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"Soundscapepipe configuration not found at {self.config_file}. Please create a configuration first."
             )
+
+        data.setdefault("frontend_gain", "low")
+        data.setdefault("frontend_gain_pin_a", 23)
+        data.setdefault("frontend_gain_pin_b", 13)
+
+        return data
 
     def save(self, config: Dict[str, Any]) -> None:
         """Save the soundscapepipe configuration to disk."""
@@ -352,5 +357,21 @@ class SoundscapepipeConfig(BaseConfig):
                     errors.append("Disk reserve must be at least 512 MB")
             except (ValueError, TypeError):
                 errors.append("Disk reserve must be a valid integer")
+
+        # Validate frontend gain
+        VALID_GAINS = {"min", "low", "mid", "high"}
+        frontend_gain = config.get("frontend_gain")
+        if frontend_gain is not None and frontend_gain not in VALID_GAINS:
+            errors.append(f"frontend_gain must be one of: {', '.join(sorted(VALID_GAINS))}")
+
+        # Validate gain GPIO pins
+        for pin_key in ("frontend_gain_pin_a", "frontend_gain_pin_b"):
+            pin = config.get(pin_key)
+            if pin is not None:
+                try:
+                    if int(pin) < 0:
+                        errors.append(f"{pin_key} must be non-negative")
+                except (ValueError, TypeError):
+                    errors.append(f"{pin_key} must be a valid integer")
 
         return errors
