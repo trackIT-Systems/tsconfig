@@ -22,7 +22,7 @@ from app.routers.configs import (
     compare_file_timestamps,
     parse_config_file,
     get_config_instance,
-    round_mtime_for_fat32,
+    truncate_mtime_for_fat32,
 )
 
 DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
@@ -395,10 +395,10 @@ def process_zip_upload(
             # Set mtime from zip timestamp (regardless of mode)
             zip_timestamp = zip_timestamps.get(filename)
             if zip_timestamp:
-                zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+                zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
                 config_file_path = config_instances[filename].config_file
                 # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-                timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
+                timestamp = calendar.timegm(zip_timestamp_truncated.timetuple())
                 os.utime(config_file_path, (timestamp, timestamp))
 
             saved_files.append(filename)

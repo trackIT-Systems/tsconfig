@@ -32,25 +32,25 @@ from app.configs.wireguard import WireguardConfig
 router = APIRouter(prefix="/api/configs", tags=["configs"])
 
 
-def round_mtime_for_fat32(dt: datetime) -> datetime:
-    """Round datetime up to next even second for FAT32 compatibility.
+def truncate_mtime_for_fat32(dt: datetime) -> datetime:
+    """Truncate datetime down to previous even second for FAT32 compatibility.
     
-    FAT32 has 2-second resolution for modification times. To prevent duplicate
-    uploads when timestamps have odd seconds, we round UP to the next even second.
+    FAT32 has 2-second resolution for modification times. To match native ZIP/FAT32
+    behavior, we truncate DOWN to the previous even second (round down).
     
     Args:
         dt: Input datetime
         
     Returns:
-        Datetime rounded up to next even second
+        Datetime truncated down to previous even second
     """
     # Remove microseconds first
     dt = dt.replace(microsecond=0)
     
     if dt.second % 2 == 1:
-        # Odd second - add 1 second to round up to next even second
+        # Odd second - subtract 1 second to truncate down to previous even second
         # This automatically handles minute/hour/day rollover
-        return dt + timedelta(seconds=1)
+        return dt - timedelta(seconds=1)
     else:
         # Even second - already good
         return dt
@@ -490,13 +490,13 @@ async def upload_config(
     # Check mtime comparison when not forced
     existing_mtime = None
     if not force:
-        upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+        upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
         
         if config_instance.config_file.exists():
             # Read file mtime as UTC (naive datetime)
             existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
             
-            if upload_mtime_rounded <= existing_mtime:
+            if upload_mtime_truncated <= existing_mtime:
                 return build_standard_response(
                     success=False,
                     config_type=config_type,
@@ -504,9 +504,9 @@ async def upload_config(
                     valid=True,
                     skipped=True,
                     message=f"File is not newer. Upload: {upload_mtime.isoformat()} "
-                           f"(rounded: {upload_mtime_rounded.isoformat()}), Existing: {existing_mtime.isoformat()}",
+                           f"(truncated: {upload_mtime_truncated.isoformat()}), Existing: {existing_mtime.isoformat()}",
                     upload_mtime=upload_mtime.isoformat(),
-                    upload_mtime_rounded=upload_mtime_rounded.isoformat(),
+                    upload_mtime_truncated=upload_mtime_truncated.isoformat(),
                     existing_mtime=existing_mtime.isoformat(),
                     config_path=str(config_instance.config_file),
                 )
@@ -520,9 +520,9 @@ async def upload_config(
             save_metadata = save_result
         
         # Set file mtime from uploaded mtime
-        upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+        upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
         # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-        timestamp = calendar.timegm(upload_mtime_rounded.timetuple())
+        timestamp = calendar.timegm(upload_mtime_truncated.timetuple())
         os.utime(config_instance.config_file, (timestamp, timestamp))
             
     except Exception as e:
@@ -548,10 +548,10 @@ async def upload_config(
         response_data.update(save_metadata)
     
     # Add mtime info
-    upload_mtime_rounded = round_mtime_for_fat32(upload_mtime)
+    upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
     response_data.update({
         "upload_mtime": upload_mtime.isoformat(),
-        "upload_mtime_rounded": upload_mtime_rounded.isoformat(),
+        "upload_mtime_truncated": upload_mtime_truncated.isoformat(),
     })
     if existing_mtime:
         response_data["existing_mtime"] = existing_mtime.isoformat()
@@ -696,7 +696,7 @@ def compare_file_timestamps(config_instances: Dict[str, Any], zip_timestamps: Di
             
         result = {
             "zip_timestamp": zip_timestamp.isoformat(),
-            "zip_timestamp_rounded": round_mtime_for_fat32(zip_timestamp).isoformat(),
+            "zip_timestamp_truncated": truncate_mtime_for_fat32(zip_timestamp).isoformat(),
             "exists_on_disk": config_instance.config_file.exists(),
             "existing_timestamp": None,
             "is_newer": False,
@@ -708,9 +708,9 @@ def compare_file_timestamps(config_instances: Dict[str, Any], zip_timestamps: Di
             existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
             result["existing_timestamp"] = existing_mtime.isoformat()
             
-            # Compare rounded zip timestamp with existing timestamp
-            zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
-            result["is_newer"] = zip_timestamp_rounded > existing_mtime
+            # Compare truncated zip timestamp with existing timestamp
+            zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
+            result["is_newer"] = zip_timestamp_truncated > existing_mtime
             result["should_update"] = result["is_newer"]
         else:
             # File doesn't exist, should update
@@ -858,9 +858,9 @@ def _apply_config_zip_from_path(
         config_instances[filename].save(parsed_configs[filename])
         zip_timestamp = zip_timestamps.get(filename)
         if zip_timestamp:
-            zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+            zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
             config_file_path = config_instances[filename].config_file
-            timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
+            timestamp = calendar.timegm(zip_timestamp_truncated.timetuple())
             os.utime(config_file_path, (timestamp, timestamp))
         saved_files.append(filename)
 
@@ -1128,10 +1128,10 @@ async def upload_config_zip(
             # This matches the behavior in /api/config/update where uploaded mtime is always preserved
             zip_timestamp = zip_timestamps.get(filename)
             if zip_timestamp:
-                zip_timestamp_rounded = round_mtime_for_fat32(zip_timestamp)
+                zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
                 config_file_path = config_instances[filename].config_file
                 # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-                timestamp = calendar.timegm(zip_timestamp_rounded.timetuple())
+                timestamp = calendar.timegm(zip_timestamp_truncated.timetuple())
                 os.utime(config_file_path, (timestamp, timestamp))
             
             saved_files.append(filename)
