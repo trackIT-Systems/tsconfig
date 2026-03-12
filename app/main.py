@@ -918,5 +918,6 @@ async def home(request: Request, config_group: str = None):
             "is_server_mode": config_loader.is_server_mode(),
             "config_loader": config_loader,
             "available_services": available_services,
+            "audioprotopnet_enabled": config_loader.is_feature_enabled("audioprotopnet"),
         },
     )

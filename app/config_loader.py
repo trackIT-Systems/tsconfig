@@ -56,6 +56,11 @@ class ConfigLoader:
         shell_config = config.get("shell", {})
         return shell_config.get("user", "pi")
 
+    def is_feature_enabled(self, feature: str) -> bool:
+        """Check if a feature flag is enabled in tsconfig.yml."""
+        config = self.load_config()
+        return config.get("features", {}).get(feature, False)
+
     def reload_config(self):
         """Force reload of the configuration."""
         self._config_cache = None

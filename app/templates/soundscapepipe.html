@@ -808,6 +808,214 @@
                             </div>
                         </div>
 
+                        {% if audioprotopnet_enabled %}
+                        <!-- AudioProtoPNet Detector Section -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-dove me-2"></i>
+                                    AudioProtoPNet Detector
+                                </h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           x-model="config.detectors.audioprotopnet.enabled" 
+                                           id="audioprotopnetEnabled">
+                                    <label class="form-check-label" for="audioprotopnetEnabled">
+                                        Enabled
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-text mb-3">Bird detection using the AudioProtoPNet model.</div>
+                            
+                            <div class="mb-3">
+                                <div class="row" x-show="config.detectors.audioprotopnet.enabled"  x-transition>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Classification Threshold: <span x-text="config.detectors.audioprotopnet.class_threshold.toFixed(2)"></span></label>
+                                        <input type="range" 
+                                               class="form-range" 
+                                               x-model.number="config.detectors.audioprotopnet.class_threshold"
+                                               min="0.3"
+                                               max="1.0"
+                                               step="0.01">
+                                        <div class="form-text">Species identification threshold (0.3 - 1.0)</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label mb-0">Model Path</label>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                    @click="loadModelFiles()"
+                                                    :disabled="loadingModels"
+                                                    title="Refresh model files">
+                                                <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingModels }"></i>
+                                            </button>
+                                        </div>
+                                        <select class="form-select" 
+                                                x-model="config.detectors.audioprotopnet.model_path">
+                                            <template x-for="modelPath in (modelFiles.audioprotopnet || [])" :key="modelPath">
+                                                <option :value="modelPath" x-text="modelPath"></option>
+                                            </template>
+                                            <template x-if="config.detectors.audioprotopnet.model_path && !(modelFiles.audioprotopnet || []).includes(config.detectors.audioprotopnet.model_path)">
+                                                <option :value="config.detectors.audioprotopnet.model_path" 
+                                                        x-text="config.detectors.audioprotopnet.model_path + ' (custom)'"></option>
+                                            </template>
+                                        </select>
+                                        <div class="form-text">Path to the AudioProtoPNet model file (.onnx)</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- AudioProtoPNet Expert Mode: Vocalization Threshold & Channel Strategy -->
+                                <div class="row" x-show="config.detectors.audioprotopnet.enabled && expertMode" x-transition>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Vocalization Threshold <small class="text-muted">(Expert)</small>: <span x-text="config.detectors.audioprotopnet.vocalization_threshold.toFixed(2)"></span></label>
+                                            <input type="range" 
+                                                   class="form-range" 
+                                                   x-model.number="config.detectors.audioprotopnet.vocalization_threshold"
+                                                   min="0.0"
+                                                   max="1.0"
+                                                   step="0.01">
+                                            <div class="form-text">Vocalization detection threshold (0.0 - 1.0)</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Channel Strategy <small class="text-muted">(Expert)</small></label>
+                                            <select class="form-select" x-model="config.detectors.audioprotopnet.channel_strategy">
+                                                <option value="mix">Mix - Combine all channels</option>
+                                                <option value="all">All - Analyze channels separately</option>
+                                                <template x-if="audioDevices.input && audioDevices.input.find(d => d.name === config.input_device_match || d.name.startsWith(config.input_device_match))">
+                                                    <template x-for="channel in Array.from({length: audioDevices.input.find(d => d.name === config.input_device_match || d.name.startsWith(config.input_device_match))?.max_input_channels || 0}, (_, i) => i)" :key="channel">
+                                                        <option :value="channel" x-text="`Channel ${channel}`"></option>
+                                                    </template>
+                                                </template>
+                                            </select>
+                                            <div class="form-text">Audio channel processing strategy</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- AudioProtoPNet Detection Tasks -->
+                                <div x-show="config.detectors.audioprotopnet.enabled" x-transition class="mt-3">
+                                    <div class="mb-3">
+                                        <label class="form-label mb-2">Detection Tasks</label>
+                                        <div class="form-text mb-3">Define time spans when AudioProtoPNet detector should be active. Leave empty for continuous operation.</div>
+                                        
+
+                                        <template x-for="(task, index) in config.detectors.audioprotopnet.tasks" :key="index">
+                                                <div class="bg-light rounded-2 p-3 mb-2">
+                                                    <div class="d-flex align-items-center justify-content-between mb-3">
+                                                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                                                            <i class="fas fa-clock text-primary me-2"></i>
+                                                            <input type="text" 
+                                                                   class="form-control form-control-sm fw-medium" 
+                                                                   x-model="task.name" 
+                                                                   placeholder="Enter task name, e.g., morning, evening..." 
+                                                                   required>
+                                                        </div>
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm" 
+                                                                @click="removeDetectorTask('audioprotopnet', index)"
+                                                                title="Remove task">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <label class="text-success fw-semibold small mb-0 schedule-label">
+                                                                    <i class="fas fa-play me-1"></i><span class="d-none d-md-inline">Start</span>
+                                                                </label>
+                                                                <div class="row g-1 flex-grow-1">
+                                                                    <div class="col">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                x-model="task.startReference"
+                                                                                @change="updateDetectorTaskTimeString('audioprotopnet', task, 'start')">
+                                                                            <option value="time">Clock Time</option>
+                                                                            <option value="sunrise">Sunrise</option>
+                                                                            <option value="sunset">Sunset</option>
+                                                                            <option value="dawn">Dawn</option>
+                                                                            <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                style="width: 70px;"
+                                                                                x-model="task.startSign"
+                                                                                @change="updateDetectorTaskTimeString('audioprotopnet', task, 'start')"
+                                                                                :disabled="task.startReference === 'time'">
+                                                                            <option value="+">+</option>
+                                                                            <option value="-">-</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="time" 
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.startOffset"
+                                                                               @change="updateDetectorTaskTimeString('audioprotopnet', task, 'start')">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <label class="text-danger fw-semibold small mb-0 schedule-label">
+                                                                    <i class="fas fa-stop me-1"></i><span class="d-none d-md-inline">Stop</span>
+                                                                </label>
+                                                                <div class="row g-1 flex-grow-1">
+                                                                    <div class="col">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                x-model="task.stopReference"
+                                                                                @change="updateDetectorTaskTimeString('audioprotopnet', task, 'stop')">
+                                                                            <option value="time">Clock Time</option>
+                                                                            <option value="sunrise">Sunrise</option>
+                                                                            <option value="sunset">Sunset</option>
+                                                                            <option value="dawn">Dawn</option>
+                                                                            <option value="dusk">Dusk</option>
+                                                                            <option value="noon">Solar Noon</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <select class="form-select form-select-sm" 
+                                                                                style="width: 70px;"
+                                                                                x-model="task.stopSign"
+                                                                                @change="updateDetectorTaskTimeString('audioprotopnet', task, 'stop')"
+                                                                                :disabled="task.stopReference === 'time'">
+                                                                            <option value="+">+</option>
+                                                                            <option value="-">-</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="time" 
+                                                                               class="form-control form-control-sm" 
+                                                                               style="width: 110px;"
+                                                                               x-model="task.stopOffset"
+                                                                               @change="updateDetectorTaskTimeString('audioprotopnet', task, 'stop')">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                        </template>
+                                        
+                                        <div class="mt-3">
+                                            <button type="button" 
+                                                    class="btn btn-outline-primary btn-sm add-schedule-btn" 
+                                                    @click="addDetectorTask('audioprotopnet')">
+                                                <i class="fas fa-plus me-2"></i>
+                                                Add Task Entry
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <!-- Time-based Continuous Recording -->
                         <div class="mb-4">
                             <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
@@ -1083,25 +1291,7 @@
                                                         selectedIndex: -1,
                                                         filteredSpecies: [],
                                                         filterSpecies(query) {
-                                                            const allSpecies = [];
-                                                            if (config.detectors.birdedge?.enabled && speciesData.birdedge) {
-                                                                speciesData.birdedge.forEach(s => {
-                                                                    allSpecies.push({
-                                                                        value: s.scientific,
-                                                                        display: getConsistentSpeciesDisplayText(s, 'BirdEdge'),
-                                                                        type: 'birdedge'
-                                                                    });
-                                                                });
-                                                            }
-                                                            if (config.detectors.yolobat?.enabled && speciesData.yolobat) {
-                                                                speciesData.yolobat.forEach(s => {
-                                                                    allSpecies.push({
-                                                                        value: s.modelLabel,
-                                                                        display: getConsistentSpeciesDisplayText(s, 'YoloBat'),
-                                                                        type: 'yolobat'
-                                                                    });
-                                                                });
-                                                            }
+                                                            const allSpecies = getMergedSpeciesList ? getMergedSpeciesList() : [];
                                                             
                                                             if (!query || query.length < 1) {
                                                                 // Show all species when no query is provided

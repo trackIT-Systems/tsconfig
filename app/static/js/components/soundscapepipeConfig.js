@@ -34,6 +34,13 @@ export function soundscapepipeConfig() {
                     channel_strategy: "mix",
                     tasks: []
                 },
+                audioprotopnet: {
+                    class_threshold: 0.3,
+                    vocalization_threshold: 0.3,
+                    model_path: "",
+                    channel_strategy: "mix",
+                    tasks: []
+                },
                 schedule: {
                     enabled: false,
                     tasks: []
@@ -196,6 +203,30 @@ export function soundscapepipeConfig() {
                     } else {
                         detectors.yolobat = { enabled: false, class_threshold: 0.3, model_path: "", channel_strategy: "mix", tasks: [] };
                     }
+
+                    // AudioProtoPNet detector - enabled if present in config, disabled if not present
+                    if (detectors.audioprotopnet) {
+                        detectors.audioprotopnet.enabled = detectors.audioprotopnet.enabled !== undefined ? detectors.audioprotopnet.enabled : true;
+                        detectors.audioprotopnet.tasks = detectors.audioprotopnet.tasks || [];
+                        if (!Array.isArray(detectors.audioprotopnet.tasks)) {
+                            detectors.audioprotopnet.tasks = [];
+                        }
+                        detectors.audioprotopnet.tasks.forEach(task => {
+                            this.parseDetectorTaskTimeString(task, task.start, 'start');
+                            this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                        });
+                        if (detectors.audioprotopnet.class_threshold === undefined) {
+                            detectors.audioprotopnet.class_threshold = 0.3;
+                        }
+                        if (detectors.audioprotopnet.vocalization_threshold === undefined) {
+                            detectors.audioprotopnet.vocalization_threshold = 0.3;
+                        }
+                        if (detectors.audioprotopnet.channel_strategy === undefined) {
+                            detectors.audioprotopnet.channel_strategy = "mix";
+                        }
+                    } else {
+                        detectors.audioprotopnet = { enabled: false, class_threshold: 0.3, vocalization_threshold: 0.3, model_path: "", channel_strategy: "mix", tasks: [] };
+                    }
                     
                     // Static detector (schedule) - enabled if present in config, disabled if not present
                     if (detectors.schedule) {
@@ -334,6 +365,17 @@ export function soundscapepipeConfig() {
                     // Clean up tasks - convert UI components back to time strings
                     if (configToSave.detectors.yolobat.tasks) {
                         configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+
+                if (this.config.detectors.audioprotopnet && this.config.detectors.audioprotopnet.enabled) {
+                    configToSave.detectors.audioprotopnet = { ...this.config.detectors.audioprotopnet };
+                    delete configToSave.detectors.audioprotopnet.enabled;
+                    if (configToSave.detectors.audioprotopnet.tasks) {
+                        configToSave.detectors.audioprotopnet.tasks = configToSave.detectors.audioprotopnet.tasks.map(task => {
                             const cleanTask = { name: task.name, start: task.start, stop: task.stop };
                             return cleanTask;
                         });
@@ -481,6 +523,17 @@ export function soundscapepipeConfig() {
                     delete configToSave.detectors.yolobat.schedule;
                     if (configToSave.detectors.yolobat.tasks) {
                         configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
+                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                            return cleanTask;
+                        });
+                    }
+                }
+
+                if (this.config.detectors.audioprotopnet && this.config.detectors.audioprotopnet.enabled) {
+                    configToSave.detectors.audioprotopnet = { ...this.config.detectors.audioprotopnet };
+                    delete configToSave.detectors.audioprotopnet.enabled;
+                    if (configToSave.detectors.audioprotopnet.tasks) {
+                        configToSave.detectors.audioprotopnet.tasks = configToSave.detectors.audioprotopnet.tasks.map(task => {
                             const cleanTask = { name: task.name, start: task.start, stop: task.stop };
                             return cleanTask;
                         });
@@ -725,7 +778,8 @@ export function soundscapepipeConfig() {
             // Define preferred model patterns
             const preferredPatterns = {
                 'yolobat': 'yolobat11_2025.3.2',
-                'birdedge': 'MarBird_EFL0_GER.onnx'
+                'birdedge': 'MarBird_EFL0_GER.onnx',
+                'audioprotopnet': 'audioprotopnet_trackit_nano_23m.onnx'
             };
 
             const preferredPattern = preferredPatterns[detectorType];
@@ -759,7 +813,7 @@ export function soundscapepipeConfig() {
             }
 
             // Check each detector type
-            ['birdedge', 'yolobat'].forEach(detectorType => {
+            ['birdedge', 'yolobat', 'audioprotopnet'].forEach(detectorType => {
                 const detector = this.config.detectors[detectorType];
                 if (detector && detector.enabled && !detector.model_path) {
                     this.selectDefaultModel(detectorType);
@@ -796,6 +850,19 @@ export function soundscapepipeConfig() {
                     }
                 }
             });
+
+            // Watch for audioprotopnet detector enabled state changes
+            this.$watch('config.detectors.audioprotopnet.enabled', (enabled, oldEnabled) => {
+                if (enabled) {
+                    const shouldAutoSelect = !this.config.detectors.audioprotopnet.model_path || 
+                                           (this.modelFiles.audioprotopnet && 
+                                            !this.modelFiles.audioprotopnet.includes(this.config.detectors.audioprotopnet.model_path));
+                    
+                    if (shouldAutoSelect) {
+                        this.selectDefaultModel('audioprotopnet');
+                    }
+                }
+            });
         },
 
         async loadLureFiles() {
@@ -825,14 +892,14 @@ export function soundscapepipeConfig() {
                     this.speciesData = await response.json();
                 } else {
                     console.error('Failed to load species data');
-                    this.speciesData = { birdedge: [], yolobat: [] };
+                    this.speciesData = { birdedge: [], yolobat: [], audioprotopnet: [] };
                 }
                 
                 // Load YoloBat labels if a model is selected
                 await this.loadYoloBatLabels();
             } catch (error) {
                 console.error('Error loading species data:', error);
-                this.speciesData = { birdedge: [], yolobat: [] };
+                this.speciesData = { birdedge: [], yolobat: [], audioprotopnet: [] };
             } finally {
                 this.loadingSpecies = false;
             }
@@ -1197,6 +1264,48 @@ export function soundscapepipeConfig() {
             return display;
         },
 
+        /**
+         * Returns a merged, deduplicated species list for the species group dropdown.
+         * BirdEdge and AudioProtoPNet both use scientific names and share many species,
+         * so we merge duplicates and show which detectors support each species.
+         * YoloBat uses modelLabel (bat abbreviations) and has no overlap.
+         */
+        getMergedSpeciesList() {
+            const byValue = new Map(); // value -> { value, display, types[] }
+            const detectorDisplayNames = { birdedge: 'BirdEdge', yolobat: 'YoloBat', audioprotopnet: 'AudioProtoPNet' };
+
+            const addOrMerge = (value, display, detectorType) => {
+                if (byValue.has(value)) {
+                    const entry = byValue.get(value);
+                    if (!entry.types.includes(detectorType)) {
+                        entry.types.push(detectorType);
+                        const typeLabels = entry.types.map(t => detectorDisplayNames[t] || t);
+                        entry.display = entry.display.replace(/ \([^)]+\)$/, ` (${typeLabels.join(', ')})`);
+                    }
+                } else {
+                    byValue.set(value, { value, display, types: [detectorType] });
+                }
+            };
+
+            if (this.config.detectors.birdedge?.enabled && this.speciesData.birdedge) {
+                this.speciesData.birdedge.forEach(s => {
+                    addOrMerge(s.scientific, this.getConsistentSpeciesDisplayText(s, 'BirdEdge'), 'birdedge');
+                });
+            }
+            if (this.config.detectors.yolobat?.enabled && this.speciesData.yolobat) {
+                this.speciesData.yolobat.forEach(s => {
+                    addOrMerge(s.modelLabel, this.getConsistentSpeciesDisplayText(s, 'YoloBat'), 'yolobat');
+                });
+            }
+            if (this.config.detectors.audioprotopnet?.enabled && this.speciesData.audioprotopnet) {
+                this.speciesData.audioprotopnet.forEach(s => {
+                    addOrMerge(s.scientific, this.getConsistentSpeciesDisplayText(s, 'AudioProtoPNet'), 'audioprotopnet');
+                });
+            }
+
+            return Array.from(byValue.values()).map(({ value, display }) => ({ value, display }));
+        },
+
         validateSpeciesGroups() {
             const errors = [];
             
@@ -1207,6 +1316,7 @@ export function soundscapepipeConfig() {
             // Get valid species lists for enabled detectors
             const validBirdEdgeSpecies = new Set();
             const validYoloBatSpecies = new Set();
+            const validAudioProtoPNetSpecies = new Set();
             
             if (this.config.detectors.birdedge?.enabled && this.speciesData.birdedge) {
                 this.speciesData.birdedge.forEach(species => {
@@ -1217,6 +1327,12 @@ export function soundscapepipeConfig() {
             if (this.config.detectors.yolobat?.enabled && this.speciesData.yolobat) {
                 this.speciesData.yolobat.forEach(species => {
                     validYoloBatSpecies.add(species.modelLabel);
+                });
+            }
+            
+            if (this.config.detectors.audioprotopnet?.enabled && this.speciesData.audioprotopnet) {
+                this.speciesData.audioprotopnet.forEach(species => {
+                    validAudioProtoPNetSpecies.add(species.scientific);
                 });
             }
             
@@ -1234,12 +1350,14 @@ export function soundscapepipeConfig() {
                     
                     const isValidBirdEdge = validBirdEdgeSpecies.has(species);
                     const isValidYoloBat = validYoloBatSpecies.has(species);
+                    const isValidAudioProtoPNet = validAudioProtoPNetSpecies.has(species);
                     
-                    if (!isValidBirdEdge && !isValidYoloBat) {
+                    if (!isValidBirdEdge && !isValidYoloBat && !isValidAudioProtoPNet) {
                         // Check which detectors are enabled to provide helpful error message
                         const enabledDetectors = [];
                         if (this.config.detectors.birdedge?.enabled) enabledDetectors.push('BirdEdge');
                         if (this.config.detectors.yolobat?.enabled) enabledDetectors.push('YoloBat');
+                        if (this.config.detectors.audioprotopnet?.enabled) enabledDetectors.push('AudioProtoPNet');
                         
                         if (enabledDetectors.length === 0) {
                             errors.push(`Group "${groupName}": Species "${species}" is invalid because no detectors are enabled.`);

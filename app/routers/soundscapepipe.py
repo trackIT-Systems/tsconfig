@@ -171,9 +171,9 @@ def _load_model_files_config() -> Dict[str, Any]:
     config_file = Path(__file__).parent.parent / "configs" / "model_files.yml"
     try:
         with open(config_file, "r") as f:
-            return yaml.safe_load(f) or {"birdedge": [], "yolobat": []}
+            return yaml.safe_load(f) or {"birdedge": [], "yolobat": [], "audioprotopnet": []}
     except FileNotFoundError:
-        return {"birdedge": [], "yolobat": []}
+        return {"birdedge": [], "yolobat": [], "audioprotopnet": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model files config: {str(e)}")
 
@@ -465,7 +465,7 @@ async def get_model_files() -> Dict[str, List[str]]:
         return _load_model_files_config()
 
     # Tracker mode: scan filesystem for model files
-    model_files = {"birdedge": [], "yolobat": []}
+    model_files = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
 
     # Look for BirdEdge models (only in subfolders, not root models directory)
     birdedge_paths = ["/home/pi/pybirdedge/birdedge/models", "/opt/pybirdedge/models"]
@@ -491,6 +491,16 @@ async def get_model_files() -> Dict[str, List[str]]:
                 for file in files:
                     if file.endswith((".xml", ".onnx")):
                         model_files["yolobat"].append(os.path.join(root, file))
+
+    # Look for AudioProtoPNet models
+    audioprotopnet_paths = ["/home/pi/audioprotopnet/models", "/opt/audioprotopnet/models"]
+
+    for base_path in audioprotopnet_paths:
+        if os.path.exists(base_path):
+            for root, dirs, files in os.walk(base_path):
+                for file in files:
+                    if file.endswith(".onnx"):
+                        model_files["audioprotopnet"].append(os.path.join(root, file))
 
     return model_files
 
@@ -529,7 +539,7 @@ async def get_lure_files() -> Dict[str, Any]:
 @router.get("/species")
 async def get_species() -> Dict[str, Any]:
     """Get available species information from detection models."""
-    species_data = {"birdedge": [], "yolobat": []}
+    species_data = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
 
     # Load BirdEdge species with multi-language support
     base_paths = ["/home/pi/pybirdedge/birdedge/etc/", "/opt/pybirdedge/etc/"]
@@ -662,6 +672,38 @@ async def get_species() -> Dict[str, Any]:
     except (json.JSONDecodeError, IOError):
         # If loading fails, keep yolobat empty
         species_data["yolobat"] = []
+
+    # Load AudioProtoPNet species from JSON file (same format as birdedge)
+    try:
+        audioprotopnet_species_path = os.path.join(
+            os.path.dirname(__file__), "..", "data", "audioprotopnet_species.json"
+        )
+        if os.path.exists(audioprotopnet_species_path):
+            with open(audioprotopnet_species_path, "r", encoding="utf-8") as f:
+                audioprotopnet_species_mapping = json.load(f)
+
+            audioprotopnet_species_list = []
+            for audioprotopnet_id, data in audioprotopnet_species_mapping.items():
+                scientific = data.get("scientific", "")
+                english = data.get("english", "")
+                german = data.get("german", "")
+
+                species_entry = {
+                    "scientific": scientific,
+                    "english": english,
+                    "german": german,
+                    "display": f"{scientific}"
+                    + (f" ({english})" if english else "")
+                    + (f" / {german}" if german else ""),
+                    "searchable": " ".join(filter(None, [scientific, english, german])).lower(),
+                }
+                audioprotopnet_species_list.append(species_entry)
+
+            species_data["audioprotopnet"] = sorted(
+                audioprotopnet_species_list, key=lambda x: x["scientific"]
+            )
+    except (json.JSONDecodeError, IOError):
+        species_data["audioprotopnet"] = []
 
     return species_data
 

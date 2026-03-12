@@ -13,6 +13,10 @@ system:
 shell:
   user: "pi"  # User to run shell sessions as (login shell)
 
+# Feature flags
+features:
+  audioprotopnet: true  # set true to enable AudioProtoPNet detector UI
+
 services:
   - name: multi-user.target
     expert: true
