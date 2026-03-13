@@ -64,6 +64,16 @@
     "english": "Whiskered Bat",
     "german": "Kleine Bartfledermaus"
   },
+  "Mdas": {
+    "scientific": "Myotis dasycneme",
+    "english": "Pond Bat",
+    "german": "Teichfledermaus"
+  },
+  "Malc": {
+    "scientific": "Myotis alcathoe",
+    "english": "Alcathoe Bat",
+    "german": "Nymphenfledermaus"
+  },
   "Enil": {
     "scientific": "Eptesicus nilssonii",
     "english": "Northern Bat",
