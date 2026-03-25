@@ -10,6 +10,7 @@ yolobat:
   - /home/pi/yolobat/models/yolobat11_2025.3.2/model.xml
   - /home/pi/yolobat/models/yolobat11_2025.6.2/model.xml
   - /home/pi/yolobat/models/yolobat11_2026.1.1/model.xml
+  - /home/pi/yolobat/models/yolobat11_2026.3.1/model.xml
 
 audioprotopnet:
   - /home/pi/audioprotopnet/models/audioprotopnet_trackit_atto_7m.onnx
