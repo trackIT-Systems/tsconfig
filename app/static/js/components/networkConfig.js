@@ -33,6 +33,16 @@ export function networkConfig() {
             channel_width: '',
             hidden: false
         },
+        wifiStation: {
+            ssid: '',
+            password: '',
+            autoconnect: true,
+        },
+        originalWifiStation: {
+            ssid: '',
+            password: '',
+            autoconnect: true,
+        },
         wifiCapabilities: {
             bands: [],
             channel_widths: []
@@ -56,9 +66,16 @@ export function networkConfig() {
         refreshing: false,
         statusInterval: null,
         showPassword: false,
+        showStationPassword: false,
         showCellularPassword: false,
         showCellularPin: false,
         cellularSaveState: 'idle',
+        stationSaveState: 'idle',
+        wifiScanResults: [],
+        wifiScanLoading: false,
+        wifiSsidShowDropdown: false,
+        wifiSsidSelectedIndex: -1,
+        wifiSsidFiltered: [],
         connectionUpStates: {},
         
         // Server mode helper
@@ -100,6 +117,12 @@ export function networkConfig() {
                    this.cellular.password !== this.originalCellular.password ||
                    this.cellular.pin !== this.originalCellular.pin;
         },
+
+        get isStationModified() {
+            return this.wifiStation.ssid !== this.originalWifiStation.ssid ||
+                   this.wifiStation.password !== this.originalWifiStation.password ||
+                   this.wifiStation.autoconnect !== this.originalWifiStation.autoconnect;
+        },
         
         async init() {
             // Prevent multiple initializations
@@ -116,6 +139,7 @@ export function networkConfig() {
             await this.loadServiceStatus();
             await this.loadConnections();
             await this.loadWifiCapabilities();
+            await this.loadWifiStationConfig();
             await this.loadHotspotConfig();
             await this.loadCellularConfig();
             await this.loadModemDetails();
@@ -250,6 +274,35 @@ export function networkConfig() {
             }
         },
         
+        async loadWifiStationConfig() {
+            try {
+                const response = await fetch(apiUrl('/api/network/connections/station'));
+
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        this.dispatchMessage('WiFi station configuration not found', true);
+                        return;
+                    }
+                    throw new Error(`Failed to load WiFi station configuration: ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.wifiStation = {
+                    ssid: data.ssid || '',
+                    password: data.password || '',
+                    autoconnect: data.autoconnect !== false,
+                };
+                this.originalWifiStation = {
+                    ssid: data.ssid || '',
+                    password: data.password || '',
+                    autoconnect: data.autoconnect !== false,
+                };
+            } catch (error) {
+                console.error('Error loading WiFi station configuration:', error);
+                this.dispatchMessage(error.message || 'Failed to load WiFi station configuration', true);
+            }
+        },
+
         async loadHotspotConfig() {
             try {
                 const response = await fetch(apiUrl('/api/network/connections/hotspot'));
@@ -365,6 +418,217 @@ export function networkConfig() {
             this.hotspot.channel = this.originalHotspot.channel || '';
             this.hotspot.channel_width = this.originalHotspot.channel_width || '';
             this.hotspot.hidden = this.originalHotspot.hidden;
+        },
+
+        async saveWifiStationConfig() {
+            if (!this.isStationModified) {
+                this.dispatchMessage('No changes to save', false);
+                return;
+            }
+
+            const updates = {};
+            if (this.wifiStation.ssid !== this.originalWifiStation.ssid) {
+                updates.ssid = this.wifiStation.ssid;
+            }
+            if (this.wifiStation.password !== this.originalWifiStation.password) {
+                updates.password = this.wifiStation.password;
+            }
+            if (this.wifiStation.autoconnect !== this.originalWifiStation.autoconnect) {
+                updates.autoconnect = this.wifiStation.autoconnect;
+            }
+
+            if (Object.keys(updates).length === 0) {
+                this.dispatchMessage('No changes to save', false);
+                return;
+            }
+
+            if (updates.password !== undefined) {
+                const p = updates.password;
+                if (p.length < 8 || p.length > 63) {
+                    this.dispatchMessage('Password must be 8-63 characters', true);
+                    return;
+                }
+            }
+
+            this.stationSaveState = 'saving';
+
+            try {
+                const response = await fetch(apiUrl('/api/network/connections/station'), {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updates),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to update WiFi station configuration');
+                }
+
+                const data = await response.json();
+                const cfg = data.config;
+
+                this.wifiStation = {
+                    ssid: cfg.ssid || '',
+                    password: cfg.password || '',
+                    autoconnect: cfg.autoconnect !== false,
+                };
+                this.originalWifiStation = {
+                    ssid: cfg.ssid || '',
+                    password: cfg.password || '',
+                    autoconnect: cfg.autoconnect !== false,
+                };
+
+                this.stationSaveState = 'saved';
+                this.dispatchMessage('WiFi station configuration updated successfully', false);
+
+                setTimeout(() => {
+                    if (this.stationSaveState === 'saved') {
+                        this.stationSaveState = 'idle';
+                    }
+                }, 2000);
+            } catch (error) {
+                console.error('Error saving WiFi station configuration:', error);
+                this.stationSaveState = 'idle';
+                this.dispatchMessage(error.message || 'Failed to save WiFi station configuration', true);
+            }
+        },
+
+        resetWifiStationConfig() {
+            this.wifiStation = {
+                ssid: this.originalWifiStation.ssid,
+                password: this.originalWifiStation.password,
+                autoconnect: this.originalWifiStation.autoconnect,
+            };
+        },
+
+        toggleStationPasswordVisibility() {
+            this.showStationPassword = !this.showStationPassword;
+        },
+
+        wifiApDropdownLabel(ap) {
+            if (!ap) return '';
+            const bits = [ap.ssid, `${ap.signal}%`, ap.security === '--' ? 'open' : ap.security];
+            if (ap.active) {
+                bits.push('connected');
+            }
+            return bits.join(' · ');
+        },
+
+        filterWifiSsidSuggestions(query) {
+            const q = (query || '').trim().toLowerCase();
+            const list = this.wifiScanResults || [];
+            let rows = list;
+            if (q) {
+                rows = list.filter(
+                    (ap) =>
+                        (ap.ssid && ap.ssid.toLowerCase().includes(q)) ||
+                        (ap.security && ap.security.toLowerCase().includes(q))
+                );
+            }
+            this.wifiSsidFiltered = rows;
+            this.wifiSsidSelectedIndex = rows.length > 0 ? 0 : -1;
+        },
+
+        async onWifiSsidFieldFocus(event) {
+            this.filterWifiSsidSuggestions(event.target.value);
+            this.wifiSsidShowDropdown = true;
+            if (
+                this.wifiScanResults.length === 0 &&
+                this.serviceStatus.active &&
+                !this.wifiScanLoading
+            ) {
+                await this.scanWifiNetworks(false);
+                this.filterWifiSsidSuggestions(event.target.value);
+            }
+        },
+
+        onWifiSsidFieldBlur() {
+            setTimeout(() => {
+                this.wifiSsidShowDropdown = false;
+                this.wifiSsidSelectedIndex = -1;
+            }, 150);
+        },
+
+        onWifiSsidKeydown(event) {
+            if (!this.wifiSsidShowDropdown || this.wifiSsidFiltered.length === 0) {
+                return;
+            }
+            switch (event.key) {
+                case 'ArrowDown':
+                    event.preventDefault();
+                    this.wifiSsidSelectedIndex = Math.min(
+                        this.wifiSsidSelectedIndex + 1,
+                        this.wifiSsidFiltered.length - 1
+                    );
+                    break;
+                case 'ArrowUp':
+                    event.preventDefault();
+                    this.wifiSsidSelectedIndex = Math.max(this.wifiSsidSelectedIndex - 1, 0);
+                    break;
+                case 'Enter':
+                    event.preventDefault();
+                    if (
+                        this.wifiSsidSelectedIndex >= 0 &&
+                        this.wifiSsidSelectedIndex < this.wifiSsidFiltered.length
+                    ) {
+                        this.selectWifiSsidAp(this.wifiSsidFiltered[this.wifiSsidSelectedIndex]);
+                    }
+                    break;
+                case 'Escape':
+                    this.wifiSsidShowDropdown = false;
+                    this.wifiSsidSelectedIndex = -1;
+                    break;
+                default:
+                    break;
+            }
+        },
+
+        selectWifiSsidAp(ap) {
+            if (!ap || ap.ssid === 'Hidden network') {
+                this.dispatchMessage(
+                    'Hidden networks need the exact SSID typed manually.',
+                    true
+                );
+                return;
+            }
+            this.wifiStation.ssid = ap.ssid;
+            this.wifiSsidShowDropdown = false;
+            this.wifiSsidSelectedIndex = -1;
+        },
+
+        async scanWifiNetworks(rescan = true) {
+            this.wifiScanLoading = true;
+            if (rescan) {
+                this.wifiScanResults = [];
+            }
+            try {
+                const q = rescan ? 'true' : 'false';
+                const response = await fetch(apiUrl(`/api/network/wifi/scan?rescan=${q}`));
+                if (!response.ok) {
+                    let detail = `Scan failed (${response.status})`;
+                    try {
+                        const err = await response.json();
+                        if (err.detail) {
+                            detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                    throw new Error(detail);
+                }
+                this.wifiScanResults = await response.json();
+                this.filterWifiSsidSuggestions(this.wifiStation.ssid);
+                if (rescan && this.wifiScanResults.length === 0) {
+                    this.dispatchMessage('No networks found. Try again or move closer to an access point.', false);
+                }
+            } catch (error) {
+                console.error('WiFi scan error:', error);
+                this.dispatchMessage(error.message || 'WiFi scan failed', true);
+            } finally {
+                this.wifiScanLoading = false;
+            }
         },
         
         onBandChange() {

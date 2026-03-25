@@ -1401,6 +1401,147 @@
                                 </template>
                             </div>
 
+                            <!-- WiFi Station Configuration Section (expert mode) -->
+                            <div class="mb-4" x-show="expertMode" x-transition>
+                                <div class="d-flex justify-content-between align-items-start align-items-sm-center flex-wrap gap-2 border-bottom pb-2 mb-3">
+                                    <h6 class="mb-0 d-flex align-items-center">
+                                        <i class="fas fa-wifi me-2"></i>
+                                        WiFi Station
+                                    </h6>
+                                    <div class="ms-auto text-end">
+                                        <div class="form-check form-switch mb-0 d-inline-block text-start">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   x-model="wifiStation.autoconnect"
+                                                   id="wifiStationAutoconnect">
+                                            <label class="form-check-label text-nowrap" for="wifiStationAutoconnect">
+                                                Connect automatically
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">
+                                    Network the device joins as a WiFi client when available. If no suitable network is found, the system falls back to the hotspot according to your device setup.
+                                </p>
+
+                                <form @submit.prevent="saveWifiStationConfig" autocomplete="off">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Network name</label>
+                                            <div class="d-flex align-items-stretch gap-2">
+                                                <div class="flex-grow-1 position-relative">
+                                                    <input type="text"
+                                                           class="form-control"
+                                                           x-model="wifiStation.ssid"
+                                                           @input="filterWifiSsidSuggestions($event.target.value); wifiSsidShowDropdown = true"
+                                                           @focus="onWifiSsidFieldFocus($event)"
+                                                           @blur="onWifiSsidFieldBlur()"
+                                                           @keydown="onWifiSsidKeydown($event)"
+                                                           placeholder="Network name"
+                                                           maxlength="32"
+                                                           spellcheck="false"
+                                                           autocomplete="off">
+                                                    <div x-show="wifiSsidShowDropdown && wifiSsidFiltered.length > 0"
+                                                         x-transition:enter="transition ease-out duration-100"
+                                                         x-transition:enter-start="opacity-0 scale-95"
+                                                         x-transition:enter-end="opacity-100 scale-100"
+                                                         x-transition:leave="transition ease-in duration-75"
+                                                         x-transition:leave-start="opacity-100 scale-100"
+                                                         x-transition:leave-end="opacity-0 scale-95"
+                                                         class="position-absolute top-100 start-0 w-100 bg-white border border-secondary rounded shadow-sm mt-1 z-3"
+                                                         style="max-height: 220px; overflow-y: auto;">
+                                                        <template x-for="(ap, idx) in wifiSsidFiltered" :key="ap.ssid + (ap.bssid || '')">
+                                                            <div class="px-3 py-2 cursor-pointer border-bottom border-light small"
+                                                                 :class="{ 'bg-primary text-white': idx === wifiSsidSelectedIndex }"
+                                                                 @click="selectWifiSsidAp(ap)"
+                                                                 @mouseenter="wifiSsidSelectedIndex = idx">
+                                                                <span x-text="wifiApDropdownLabel(ap)"></span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary flex-shrink-0"
+                                                        @click="scanWifiNetworks(true)"
+                                                        :disabled="wifiScanLoading || !serviceStatus.active"
+                                                        title="Rescan networks">
+                                                    <i class="fas fa-sync-alt" :class="{ 'fa-spin': wifiScanLoading }"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text">
+                                                Up to 32 characters. Focus the field for nearby networks; use refresh to scan again.
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Password</label>
+                                            <div class="input-group">
+                                                <input :type="showStationPassword ? 'text' : 'password'"
+                                                       class="form-control"
+                                                       name="wifi-station-psk"
+                                                       x-model="wifiStation.password"
+                                                       placeholder="Password"
+                                                       maxlength="63"
+                                                       autocomplete="off"
+                                                       data-lpignore="true"
+                                                       data-1p-ignore
+                                                       data-bwignore
+                                                       data-form-type="other">
+                                                <button class="btn btn-outline-secondary"
+                                                        type="button"
+                                                        @click="toggleStationPasswordVisibility()"
+                                                        :title="showStationPassword ? 'Hide password' : 'Show password'">
+                                                    <i :class="showStationPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text">
+                                                8–63 characters if you change it. Leave as-is to keep the current password.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div class="d-flex gap-2">
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary"
+                                                    @click="resetWifiStationConfig()"
+                                                    :disabled="!isStationModified">
+                                                Reset
+                                            </button>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="submit"
+                                                    class="btn"
+                                                    :class="{
+                                                        'btn-success': stationSaveState === 'idle',
+                                                        'btn-primary': stationSaveState === 'saving',
+                                                        'btn-outline-success': stationSaveState === 'saved'
+                                                    }"
+                                                    :disabled="stationSaveState === 'saving' || !isStationModified">
+                                                <template x-if="stationSaveState === 'idle'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-save me-1"></i>
+                                                        Save
+                                                    </div>
+                                                </template>
+                                                <template x-if="stationSaveState === 'saving'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                                        Saving...
+                                                    </div>
+                                                </template>
+                                                <template x-if="stationSaveState === 'saved'">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-check me-1"></i>
+                                                        Saved!
+                                                    </div>
+                                                </template>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
                             <!-- Hotspot Configuration Section -->
                             <div class="mb-4">
                                 <h6 class="border-bottom pb-2">
@@ -1411,7 +1552,7 @@
                                     The SSID is configured from the hostname on boot. Only the password can be changed.
                                 </p>
                                 
-                                <form @submit.prevent="saveHotspotConfig">
+                                <form @submit.prevent="saveHotspotConfig" autocomplete="off">
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">SSID (Network Name)</label>
@@ -1429,12 +1570,14 @@
                                             <label class="form-label">Password</label>
                                             <div class="input-group">
                                                 <input :type="showPassword ? 'text' : 'password'" 
-                                                       class="form-control" 
+                                                       class="form-control"
+                                                       name="wifi-hotspot-psk"
                                                        x-model="hotspot.password"
                                                        placeholder="Enter hotspot password"
                                                        minlength="8"
                                                        maxlength="63"
                                                        autocomplete="off"
+                                                       data-form-type="other"
                                                        required>
                                                 <button class="btn btn-outline-secondary" 
                                                         type="button"
@@ -1444,7 +1587,7 @@
                                                 </button>
                                             </div>
                                             <div class="form-text">
-                                                8-63 characters. Required for WPA2 security. Default: <code>BirdsAndBats</code>
+                                                8-63 characters. Required for WPA security. Default: <code>BirdsAndBats</code>
                                             </div>
                                         </div>
                                     </div>

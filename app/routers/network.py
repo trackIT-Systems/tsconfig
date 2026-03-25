@@ -7,7 +7,7 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.utils.subprocess_async import run_subprocess_async
@@ -44,6 +44,22 @@ class HotspotUpdate(BaseModel):
     channel: int | None = Field(None, description="WiFi channel number (null for auto)")
     channel_width: str | None = Field(None, description="Channel width in MHz (20, 40, 80, 160)")
     hidden: bool | None = Field(None, description="Hide SSID (true/false)")
+
+
+class WiFiStationConfig(BaseModel):
+    """WiFi station (client) configuration model."""
+
+    ssid: str = Field(..., description="WiFi network name (SSID) to join")
+    password: str = Field(default="", description="WPA2 pre-shared key")
+    autoconnect: bool = Field(..., description="Whether NetworkManager auto-activates this connection")
+
+
+class WiFiStationUpdate(BaseModel):
+    """WiFi station update request model."""
+
+    ssid: str | None = Field(None, description="WiFi network name (SSID)")
+    password: str | None = Field(None, description="WPA2 pre-shared key (8-63 characters)")
+    autoconnect: bool | None = Field(None, description="Enable or disable connection.autoconnect")
 
 
 class CellularConfig(BaseModel):
@@ -103,12 +119,149 @@ class WiFiCapabilities(BaseModel):
     channel_widths: List[str] = Field(..., description="Supported channel widths (20, 40, 80, 160)")
 
 
-async def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+class WiFiScanAP(BaseModel):
+    """One WiFi access point from an nmcli device wifi scan."""
+
+    ssid: str = Field(..., description="Network name (SSID), or placeholder for hidden networks")
+    signal: int = Field(..., description="Signal strength 0–100")
+    security: str = Field(..., description="Security flags as reported by nmcli (e.g. WPA2, -- for open)")
+    active: bool = Field(..., description="Whether this AP is the current connection")
+    channel: int | None = Field(None, description="WiFi channel if known")
+    bssid: str | None = Field(None, description="BSSID if known")
+
+
+def _split_nmcli_terse_line(line: str) -> List[str]:
+    """Split an nmcli -t line on ':' with '\\:' as a literal colon in values."""
+    parts: List[str] = []
+    current: List[str] = []
+    i = 0
+    while i < len(line):
+        c = line[i]
+        if c == "\\" and i + 1 < len(line):
+            current.append(line[i + 1])
+            i += 2
+            continue
+        if c == ":":
+            parts.append("".join(current))
+            current = []
+            i += 1
+            continue
+        current.append(c)
+        i += 1
+    parts.append("".join(current))
+    return parts
+
+
+async def _connection_interface_name(connection_name: str) -> str | None:
+    """Return connection.interface-name if the connection exists, else None."""
+    try:
+        props = await get_nmcli_connection_properties(connection_name, show_secrets=False)
+        iface = (props.get("connection.interface-name") or "").strip()
+        return iface or None
+    except HTTPException as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
+async def _get_wifi_interface_for_scan() -> str:
+    """Pick the WiFi device for `nmcli device wifi list` / rescan."""
+    iface = await _connection_interface_name("station")
+    if iface:
+        return iface
+    iface = await _connection_interface_name("hotspot")
+    if iface:
+        return iface
+    result = await run_nmcli_command(["-t", "-f", "DEVICE,TYPE", "device", "status"], check=False)
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not list NetworkManager devices for WiFi scan",
+        )
+    for line in result.stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split(":")
+        if len(parts) < 2:
+            continue
+        dev, typ = parts[0], parts[1]
+        if typ == "wifi":
+            return dev
+    raise HTTPException(
+        status_code=503,
+        detail="No WiFi interface found. Configure hotspot or station in NetworkManager first.",
+    )
+
+
+def _parse_wifi_scan_lines(stdout: str) -> List[WiFiScanAP]:
+    """Parse `nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE,CHAN,BSSID device wifi list` output."""
+    fields = ("SSID", "SIGNAL", "SECURITY", "ACTIVE", "CHAN", "BSSID")
+    n = len(fields)
+    networks: List[WiFiScanAP] = []
+    for line in stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = _split_nmcli_terse_line(line)
+        if len(parts) < n:
+            continue
+        raw_ssid = (parts[0] or "").strip()
+        if not raw_ssid or raw_ssid == "--":
+            ssid = "Hidden network"
+        else:
+            ssid = raw_ssid
+        try:
+            signal = int(parts[1].strip())
+        except ValueError:
+            signal = 0
+        security = (parts[2] or "").strip() or "--"
+        active_raw = (parts[3] or "").strip().lower()
+        active = active_raw in ("yes", "true", "*", "1")
+        channel: int | None = None
+        ch = (parts[4] or "").strip()
+        if ch.isdigit():
+            channel = int(ch)
+        bssid = (parts[5] or "").strip()
+        if bssid == "--":
+            bssid = None
+        networks.append(
+            WiFiScanAP(
+                ssid=ssid,
+                signal=max(0, min(100, signal)),
+                security=security,
+                active=active,
+                channel=channel,
+                bssid=bssid,
+            )
+        )
+    return networks
+
+
+def _merge_scan_by_ssid(networks: List[WiFiScanAP]) -> List[WiFiScanAP]:
+    """Keep one row per SSID (strongest signal, active OR across BSSIDs)."""
+    merged: Dict[str, WiFiScanAP] = {}
+    for ap in networks:
+        key = ap.ssid
+        if key not in merged:
+            merged[key] = ap
+            continue
+        prev = merged[key]
+        active = prev.active or ap.active
+        if ap.signal > prev.signal:
+            merged[key] = ap.model_copy(update={"active": active})
+        else:
+            merged[key] = prev.model_copy(update={"active": active})
+    return sorted(merged.values(), key=lambda x: (-x.signal, x.ssid.lower()))
+
+
+async def run_nmcli_command(
+    args: List[str], check: bool = True, timeout: float = 10
+) -> subprocess.CompletedProcess:
     """Run nmcli command with proper error handling.
 
     Args:
         args: Command arguments to pass to nmcli
         check: Whether to check return code and raise exception on failure
+        timeout: Subprocess timeout in seconds
 
     Returns:
         CompletedProcess instance
@@ -118,7 +271,7 @@ async def run_nmcli_command(args: List[str], check: bool = True) -> subprocess.C
     """
     try:
         cmd = ["nmcli"] + args
-        result = await run_subprocess_async(cmd, capture_output=True, text=True, check=check, timeout=10)
+        result = await run_subprocess_async(cmd, capture_output=True, text=True, check=check, timeout=timeout)
         return result
     except subprocess.CalledProcessError as e:
         raise HTTPException(
@@ -334,6 +487,18 @@ async def get_nmcli_connection_properties(connection_name: str, show_secrets: bo
         )
 
 
+async def _try_get_hotspot_ssid() -> str | None:
+    """SSID of the device's hotspot connection, if any (to omit from station scan list)."""
+    try:
+        props = await get_nmcli_connection_properties("hotspot", show_secrets=False)
+        s = (props.get("802-11-wireless.ssid") or "").strip()
+        return s or None
+    except HTTPException as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
 async def get_device_ipv4_address(device: str) -> str | None:
     """Get IPv4 address for a network device using NetworkManager.
 
@@ -521,6 +686,40 @@ async def get_wifi_capabilities() -> WiFiCapabilities:
         raise HTTPException(status_code=500, detail=f"Failed to get WiFi capabilities: {str(e)}")
 
 
+@router.get("/wifi/scan", summary="Scan for WiFi networks", response_model=List[WiFiScanAP])
+async def wifi_scan(rescan: bool = Query(True, description="Request a fresh scan before listing (slower but current)")) -> List[WiFiScanAP]:
+    """List visible WiFi networks (same source as `nmcli device wifi list`) for station setup guidance."""
+    try:
+        iface = await _get_wifi_interface_for_scan()
+        if rescan:
+            await run_nmcli_command(["device", "wifi", "rescan", "ifname", iface], check=False, timeout=15)
+            await asyncio.sleep(4)
+        result = await run_nmcli_command(
+            [
+                "-t",
+                "-f",
+                "SSID,SIGNAL,SECURITY,ACTIVE,CHAN,BSSID",
+                "device",
+                "wifi",
+                "list",
+                "ifname",
+                iface,
+            ],
+            check=True,
+            timeout=45,
+        )
+        networks = _parse_wifi_scan_lines(result.stdout)
+        merged = _merge_scan_by_ssid(networks)
+        hotspot_ssid = await _try_get_hotspot_ssid()
+        if hotspot_ssid:
+            merged = [ap for ap in merged if ap.ssid != hotspot_ssid]
+        return merged
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"WiFi scan failed: {str(e)}")
+
+
 @router.get("/connections", summary="List all network connections", response_model=List[ConnectionInfo])
 async def get_connections() -> List[ConnectionInfo]:
     """Get list of all NetworkManager connections with their status and IPv4 addresses.
@@ -555,6 +754,69 @@ async def get_connections() -> List[ConnectionInfo]:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list network connections: {str(e)}")
+
+
+@router.get("/connections/station", summary="Get WiFi station configuration", response_model=WiFiStationConfig)
+async def get_wifi_station_config() -> WiFiStationConfig:
+    """Get WiFi client SSID and password from the NetworkManager station connection."""
+    try:
+        props = await get_nmcli_connection_properties("station", show_secrets=True)
+        ssid = props.get("802-11-wireless.ssid") or ""
+        password = props.get("802-11-wireless-security.psk", "") or ""
+        autoconnect_raw = (props.get("connection.autoconnect") or "yes").lower()
+        autoconnect = autoconnect_raw in ("yes", "true", "1")
+        return WiFiStationConfig(ssid=ssid, password=password, autoconnect=autoconnect)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get WiFi station configuration: {str(e)}")
+
+
+@router.patch("/connections/station", summary="Update WiFi station configuration")
+async def update_wifi_station_config(update: WiFiStationUpdate) -> Dict[str, Any]:
+    """Update WiFi client SSID and/or WPA2 password on the NetworkManager station connection."""
+    try:
+        if update.ssid is None and update.password is None and update.autoconnect is None:
+            raise HTTPException(status_code=400, detail="At least one field must be provided")
+
+        if update.password is not None:
+            if len(update.password) < 8:
+                raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+            if len(update.password) > 63:
+                raise HTTPException(status_code=400, detail="Password must be 63 characters or less")
+
+        ssid_value: str | None = None
+        if update.ssid is not None:
+            ssid_value = update.ssid.strip()
+            if not ssid_value:
+                raise HTTPException(status_code=400, detail="SSID cannot be empty")
+            if len(ssid_value) > 32:
+                raise HTTPException(status_code=400, detail="SSID must be 32 characters or less")
+
+        modifications: List[str] = []
+        if ssid_value is not None:
+            modifications.extend(["802-11-wireless.ssid", ssid_value])
+        if update.password is not None:
+            modifications.extend(
+                ["802-11-wireless-security.key-mgmt", "wpa-psk", "802-11-wireless-security.psk", update.password]
+            )
+
+        if update.autoconnect is not None:
+            modifications.extend(["connection.autoconnect", "yes" if update.autoconnect else "no"])
+
+        if modifications:
+            await run_nmcli_command(["connection", "modify", "station"] + modifications)
+
+        updated_config = await get_wifi_station_config()
+        return {
+            "message": "WiFi station configuration updated successfully (changes saved, restart connection to apply)",
+            "config": updated_config,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update WiFi station configuration: {str(e)}")
 
 
 @router.get("/connections/hotspot", summary="Get hotspot configuration", response_model=HotspotConfig)
