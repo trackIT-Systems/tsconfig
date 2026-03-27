@@ -4,7 +4,6 @@ import asyncio
 import subprocess
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, List, Optional
 
 import psutil
@@ -19,9 +18,6 @@ router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
 # Empty default services configuration - no services loaded by default
 DEFAULT_SERVICES_CONFIG = {"services": []}
-
-# Configuration file path
-CONFIG_PATH = Path("configs/tsconfig.yml")
 
 
 class ServiceConfig(BaseModel):

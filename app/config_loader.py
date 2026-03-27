@@ -8,11 +8,18 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 
+def _default_main_config_path() -> Path:
+    env_path = os.environ.get("TSCONFIG_CONFIG_FILE", "").strip()
+    if env_path:
+        return Path(env_path)
+    return Path("configs/tsconfig.yml")
+
+
 class ConfigLoader:
     """Load and manage the main tsconfig.yml configuration."""
 
     def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = config_path or Path("configs/tsconfig.yml")
+        self.config_path = config_path or _default_main_config_path()
         self._config_cache: Optional[Dict[str, Any]] = None
 
     def load_config(self) -> Dict[str, Any]:
