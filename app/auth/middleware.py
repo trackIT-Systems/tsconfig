@@ -168,9 +168,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 if self._is_browser_request(request):
                     # Render forbidden page for browser
                     return templates.TemplateResponse(
+                        request,
                         "forbidden.html",
                         {
-                            "request": request,
                             "base_url": self.base_url,
                             "user_email": user_info.get("email"),
                             "required_groups": required_groups,
