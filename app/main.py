@@ -909,9 +909,9 @@ async def home(request: Request, config_group: str = None):
     available_services = _get_available_services_for_template(config_group)
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "version": __version__,
             "base_url": BASE_URL,
             "config_group": config_group,

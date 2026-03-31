@@ -151,9 +151,9 @@ async def callback(
             # Render forbidden page with user info
             base_url = os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
             return templates.TemplateResponse(
+                request,
                 "forbidden.html",
                 {
-                    "request": request,
                     "base_url": base_url,
                     "user_email": user_info.get("email"),
                     "required_groups": required_groups,
