@@ -81,7 +81,7 @@ class SoundscapepipeConfig(BaseConfig):
                 f"Soundscapepipe configuration not found at {self.config_file}. Please create a configuration first."
             )
 
-        data.setdefault("frontend_gain", "low")
+        data.setdefault("frontend_gain", "high")
         data.setdefault("frontend_gain_pin_a", 23)
         data.setdefault("frontend_gain_pin_b", 13)
 
