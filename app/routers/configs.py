@@ -601,6 +601,7 @@ RECOGNIZED_CONFIG_FILES = {
     "server.crt": "mosquitto_cert",
     "server.conf": "mosquitto_conf",
     "geolocation": "geolocation",
+    "tsupdate.yml": "tsupdate",
 }
 
 # Service mapping for restart
@@ -611,6 +612,7 @@ SERVICE_MAPPING = {
     "wireguard": "wg-quick@wireguard",
     "mosquitto_cert": "mosquitto",
     "mosquitto_conf": "mosquitto",
+    "tsupdate": "tsupdate",
 }
 
 
