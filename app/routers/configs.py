@@ -27,6 +27,7 @@ from app.configs.mosquitto_conf import MosquittoConfConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.configs.tsupdate import TsupdateConfig
 from app.configs.wireguard import WireguardConfig
 
 router = APIRouter(prefix="/api/configs", tags=["configs"])
@@ -217,12 +218,15 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
                     detail=f"Invalid geolocation file format: {str(e)}",
                 )
             config_instance = GeolocationConfig()
+        elif config_type == "tsupdate":
+            parsed_config = parse_yaml_file(content_str)
+            config_instance = TsupdateConfig()
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported configuration file: {filename}. "
                 "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
-                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation",
+                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml",
             )
         
         return config_instance, parsed_config
@@ -280,8 +284,9 @@ async def handle_service_restart(config_type: str, restart_service: bool) -> Dic
     
     service_mapping = {
         "radiotracking": "radiotracking",
-        "schedule": "tsschedule", 
+        "schedule": "tsschedule",
         "soundscapepipe": "soundscapepipe",
+        "tsupdate": "tsupdate",
     }
     
     service_name = service_mapping.get(config_type)
@@ -459,6 +464,7 @@ async def upload_config(
         "server.crt": "mosquitto_cert",
         "server.conf": "mosquitto_conf",
         "geolocation": "geolocation",
+        "tsupdate.yml": "tsupdate",
     }
     
     config_type = filename_to_type.get(filename_lower)
@@ -645,6 +651,8 @@ def get_config_instance(config_type: str, is_config_upload: bool = False):
         return MosquittoConfConfig()
     elif config_type == "geolocation":
         return GeolocationConfig()
+    elif config_type == "tsupdate":
+        return TsupdateConfig()
     else:
         raise ValueError(f"Unknown config type: {config_type}")
 
