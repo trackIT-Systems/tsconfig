@@ -19,7 +19,7 @@
     "english": "Western Barbastelle",
     "german": "Mopsfledermaus"
   },
-   "Rfer": {
+  "Rfer": {
     "scientific": "Rhinolophus ferrumequinum",
     "english": "Greater Horseshoe Bat",
     "german": "Große Hufeisennase"
@@ -30,61 +30,61 @@
     "german": "Kleine Hufeisennase"
   },
   "Plecotus": {
-      "scientific": "Plecotus",
+    "scientific": "Plecotus",
     "english": "Long-eared Bats",
     "german": "Langohrfledermäuse"
-},
-"Malc": {
+  },
+  "Malc": {
     "scientific": "Myotis alcathoe",
     "english": "Alcathoe Bat",
     "german": "Nymphenfledermaus"
-},
-"Mema": {
+  },
+  "Mema": {
     "scientific": "Myotis emarginatus",
     "english": "Geoffroy's Bat",
     "german": "Wimperfledermaus"
-},
-"Mdas": {
+  },
+  "Mdas": {
     "scientific": "Myotis dasycneme",
     "english": "Pond Bat",
     "german": "Teichfledermaus"
-},
-"Mbart": {
+  },
+  "Mbart": {
     "scientific": "Myotis brandtii",
     "english": "Brandt's Bat",
     "german": "Große Bartfledermaus"
-},
-"Mbec": {
+  },
+  "Mbec": {
     "scientific": "Myotis bechsteinii",
     "english": "Bechstein's Bat",
     "german": "Bechsteinfledermaus"
-},
-"Mdau": {
+  },
+  "Mdau": {
     "scientific": "Myotis daubentonii",
     "english": "Daubenton's Bat",
     "german": "Wasserfledermaus"
-},
-"Mmyo": {
+  },
+  "Mmyo": {
     "scientific": "Myotis myotis",
     "english": "Greater Mouse-eared Bat",
     "german": "Großes Mausohr"
-},
+  },
   "Mnat": {
-      "scientific": "Myotis nattereri",
-      "english": "Natterer's Bat",
-      "german": "Fransenfledermaus"
+    "scientific": "Myotis nattereri",
+    "english": "Natterer's Bat",
+    "german": "Fransenfledermaus"
   },
   "Eser": {
-      "scientific": "Eptesicus serotinus",
-      "english": "Serotine Bat",
-      "german": "Breitflügelfledermaus"
-    },
+    "scientific": "Eptesicus serotinus",
+    "english": "Serotine Bat",
+    "german": "Breitflügelfledermaus"
+  },
   "Enil": {
-      "scientific": "Eptesicus nilssonii",
+    "scientific": "Eptesicus nilssonii",
     "english": "Northern Bat",
     "german": "Nordfledermaus"
-},
-"Vmur": {
+  },
+  "Vmur": {
     "scientific": "Vespertilio murinus",
     "english": "Parti-coloured Bat",
     "german": "Zweifarbfledermaus"
@@ -95,40 +95,10 @@
     "german": "Kleiner Abendsegler"
   },
   "Nnoc": {
-      "scientific": "Nyctalus noctula",
-      "english": "Common Noctule",
-      "german": "Großer Abendsegler"
-    },
-//   "Pkuh": {
-//     "scientific": "Pipistrellus kuhlii",
-//     "english": "Kuhl's Pipistrelle",
-//     "german": "Weißrandfledermaus"
-//   },
-//   "Paur": {
-//     "scientific": "Plecotus auritus",
-//     "english": "Brown Long-eared Bat",
-//     "german": "Braunes Langohr"
-//   },
-//   "Mmys": {
-//     "scientific": "Myotis mystacinus",
-//     "english": "Whiskered Bat",
-//     "german": "Kleine Bartfledermaus"
-//   },
-//   "Hsav": {
-//     "scientific": "Hypsugo savii",
-//     "english": "Savi's Pipistrelle",
-//     "german": "Alpenfledermaus"
-//   },
-//   "Paus": {
-//     "scientific": "Plecotus austriacus",
-//     "english": "Grey Long-eared Bat",
-//     "german": "Graues Langohr"
-//   },
-//   "Tten": {
-//     "scientific": "Tadarida teniotis",
-//     "english": "European Free-tailed Bat",
-//     "german": "Bulldoggfledermaus"
-//   },
+    "scientific": "Nyctalus noctula",
+    "english": "Common Noctule",
+    "german": "Großer Abendsegler"
+  },
   "feeding-buzz": {
     "scientific": "feeding-buzz",
     "english": "Feeding Buzz",
@@ -139,4 +109,4 @@
     "english": "Social Call",
     "german": "Sozialruf"
   }
-} 
+}
