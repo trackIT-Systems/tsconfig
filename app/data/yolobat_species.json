@@ -50,9 +50,9 @@
     "german": "Teichfledermaus"
   },
   "Mbart": {
-    "scientific": "Myotis brandtii",
-    "english": "Brandt's Bat",
-    "german": "Große Bartfledermaus"
+    "scientific": "Myotis mystacinus/brandtii",
+    "english": "Mystacinus/Brandt's Bat",
+    "german": "Kleine/große Bartfledermaus"
   },
   "Mbec": {
     "scientific": "Myotis bechsteinii",
