@@ -50,5 +50,9 @@ services:
     expert: true
   - name: ModemManager
     expert: true
+  - name: wificheck
+    expert: true    
+  - name: huaweicheck
+    expert: true
   - name: dmesg
     expert: true
