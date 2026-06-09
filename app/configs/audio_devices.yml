@@ -8,6 +8,11 @@ input:
     default_sample_rate: 384000
     is_default: true
   
+  - name: "gm90ip"
+    max_input_channels: 1
+    default_sample_rate: 300000
+    is_default: false
+  
   - name: "384kHz AudioMoth USB Microphone"
     max_input_channels: 1
     default_sample_rate: 384000
