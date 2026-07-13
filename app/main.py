@@ -24,6 +24,7 @@ from app.configs.geolocation import GeolocationConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.configs.mqttutil import MqttUtilConfig
 from app.configs.tsupdate import TsupdateConfig
 from app.logging_config import get_logger, setup_logging
 from app.routers import (
@@ -39,6 +40,7 @@ from app.routers import (
     systemd,
     system_reset,
     tsupdate,
+    mqttutil,
 )
 from app.utils.subprocess_async import run_subprocess_async
 
@@ -96,6 +98,10 @@ tags_metadata = [
         "name": "tsupdate",
         "description": "Tsupdate daemon configuration for automatic system updates.",
     },
+    {
+        "name": "mqttutil",
+        "description": "MQTT system health reporting configuration (mqttutil.conf).",
+    },
 ]
 
 app = FastAPI(
@@ -151,6 +157,7 @@ app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
 app.include_router(configs.router)
 app.include_router(tsupdate.router)
+app.include_router(mqttutil.router)
 app.include_router(deployment.router)  # Deployment proxy (for server mode)
 
 # Only include system-specific routers in tracker mode (default mode)
@@ -300,6 +307,8 @@ async def get_server_mode():
                                 dir_details[item.name]["config_files"].append("schedule.yml")
                             if (latest_dir / "soundscapepipe.yml").exists():
                                 dir_details[item.name]["config_files"].append("soundscapepipe.yml")
+                            if (latest_dir / "mqttutil.conf").exists():
+                                dir_details[item.name]["config_files"].append("mqttutil.conf")
                 debug_info["directory_details"] = dir_details
             except Exception as e:
                 debug_info["error"] = str(e)
@@ -667,6 +676,14 @@ async def get_available_services(config_group: str = None):
         tsupdate_config = TsupdateConfig(config_dir) if config_dir else TsupdateConfig()
         if tsupdate_config.config_file.exists():
             available_services.append("tsupdate")
+    except Exception:
+        pass
+
+    # Check mqttutil configuration
+    try:
+        mqttutil_config = MqttUtilConfig(config_dir) if config_dir else MqttUtilConfig()
+        if mqttutil_config.config_file.exists():
+            available_services.append("mqttutil")
     except Exception:
         pass
 

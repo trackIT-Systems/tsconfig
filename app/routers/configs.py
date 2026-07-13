@@ -6,6 +6,7 @@ import os
 import socket
 import subprocess
 import zipfile
+from ast import literal_eval
 from configparser import ConfigParser
 from datetime import datetime, timedelta, timezone
 from email.utils import formatdate
@@ -24,6 +25,7 @@ from app.configs.cmdline import CmdlineConfig
 from app.configs.geolocation import GeolocationConfig
 from app.configs.mosquitto_cert import MosquittoCertConfig
 from app.configs.mosquitto_conf import MosquittoConfConfig
+from app.configs.mqttutil import MqttUtilConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -84,6 +86,38 @@ async def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str
         return False, "Service restart timed out"
     except Exception as e:
         return False, str(e)
+
+
+def parse_mqttutil_ini(content: str) -> Dict[str, Any]:
+    """Parse mqttutil.conf INI content with Python literal values.
+
+    Args:
+        content: String content of mqttutil.conf
+
+    Returns:
+        Dictionary with DEFAULT and task sections
+
+    Raises:
+        ValueError: If file cannot be parsed
+    """
+    try:
+        parser = ConfigParser()
+        parser.read_string(content)
+
+        if not parser.defaults() and not parser.sections():
+            raise ValueError("mqttutil.conf is empty or has no sections")
+
+        data: Dict[str, Any] = {}
+        defaults = dict(parser.defaults())
+        if defaults:
+            data["DEFAULT"] = {key: literal_eval(value) for key, value in defaults.items()}
+
+        for section in parser.sections():
+            data[section] = {key: literal_eval(value) for key, value in parser[section].items()}
+
+        return data
+    except Exception as e:
+        raise ValueError(f"Failed to parse mqttutil.conf: {str(e)}")
 
 
 def parse_ini_file(content: str) -> Dict[str, Any]:
@@ -221,12 +255,15 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
         elif config_type == "tsupdate":
             parsed_config = parse_yaml_file(content_str)
             config_instance = TsupdateConfig()
+        elif config_type == "mqttutil":
+            parsed_config = parse_mqttutil_ini(content_str)
+            config_instance = MqttUtilConfig()
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported configuration file: {filename}. "
                 "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
-                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml",
+                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml, mqttutil.conf",
             )
         
         return config_instance, parsed_config
@@ -287,6 +324,7 @@ async def handle_service_restart(config_type: str, restart_service: bool) -> Dic
         "schedule": "tsschedule",
         "soundscapepipe": "soundscapepipe",
         "tsupdate": "tsupdate",
+        "mqttutil": "mqttutil",
     }
     
     service_name = service_mapping.get(config_type)
@@ -465,6 +503,7 @@ async def upload_config(
         "server.conf": "mosquitto_conf",
         "geolocation": "geolocation",
         "tsupdate.yml": "tsupdate",
+        "mqttutil.conf": "mqttutil",
     }
     
     config_type = filename_to_type.get(filename_lower)
@@ -608,6 +647,7 @@ RECOGNIZED_CONFIG_FILES = {
     "server.conf": "mosquitto_conf",
     "geolocation": "geolocation",
     "tsupdate.yml": "tsupdate",
+    "mqttutil.conf": "mqttutil",
 }
 
 # Service mapping for restart
@@ -619,6 +659,7 @@ SERVICE_MAPPING = {
     "mosquitto_cert": "mosquitto",
     "mosquitto_conf": "mosquitto",
     "tsupdate": "tsupdate",
+    "mqttutil": "mqttutil",
 }
 
 
@@ -653,6 +694,8 @@ def get_config_instance(config_type: str, is_config_upload: bool = False):
         return GeolocationConfig()
     elif config_type == "tsupdate":
         return TsupdateConfig()
+    elif config_type == "mqttutil":
+        return MqttUtilConfig()
     else:
         raise ValueError(f"Unknown config type: {config_type}")
 
@@ -747,6 +790,8 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
     """
     if filename.endswith(".ini"):
         return parse_ini_file(content)
+    elif filename == "mqttutil.conf":
+        return parse_mqttutil_ini(content)
     elif filename.endswith(".yml") or filename.endswith(".yaml"):
         return parse_yaml_file(content)
     elif filename == "authorized_keys":
