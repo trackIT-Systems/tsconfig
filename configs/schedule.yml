@@ -1,5 +1,7 @@
 button_delay: 00:30
 force_on: true
+recovery_interval: "00:30"
+recovery_guard: "00:05"
 schedule:
 - name: debugging
   start: sunrise+00:00

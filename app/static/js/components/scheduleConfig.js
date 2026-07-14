@@ -13,6 +13,8 @@ export function scheduleConfig() {
         config: {
             force_on: false,
             button_delay: "00:00",
+            recovery_interval: "00:00",
+            recovery_guard: "00:00",
             schedule: []
         },
         // Service status tracking
@@ -117,6 +119,8 @@ export function scheduleConfig() {
                 this.config = {
                     force_on: false,
                     button_delay: "00:00",
+                    recovery_interval: "00:00",
+                    recovery_guard: "00:00",
                     schedule: []
                 };
                 
@@ -139,6 +143,8 @@ export function scheduleConfig() {
                     this.config = {
                         force_on: false,
                         button_delay: "01:00",
+                        recovery_interval: "00:00",
+                        recovery_guard: "00:00",
                         schedule: []
                     };
                     this.showMessage("No schedule configuration found. Using default values.", false);
@@ -149,6 +155,8 @@ export function scheduleConfig() {
                 }
                 const data = await response.json();
                 this.config = data;
+                this.config.recovery_interval = data.recovery_interval ?? "00:00";
+                this.config.recovery_guard = data.recovery_guard ?? "00:00";
                 
                 // Process schedule entries to add UI helper properties
                 this.config.schedule.forEach(entry => {

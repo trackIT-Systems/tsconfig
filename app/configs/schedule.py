@@ -9,6 +9,23 @@ from pydantic import BaseModel
 from app.configs import BaseConfig
 
 
+def _validate_hh_mm(value: str, field_name: str) -> List[str]:
+    """Validate an HH:MM duration string."""
+    errors = []
+    if not isinstance(value, str) or not value:
+        errors.append(f"{field_name} is required")
+    elif value.count(":") != 1:
+        errors.append(f"{field_name} must be in HH:MM format")
+    else:
+        try:
+            hours, minutes = map(int, value.split(":"))
+            if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+                errors.append(f"{field_name} hours must be 0-23 and minutes 0-59")
+        except ValueError:
+            errors.append(f"Invalid {field_name} format")
+    return errors
+
+
 class ScheduleEntry(BaseModel):
     """A single schedule entry."""
 
@@ -62,19 +79,15 @@ class ScheduleConfig(BaseConfig):
         """Validate the schedule configuration."""
         errors = []
 
-        # Validate button delay
-        button_delay = config.get("button_delay", "")
-        if not isinstance(button_delay, str) or not button_delay:
-            errors.append("Button delay is required")
-        elif not button_delay.count(":") == 1:
-            errors.append("Button delay must be in HH:MM format")
-        else:
-            try:
-                hours, minutes = map(int, button_delay.split(":"))
-                if not (0 <= hours <= 23 and 0 <= minutes <= 59):
-                    errors.append("Button delay hours must be 0-23 and minutes 0-59")
-            except ValueError:
-                errors.append("Invalid button delay format")
+        errors.extend(_validate_hh_mm(config.get("button_delay", ""), "Button delay"))
+
+        recovery_interval = config.get("recovery_interval", "00:00")
+        if recovery_interval and recovery_interval != "00:00":
+            errors.extend(_validate_hh_mm(recovery_interval, "Recovery interval"))
+
+        recovery_guard = config.get("recovery_guard", "00:00")
+        if recovery_guard:
+            errors.extend(_validate_hh_mm(recovery_guard, "Guard interval"))
 
         # Validate schedule entries
         schedule = config.get("schedule", [])

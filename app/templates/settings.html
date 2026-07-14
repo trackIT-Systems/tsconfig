@@ -261,6 +261,46 @@
                                     </div>
                                 </div>
 
+                                <!-- Brownout Recovery (expert mode) -->
+                                <div class="mb-4" x-show="expertMode" x-transition>
+                                    <h6 class="border-bottom pb-2">
+                                        <i class="fas fa-bolt me-2"></i>
+                                        Brownout Recovery
+                                    </h6>
+                                    <div class="form-text mb-3">
+                                        Recover from unexpected power loss during scheduled on-times by setting
+                                        RTC wake alarms on a time grid. Set interval to 00:00 to disable.
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Recovery Interval (HH:MM)</label>
+                                                <input type="text"
+                                                        class="form-control"
+                                                        x-model="config.recovery_interval"
+                                                        pattern="[0-9]{2}:[0-9]{2}"
+                                                        required>
+                                                <div class="form-text">
+                                                    Grid period for recovery wakes (00:00 = disabled).
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Guard Interval (HH:MM)</label>
+                                                <input type="text"
+                                                        class="form-control"
+                                                        x-model="config.recovery_guard"
+                                                        pattern="[0-9]{2}:[0-9]{2}"
+                                                        required>
+                                                <div class="form-text">
+                                                    Skip grid points closer than this (e.g. 00:05).
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Schedule Entries Section -->
                                 <div class="mb-4">
                                     <h6 class="border-bottom pb-2">

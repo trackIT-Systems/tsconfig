@@ -12,6 +12,8 @@ from app.routers.base import BaseConfigRouter
 class ScheduleConfigUpdate(BaseModel):
     force_on: bool
     button_delay: str
+    recovery_interval: str = "00:00"
+    recovery_guard: str = "00:00"
     schedule: List[ScheduleEntry]
 
 
