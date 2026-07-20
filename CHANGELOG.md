@@ -15,6 +15,10 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 - Restrict 'maintenance' schedule entries to fixed clock times (HH:MM) and disable astronomical relative references
 
+### Fixed
+
+- Prevent writing empty or unset optional fields (e.g. `disk_reserve_mb` being written as `null`/`None`) to `soundscapepipe.yml` by filtering none values on model serialization (Issue #6)
+
 ## [2026.7.1] - 2026-07-14
 
 ### Added

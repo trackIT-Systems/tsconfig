@@ -140,7 +140,7 @@ async def update_soundscapepipe(
     config: SoundscapepipeConfigUpdate,
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
-    config_dict = config.model_dump()
+    config_dict = config.model_dump(exclude_none=True)
     return soundscapepipe_router.update_config_helper(config_dict, config_group)
 
 
@@ -149,7 +149,7 @@ async def validate_soundscapepipe(
     config: SoundscapepipeConfigUpdate,
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
-    config_dict = config.model_dump()
+    config_dict = config.model_dump(exclude_none=True)
     return soundscapepipe_router.validate_config_helper(config_dict, config_group)
 
 
