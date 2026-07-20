@@ -19,6 +19,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Path as PathParam, Res
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config_loader import config_loader
+from app.logging_config import get_logger
 from app.utils.subprocess_async import run_subprocess_async
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.cmdline import CmdlineConfig
@@ -33,6 +34,7 @@ from app.configs.tsupdate import TsupdateConfig
 from app.configs.wireguard import WireguardConfig
 
 router = APIRouter(prefix="/api/configs", tags=["configs"])
+logger = get_logger(__name__)
 
 
 def truncate_mtime_for_fat32(dt: datetime) -> datetime:
@@ -57,6 +59,42 @@ def truncate_mtime_for_fat32(dt: datetime) -> datetime:
     else:
         # Even second - already good
         return dt
+
+
+def set_and_verify_file_mtime(file_path: Path, expected_mtime: datetime) -> bool:
+    """Set file mtime, sync to disk, and verify it was persisted.
+
+    FAT32 on /boot/firmware may not persist utime metadata until buffers are flushed.
+    A 2-second tolerance accounts for FAT32's coarse timestamp resolution.
+
+    Args:
+        file_path: Path to the file whose mtime should be set
+        expected_mtime: Expected modification time (naive UTC)
+
+    Returns:
+        True if the on-disk mtime matches expected_mtime within tolerance
+    """
+    timestamp = calendar.timegm(expected_mtime.timetuple())
+    os.utime(file_path, (timestamp, timestamp))
+
+    try:
+        os.sync()
+    except AttributeError:
+        pass
+
+    actual_mtime = datetime.utcfromtimestamp(file_path.stat().st_mtime)
+    diff_seconds = abs((actual_mtime - expected_mtime).total_seconds())
+    if diff_seconds > 2:
+        logger.warning(
+            "File mtime mismatch after sync for %s: expected %s, got %s (diff %.0fs)",
+            file_path,
+            expected_mtime.isoformat(),
+            actual_mtime.isoformat(),
+            diff_seconds,
+        )
+        return False
+
+    return True
 
 
 async def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
@@ -566,9 +604,7 @@ async def upload_config(
         
         # Set file mtime from uploaded mtime
         upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
-        # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-        timestamp = calendar.timegm(upload_mtime_truncated.timetuple())
-        os.utime(config_instance.config_file, (timestamp, timestamp))
+        set_and_verify_file_mtime(config_instance.config_file, upload_mtime_truncated)
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
@@ -915,8 +951,7 @@ def _apply_config_zip_from_path(
         if zip_timestamp:
             zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
             config_file_path = config_instances[filename].config_file
-            timestamp = calendar.timegm(zip_timestamp_truncated.timetuple())
-            os.utime(config_file_path, (timestamp, timestamp))
+            set_and_verify_file_mtime(config_file_path, zip_timestamp_truncated)
         saved_files.append(filename)
 
     cmdline_updated = "cmdline.txt" in saved_files
@@ -1185,9 +1220,7 @@ async def upload_config_zip(
             if zip_timestamp:
                 zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
                 config_file_path = config_instances[filename].config_file
-                # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-                timestamp = calendar.timegm(zip_timestamp_truncated.timetuple())
-                os.utime(config_file_path, (timestamp, timestamp))
+                set_and_verify_file_mtime(config_file_path, zip_timestamp_truncated)
             
             saved_files.append(filename)
         except Exception as e:

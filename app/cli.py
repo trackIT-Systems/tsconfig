@@ -1,7 +1,6 @@
 """Command-line interface for tsconfig configuration upload and system reset."""
 
 import argparse
-import calendar
 import logging
 import os
 import shutil
@@ -23,6 +22,7 @@ from app.routers.configs import (
     parse_config_file,
     get_config_instance,
     truncate_mtime_for_fat32,
+    set_and_verify_file_mtime,
 )
 
 DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
@@ -397,9 +397,7 @@ def process_zip_upload(
             if zip_timestamp:
                 zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
                 config_file_path = config_instances[filename].config_file
-                # Convert naive UTC datetime to Unix timestamp using timegm (treats as UTC)
-                timestamp = calendar.timegm(zip_timestamp_truncated.timetuple())
-                os.utime(config_file_path, (timestamp, timestamp))
+                set_and_verify_file_mtime(config_file_path, zip_timestamp_truncated)
 
             saved_files.append(filename)
             log.info(f"Saved {filename}")
