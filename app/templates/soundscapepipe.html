@@ -1471,23 +1471,23 @@
                                                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingDevices }"></i>
                                             </button>
                                         </div>
-                                        <template x-if="audioDevices.output && audioDevices.output.length > 0">
-                                            <select class="form-select" 
-                                                    @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
-                                                <option value="">Select output device...</option>
+                                        <select class="form-select mb-2" 
+                                                @change="updateOutputDeviceFromSelection($event.target.value, $event.target.selectedOptions[0])">
+                                            <option value="none" :selected="!config.output_device_match || config.output_device_match === 'none'">No output device (disabled)</option>
+                                            <template x-if="audioDevices.output && audioDevices.output.length > 0">
                                                 <template x-for="device in audioDevices.output" :key="device.index">
                                                     <option :value="device.name" 
                                                             :data-sample-rate="device.default_sample_rate"
-                                                        :data-max-channels="device.max_output_channels"
+                                                            :data-max-channels="device.max_output_channels"
                                                             :selected="config.output_device_match && config.output_device_match === device.name.split(':')[0].trim()"
                                                             x-text="device.name + (device.is_default ? ' (Default)' : '') + ' - ' + device.max_output_channels + ' channels @ ' + Math.round(device.default_sample_rate/1000) + 'kHz'">
                                                     </option>
                                                 </template>
-                                            </select>
-                                        </template>
+                                            </template>
+                                        </select>
                                         <template x-if="!audioDevices.output || audioDevices.output.length === 0">
-                                            <div class="text-muted">
-                                                <i class="fas fa-exclamation-triangle"></i> No output devices detected
+                                            <div class="text-muted small">
+                                                <i class="fas fa-info-circle"></i> No physical output hardware detected
                                             </div>
                                         </template>
                                     </div>
@@ -1501,7 +1501,8 @@
                                         <label class="form-label">Device Match <small class="text-muted">(Expert)</small></label>
                                         <input type="text" 
                                                class="form-control" 
-                                               x-model="config.output_device_match"
+                                               :value="config.output_device_match === 'none' ? '' : config.output_device_match"
+                                               @input="config.output_device_match = $event.target.value.trim() || 'none'"
                                                placeholder="bcm2835 Headphones">
                                         <div class="form-text">Device identifier pattern</div>
                                     </div>

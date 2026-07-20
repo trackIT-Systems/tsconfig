@@ -84,6 +84,7 @@ class SoundscapepipeConfig(BaseConfig):
         data.setdefault("frontend_gain", "high")
         data.setdefault("frontend_gain_pin_a", 23)
         data.setdefault("frontend_gain_pin_b", 13)
+        data.setdefault("output_device_match", "none")
 
         return data
 

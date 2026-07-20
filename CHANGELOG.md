@@ -14,6 +14,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 ### Changed
 
 - Restrict 'maintenance' schedule entries to fixed clock times (HH:MM) and disable astronomical relative references
+- Allow selecting and retaining 'No output device' (disabled) in the Soundscapepipe UI even when no output hardware is detected or list of devices is empty. The Expert Mode field is left blank when disabled, resolving to 'none' in memory and completely omitted from `soundscapepipe.yml` on disk (Issue #5)
 
 ### Fixed
 

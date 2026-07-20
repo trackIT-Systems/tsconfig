@@ -275,7 +275,7 @@ export function soundscapepipeConfig() {
                         channels: data.channels || 2,
                         sample_rate: data.sample_rate || 384000,
                         detectors: detectors,
-                        output_device_match: data.output_device_match || "bcm2835 Headphones",
+                        output_device_match: data.output_device_match !== undefined && data.output_device_match !== null ? data.output_device_match : "none",
                         speaker_enable_pin: data.speaker_enable_pin || 27,
                         highpass_freq: data.highpass_freq || 100,
                         lure: lure,
@@ -735,11 +735,13 @@ export function soundscapepipeConfig() {
         },
 
         updateOutputDeviceFromSelection(deviceName, selectedOption) {
-            if (deviceName) {
+            if (deviceName && deviceName !== "none") {
                 // Extract just the device name part (before the colon if it exists)
                 // e.g. "USB AUDIO DEVICE: Audio (hw:3,0)" -> "USB AUDIO DEVICE"
                 const cleanDeviceName = deviceName.split(':')[0].trim();
                 this.config.output_device_match = cleanDeviceName;
+            } else {
+                this.config.output_device_match = "none";
             }
         },
 

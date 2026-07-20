@@ -141,6 +141,8 @@ async def update_soundscapepipe(
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump(exclude_none=True)
+    if config_dict.get("output_device_match") == "none":
+        config_dict.pop("output_device_match", None)
     return soundscapepipe_router.update_config_helper(config_dict, config_group)
 
 
@@ -150,6 +152,8 @@ async def validate_soundscapepipe(
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump(exclude_none=True)
+    if config_dict.get("output_device_match") == "none":
+        config_dict.pop("output_device_match", None)
     return soundscapepipe_router.validate_config_helper(config_dict, config_group)
 
 
