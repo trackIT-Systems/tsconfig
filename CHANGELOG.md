@@ -7,6 +7,14 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ## [Unreleased]
 
+### Added
+
+- Verification of file modification times (`mtime`) and filesystem synchronization (`sync`) on configuration updates
+
+### Changed
+
+- Restrict 'maintenance' schedule entries to fixed clock times (HH:MM) and disable astronomical relative references
+
 ## [2026.7.1] - 2026-07-14
 
 ### Added
