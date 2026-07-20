@@ -319,7 +319,17 @@
                                                             :class="isMaintenanceEntryProtected(index) ? 'bg-secondary bg-opacity-10 text-muted' : ''"
                                                             x-model="entry.name" 
                                                             :readonly="isMaintenanceEntryProtected(index)"
-                                                            @blur='if (checkDuplicateMaintenanceName(entry.name, index)) { showMessage("A schedule entry named \"maintenance\" already exists. Only one maintenance entry is allowed.", true); entry.name = ""; }'
+                                                            @blur='
+                                                                if (checkDuplicateMaintenanceName(entry.name, index)) { 
+                                                                    showMessage("A schedule entry named \"maintenance\" already exists. Only one maintenance entry is allowed.", true); 
+                                                                    entry.name = ""; 
+                                                                } else if (entry.name === "maintenance") {
+                                                                    entry.startReference = "time";
+                                                                    entry.stopReference = "time";
+                                                                    updateTimeString(entry, "start");
+                                                                    updateTimeString(entry, "stop");
+                                                                }
+                                                            '
                                                             placeholder="Enter schedule name..." 
                                                             required>
                                                     <template x-if="isFirstMaintenanceEntry(index)">
@@ -357,11 +367,11 @@
                                                                         x-model="entry.startReference"
                                                                         @change="updateTimeString(entry, 'start')">
                                                                     <option value="time">Clock Time</option>
-                                                                    <option value="sunrise">Sunrise</option>
-                                                                    <option value="sunset">Sunset</option>
-                                                                    <option value="dawn">Dawn</option>
-                                                                    <option value="dusk">Dusk</option>
-                                                                    <option value="noon">Solar Noon</option>
+                                                                    <option value="sunrise" :disabled="entry.name === 'maintenance'">Sunrise</option>
+                                                                    <option value="sunset" :disabled="entry.name === 'maintenance'">Sunset</option>
+                                                                    <option value="dawn" :disabled="entry.name === 'maintenance'">Dawn</option>
+                                                                    <option value="dusk" :disabled="entry.name === 'maintenance'">Dusk</option>
+                                                                    <option value="noon" :disabled="entry.name === 'maintenance'">Solar Noon</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-auto">
@@ -396,11 +406,11 @@
                                                                         x-model="entry.stopReference"
                                                                         @change="updateTimeString(entry, 'stop')">
                                                                     <option value="time">Clock Time</option>
-                                                                    <option value="sunrise">Sunrise</option>
-                                                                    <option value="sunset">Sunset</option>
-                                                                    <option value="dawn">Dawn</option>
-                                                                    <option value="dusk">Dusk</option>
-                                                                    <option value="noon">Solar Noon</option>
+                                                                    <option value="sunrise" :disabled="entry.name === 'maintenance'">Sunrise</option>
+                                                                    <option value="sunset" :disabled="entry.name === 'maintenance'">Sunset</option>
+                                                                    <option value="dawn" :disabled="entry.name === 'maintenance'">Dawn</option>
+                                                                    <option value="dusk" :disabled="entry.name === 'maintenance'">Dusk</option>
+                                                                    <option value="noon" :disabled="entry.name === 'maintenance'">Solar Noon</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-auto">

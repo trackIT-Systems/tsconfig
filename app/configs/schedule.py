@@ -108,4 +108,16 @@ class ScheduleConfig(BaseConfig):
                 if not entry.get("stop"):
                     errors.append(f"Schedule entry {i} must have a stop time")
 
+                if entry.get("name") == "maintenance":
+                    start = entry.get("start", "")
+                    stop = entry.get("stop", "")
+                    
+                    start_errors = _validate_hh_mm(start, "Maintenance start time")
+                    if start_errors:
+                        errors.extend([f"Schedule entry {i} ('maintenance'): {err}" for err in start_errors])
+                        
+                    stop_errors = _validate_hh_mm(stop, "Maintenance stop time")
+                    if stop_errors:
+                        errors.extend([f"Schedule entry {i} ('maintenance'): {err}" for err in stop_errors])
+
         return errors
