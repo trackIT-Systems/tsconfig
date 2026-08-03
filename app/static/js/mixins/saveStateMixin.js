@@ -3,12 +3,13 @@ import { triggerDeployment, formatDeploymentMessage } from '../utils/deploymentU
 
 export function saveStateMixin() {
     return {
-        saveState: 'idle', // 'idle', 'saving', 'deploying', 'saved', 'deployed'
+        saveState: 'idle', // 'idle', 'saving', 'saved'
         saveRestartState: 'idle', // 'idle', 'saving', 'restarting', 'saved'
+        deployState: 'idle', // 'idle', 'deploying', 'deployed'
         
         setSaveState(state) {
             this.saveState = state;
-            if (state === 'saved' || state === 'deployed') {
+            if (state === 'saved') {
                 setTimeout(() => {
                     this.saveState = 'idle';
                 }, 5000);
@@ -24,11 +25,24 @@ export function saveStateMixin() {
             }
         },
         
+        setDeployState(state) {
+            this.deployState = state;
+            if (state === 'deployed') {
+                setTimeout(() => {
+                    this.deployState = 'idle';
+                }, 5000);
+            }
+        },
+        
         async handleSaveConfig(configSaveFunction) {
             try {
                 this.setSaveState('saving');
                 await configSaveFunction();
                 this.setSaveState('saved');
+                // In server mode, show a toast (tracker mode components show their own messages)
+                if (window.serverModeManager?.isEnabled() && window.toastManager) {
+                    window.toastManager.success('Configuration saved successfully');
+                }
             } catch (error) {
                 this.setSaveState('idle');
                 throw error;
@@ -48,63 +62,43 @@ export function saveStateMixin() {
             }
         },
         
-        async handleSaveAndDeployConfig(configSaveFunction, configGroupId) {
-            console.log('[SaveAndDeploy] Starting save and deploy process');
-            console.log('[SaveAndDeploy] Config group ID:', configGroupId);
-            console.log('[SaveAndDeploy] Server mode:', window.serverModeManager?.isEnabled());
+        async handleDeployConfig(configGroupId) {
+            console.log('[Deploy] Starting deploy-only process');
+            console.log('[Deploy] Config group ID:', configGroupId);
+            console.log('[Deploy] Server mode:', window.serverModeManager?.isEnabled());
+            
+            if (!configGroupId) {
+                console.error('[Deploy] No config group ID provided');
+                throw new Error('Config group ID is required for deployment');
+            }
             
             try {
-                // First, save the configuration
-                this.setSaveState('saving');
-                console.log('[SaveAndDeploy] Saving configuration...');
-                await configSaveFunction();
-                console.log('[SaveAndDeploy] Configuration saved successfully');
+                this.setDeployState('deploying');
+                console.log('[Deploy] Triggering deployment for config group:', configGroupId);
                 
-                // Show success message for save
+                const deploymentResult = await triggerDeployment(configGroupId);
+                console.log('[Deploy] Deployment result:', deploymentResult);
+                const deploymentMessage = formatDeploymentMessage(deploymentResult);
+                
                 if (window.toastManager) {
-                    window.toastManager.success('Configuration saved successfully');
+                    window.toastManager.success(deploymentMessage);
                 }
                 
-                // Then, trigger deployment
-                this.setSaveState('deploying');
-                console.log('[SaveAndDeploy] Triggering deployment for config group:', configGroupId);
+                this.setDeployState('deployed');
+            } catch (deployError) {
+                console.error('[Deploy] Deployment error:', deployError);
+                console.error('[Deploy] Error details:', {
+                    message: deployError.message,
+                    stack: deployError.stack
+                });
                 
-                try {
-                    const deploymentResult = await triggerDeployment(configGroupId);
-                    console.log('[SaveAndDeploy] Deployment result:', deploymentResult);
-                    const deploymentMessage = formatDeploymentMessage(deploymentResult);
-                    
-                    // Show success message for deployment
-                    if (window.toastManager) {
-                        window.toastManager.success(deploymentMessage);
-                    }
-                    
-                    this.setSaveState('deployed');
-                } catch (deployError) {
-                    // Deployment failed, but config was saved
-                    console.error('[SaveAndDeploy] Deployment error:', deployError);
-                    console.error('[SaveAndDeploy] Error details:', {
-                        message: deployError.message,
-                        stack: deployError.stack
-                    });
-                    
-                    // Show error message for deployment
-                    if (window.toastManager) {
-                        window.toastManager.error(`Deployment failed: ${deployError.message}`);
-                    }
-                    
-                    // Reset to idle since deployment failed
-                    this.setSaveState('idle');
-                    
-                    // Don't throw - we want to show partial success
+                if (window.toastManager) {
+                    window.toastManager.error(`Deployment failed: ${deployError.message}`);
                 }
-            } catch (error) {
-                // Config save failed
-                console.error('[SaveAndDeploy] Config save failed:', error);
-                this.setSaveState('idle');
-                throw error;
+                
+                this.setDeployState('idle');
+                throw deployError;
             }
         }
     };
 }
-

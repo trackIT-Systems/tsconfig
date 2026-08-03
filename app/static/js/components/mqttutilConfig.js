@@ -314,12 +314,13 @@ export function mqttutilConfig() {
                 }
             };
 
-            if (this.serverMode) {
-                const configGroup = window.serverModeManager?.getCurrentConfigGroup();
-                await this.handleSaveAndDeployConfig(configSaveFunction, configGroup);
-            } else {
-                await this.handleSaveConfig(configSaveFunction);
-            }
+            // Save only; deployment is triggered separately via deployConfig()
+            await this.handleSaveConfig(configSaveFunction);
+        },
+
+        async deployConfig() {
+            const configGroup = window.serverModeManager?.getCurrentConfigGroup();
+            await this.handleDeployConfig(configGroup);
         },
 
         async saveAndRestartService() {
