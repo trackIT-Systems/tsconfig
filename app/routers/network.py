@@ -3,16 +3,27 @@
 import asyncio
 import json
 import subprocess
-import yaml
-from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.config_loader import config_loader
+from app.privileged.ops import ALLOWED_CONNECTIONS
+from app.utils.privileged import PrivilegedCallError, unset_gsm_fields
 from app.utils.subprocess_async import run_subprocess_async
 
 router = APIRouter(prefix="/api/network", tags=["network"])
+
+
+def _ensure_tracker_mode() -> None:
+    """Network configuration changes only make sense in tracker mode - server
+    mode (the Docker/fleet deployment) has no NetworkManager, no `sudo`
+    wrapper, and no boot partition (see app/utils/privileged.py's module
+    docstring: it never checks this itself, so every caller must).
+    """
+    if config_loader.is_server_mode():
+        raise HTTPException(status_code=403, detail="Network configuration is not available in server mode")
 
 
 class ConnectionInfo(BaseModel):
@@ -283,6 +294,28 @@ async def run_nmcli_command(
         raise HTTPException(status_code=503, detail="NetworkManager (nmcli) not available")
 
 
+async def nmcli_connection_modify(
+    connection: str, set_props: Dict[str, str], unset_props: List[str] | None = None
+) -> subprocess.CompletedProcess:
+    """`nmcli connection modify <connection> (<prop> <value>)... [-- (-<prop>)...]`
+
+    Each property/value pair is passed as two separate argv elements (never
+    joined into one string), so a value can't be mistaken for a new
+    property/flag. `pi` has direct, polkit-authorized NetworkManager access
+    (see docs/security.md's "Network management" section), so this runs
+    unprivileged - there's no root boundary left to validate property names
+    against; the properties set here are hardcoded by this router, never
+    caller-supplied.
+    """
+    args = ["connection", "modify", connection]
+    for key, value in set_props.items():
+        args += [key, value]
+    if unset_props:
+        args.append("--")
+        args += [f"-{key}" for key in unset_props]
+    return await run_nmcli_command(args, check=False)
+
+
 async def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Run mmcli command with proper error handling.
 
@@ -453,31 +486,31 @@ async def get_nmcli_connection_properties(connection_name: str, show_secrets: bo
         if show_secrets:
             args.append("--show-secrets")
         args.append(connection_name)
-        
+
         result = await run_nmcli_command(args, check=False)
-        
+
         if result.returncode != 0:
             raise HTTPException(
                 status_code=404,
                 detail=f"Connection '{connection_name}' not found"
             )
-        
+
         # Parse output - each line is "property:value"
         properties = {}
         for line in result.stdout.strip().split("\n"):
             if not line or ":" not in line:
                 continue
-            
+
             # Split on first colon to separate property from value
             prop, value = line.split(":", 1)
             value = value.strip()
-            
+
             # Store only non-empty values (skip "--", "<hidden>", and empty strings)
             if value and value != "--" and value != "<hidden>":
                 properties[prop.strip()] = value
-        
+
         return properties
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -528,146 +561,6 @@ async def get_device_ipv4_address(device: str) -> str | None:
         return None
 
 
-async def remove_gsm_fields_from_netplan(fields_to_remove: List[str], connection_name: str = "cellular") -> None:
-    """Remove GSM fields from netplan YAML file.
-    
-    nmcli doesn't allow directly unsetting certain GSM fields (like password, pin),
-    so we need to edit the netplan YAML file directly:
-    1. Get the connection UUID
-    2. Find the corresponding netplan YAML file
-    3. Remove the specified fields from the YAML
-    4. Reload NetworkManager connections
-    
-    Args:
-        fields_to_remove: List of field names to remove (e.g., ["password", "pin"])
-        connection_name: Name of the cellular connection (default: "cellular")
-        
-    Raises:
-        HTTPException: If critical operations fail
-    """
-    if not fields_to_remove:
-        return
-    
-    try:
-        # Step 1: Get connection UUID
-        result = await run_nmcli_command(
-            ["-t", "-f", "connection.uuid", "connection", "show", connection_name],
-            check=False
-        )
-        
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Connection '{connection_name}' not found"
-            )
-        
-        uuid = result.stdout.strip().replace("connection.uuid:", "")
-        if not uuid:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to get connection UUID"
-            )
-        
-        # Step 2: Find netplan file
-        netplan_file = Path(f"/etc/netplan/90-NM-{uuid}.yaml")
-        
-        if not netplan_file.exists():
-            # Log warning but don't fail - fields might not be in netplan
-            print(f"Warning: Netplan file {netplan_file} not found, fields may not exist")
-            return
-        
-        # Step 3: Read and parse YAML
-        try:
-            with open(netplan_file, "r") as f:
-                netplan_content = yaml.safe_load(f)
-        except PermissionError:
-            # Try using subprocess
-            read_result = await run_subprocess_async(
-                ["cat", str(netplan_file)],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if read_result.returncode != 0:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to read netplan file (permission denied)"
-                )
-            netplan_content = yaml.safe_load(read_result.stdout)
-        
-        # Step 4: Remove specified fields from YAML structure
-        modified = False
-        if (netplan_content and 
-            "network" in netplan_content and 
-            "modems" in netplan_content["network"] and 
-            "cellular" in netplan_content["network"]["modems"]):
-            
-            cellular_config = netplan_content["network"]["modems"]["cellular"]
-            for field in fields_to_remove:
-                if field in cellular_config:
-                    del cellular_config[field]
-                    modified = True
-                    print(f"Info: Removed '{field}' field from {netplan_file}")
-        
-        if not modified:
-            # No fields found in YAML, nothing to do
-            print(f"Info: None of the specified fields {fields_to_remove} found in {netplan_file}")
-            return
-        
-        # Step 5: Write back the YAML
-        yaml_output = yaml.dump(netplan_content, default_flow_style=False, sort_keys=False)
-        
-        try:
-            with open(netplan_file, "w") as f:
-                f.write(yaml_output)
-        except PermissionError:
-            # Use tee to write
-            process = await asyncio.create_subprocess_exec(
-                "tee",
-                str(netplan_file),
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(yaml_output.encode()),
-                timeout=5.0
-            )
-            returncode = await process.wait()
-            
-            write_result = subprocess.CompletedProcess(
-                args=["tee", str(netplan_file)],
-                returncode=returncode,
-                stdout=stdout.decode() if stdout else '',
-                stderr=stderr.decode() if stderr else '',
-            )
-            if write_result.returncode != 0:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to write netplan file (permission denied)"
-                )
-        
-        # Step 6: Reload NetworkManager connections
-        reload_result = await run_subprocess_async(
-            ["nmcli", "connection", "reload"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if reload_result.returncode != 0:
-            print(f"Warning: nmcli connection reload failed: {reload_result.stderr}")
-            # Don't fail here - the file was updated successfully
-        
-    except HTTPException:
-        raise
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
-        raise HTTPException(status_code=504, detail="Operation timed out")
-    except Exception as e:
-        # Log error but don't fail the entire update
-        print(f"Warning: Failed to remove GSM fields from netplan: {str(e)}")
-
-
 @router.get("/wifi/capabilities", summary="Get WiFi device capabilities", response_model=WiFiCapabilities)
 async def get_wifi_capabilities() -> WiFiCapabilities:
     """Get WiFi capabilities of the hotspot interface (bands, channels, channel widths).
@@ -692,7 +585,10 @@ async def wifi_scan(rescan: bool = Query(True, description="Request a fresh scan
     try:
         iface = await _get_wifi_interface_for_scan()
         if rescan:
-            await run_nmcli_command(["device", "wifi", "rescan", "ifname", iface], check=False, timeout=15)
+            if not config_loader.is_server_mode():
+                # Best-effort: a rescan failure shouldn't block returning the
+                # last-known list.
+                await run_nmcli_command(["device", "wifi", "rescan", "ifname", iface], check=False, timeout=15)
             await asyncio.sleep(4)
         result = await run_nmcli_command(
             [
@@ -776,6 +672,8 @@ async def get_wifi_station_config() -> WiFiStationConfig:
 async def update_wifi_station_config(update: WiFiStationUpdate) -> Dict[str, Any]:
     """Update WiFi client SSID and/or WPA2 password on the NetworkManager station connection."""
     try:
+        _ensure_tracker_mode()
+
         if update.ssid is None and update.password is None and update.autoconnect is None:
             raise HTTPException(status_code=400, detail="At least one field must be provided")
 
@@ -793,19 +691,20 @@ async def update_wifi_station_config(update: WiFiStationUpdate) -> Dict[str, Any
             if len(ssid_value) > 32:
                 raise HTTPException(status_code=400, detail="SSID must be 32 characters or less")
 
-        modifications: List[str] = []
+        set_props: Dict[str, str] = {}
         if ssid_value is not None:
-            modifications.extend(["802-11-wireless.ssid", ssid_value])
+            set_props["802-11-wireless.ssid"] = ssid_value
         if update.password is not None:
-            modifications.extend(
-                ["802-11-wireless-security.key-mgmt", "wpa-psk", "802-11-wireless-security.psk", update.password]
-            )
-
+            set_props["802-11-wireless-security.key-mgmt"] = "wpa-psk"
+            set_props["802-11-wireless-security.psk"] = update.password
         if update.autoconnect is not None:
-            modifications.extend(["connection.autoconnect", "yes" if update.autoconnect else "no"])
+            set_props["connection.autoconnect"] = "yes" if update.autoconnect else "no"
 
-        if modifications:
-            await run_nmcli_command(["connection", "modify", "station"] + modifications)
+        if set_props:
+            result = await nmcli_connection_modify("station", set_props)
+            if result.returncode != 0:
+                error_msg = (result.stderr or result.stdout or "unknown error").strip()
+                raise HTTPException(status_code=500, detail=f"Failed to update WiFi station configuration: {error_msg}")
 
         updated_config = await get_wifi_station_config()
         return {
@@ -890,6 +789,8 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         Success message with updated configuration
     """
     try:
+        _ensure_tracker_mode()
+
         # Check that at least one field is provided
         if not any([
             update.password is not None,
@@ -958,14 +859,14 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
                     detail=f"Invalid channel width '{update.channel_width}'. Valid options: {', '.join(valid_widths)}"
                 )
 
-        # Build list of modifications for a single nmcli call
-        modifications = []
-        properties_to_remove = []
-        
+        # Build the set of properties to set/unset for a single nm-modify call
+        set_props: Dict[str, str] = {}
+        unset_props: List[str] = []
+
         # Update password if provided
         if update.password is not None:
-            modifications.extend(["802-11-wireless-security.psk", update.password])
-        
+            set_props["802-11-wireless-security.psk"] = update.password
+
         # Update band if provided
         # NetworkManager expects "a" for 5GHz, "bg" for 2.4GHz
         if update.band is not None:
@@ -975,37 +876,34 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
                 band_value = "bg"
             else:
                 band_value = ""  # Auto/unset
-            modifications.extend(["802-11-wireless.band", band_value])
+            set_props["802-11-wireless.band"] = band_value
         elif "band" in update.__fields_set__:  # Explicitly set to None (auto)
-            properties_to_remove.append("802-11-wireless.band")
-        
+            unset_props.append("802-11-wireless.band")
+
         # Update channel if provided
         if update.channel is not None:
-            modifications.extend(["802-11-wireless.channel", str(update.channel)])
+            set_props["802-11-wireless.channel"] = str(update.channel)
         elif "channel" in update.__fields_set__:  # Explicitly set to None (auto)
-            modifications.extend(["802-11-wireless.channel", ""])
-        
+            set_props["802-11-wireless.channel"] = ""
+
         # Update hidden if provided
         if update.hidden is not None:
-            hidden_value = "yes" if update.hidden else "no"
-            modifications.extend(["802-11-wireless.hidden", hidden_value])
+            set_props["802-11-wireless.hidden"] = "yes" if update.hidden else "no"
         elif "hidden" in update.__fields_set__:  # Explicitly set to None (default)
-            modifications.extend(["802-11-wireless.hidden", "no"])
-        
+            set_props["802-11-wireless.hidden"] = "no"
+
         # Update channel width if provided
         if update.channel_width is not None:
-            modifications.extend(["802-11-wireless.channel-width", update.channel_width])
+            set_props["802-11-wireless.channel-width"] = update.channel_width
         elif "channel_width" in update.__fields_set__:  # Explicitly set to None (unset/auto)
-            modifications.extend(["802-11-wireless.channel-width", "0"])
-        
-        # Execute all modifications in a single nmcli call
-        if modifications or properties_to_remove:
-            args = ["connection", "modify", "hotspot"] + modifications
-            if properties_to_remove:
-                args.append("--")
-                for prop in properties_to_remove:
-                    args.append(f"-{prop}")
-            await run_nmcli_command(args)
+            set_props["802-11-wireless.channel-width"] = "0"
+
+        # Execute all modifications in a single nmcli connection modify call
+        if set_props or unset_props:
+            result = await nmcli_connection_modify("hotspot", set_props, unset_props)
+            if result.returncode != 0:
+                error_msg = (result.stderr or result.stdout or "unknown error").strip()
+                raise HTTPException(status_code=500, detail=f"Failed to update hotspot configuration: {error_msg}")
 
         # Get updated configuration
         updated_config = await get_hotspot_config()
@@ -1057,6 +955,8 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         Success message with updated configuration
     """
     try:
+        _ensure_tracker_mode()
+
         # Validate PIN if provided (not empty/null)
         if update.pin:
             # PIN should be 4-8 digits
@@ -1067,37 +967,46 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
 
         # Frontend always sends all 4 fields (either with values or null)
         # Treat None/null as empty string to clear the field for APN and username
-        modifications = [
-            "gsm.apn", update.apn or "",
-            "gsm.username", update.username or ""
-        ]
-        
+        set_props: Dict[str, str] = {
+            "gsm.apn": update.apn or "",
+            "gsm.username": update.username or "",
+        }
+
         # Track fields that need to be removed from netplan (nmcli can't unset them)
-        fields_to_remove_from_netplan = []
-        
+        fields_to_remove_from_netplan: List[str] = []
+
         # Handle password field
         if update.password:
             # Set password via nmcli
-            modifications.extend(["gsm.password", update.password])
+            set_props["gsm.password"] = update.password
         else:
             # Remove password by editing netplan YAML file
             fields_to_remove_from_netplan.append("password")
-        
+
         # Handle pin field
         if update.pin:
             # Set pin via nmcli
-            modifications.extend(["gsm.pin", update.pin])
+            set_props["gsm.pin"] = update.pin
         else:
             # Remove pin by editing netplan YAML file
             fields_to_remove_from_netplan.append("pin")
-        
-        # Remove fields from netplan if needed
+
+        # Remove fields from netplan if needed - this is the one op still
+        # routed through root (nmcli can't unset these itself, and
+        # /etc/netplan is root-owned; see app.privileged.ops.unset_gsm_fields).
+        # Best-effort: a failure here shouldn't block the nmcli-side update
+        # below.
         if fields_to_remove_from_netplan:
-            await remove_gsm_fields_from_netplan(fields_to_remove_from_netplan, "cellular")
-        
-        # Execute all modifications in a single nmcli call
-        args = ["connection", "modify", "cellular"] + modifications
-        await run_nmcli_command(args)
+            try:
+                await unset_gsm_fields("cellular", fields_to_remove_from_netplan)
+            except PrivilegedCallError as e:
+                print(f"Warning: Failed to remove GSM fields from netplan: {e}")
+
+        # Execute all modifications in a single nmcli connection modify call
+        result = await nmcli_connection_modify("cellular", set_props)
+        if result.returncode != 0:
+            error_msg = (result.stderr or result.stdout or "unknown error").strip()
+            raise HTTPException(status_code=500, detail=f"Failed to update cellular configuration: {error_msg}")
 
         # Get updated configuration
         updated_config = await get_cellular_config()
@@ -1115,21 +1024,29 @@ async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
     """Bring a network connection up using nmcli connection up.
 
     Args:
-        connection_name: Name of the connection to bring up
+        connection_name: Name of the connection to bring up - must be one of
+            app.privileged.ops.ALLOWED_CONNECTIONS. This isn't a privilege
+            boundary any more (pi can run `nmcli connection up <anything>`
+            directly), just a clean 400 for an unknown name instead of
+            nmcli's own "connection not found" error.
 
     Returns:
         Success message with connection information
     """
+    if connection_name not in ALLOWED_CONNECTIONS:
+        raise HTTPException(status_code=400, detail=f"Unknown connection: {connection_name}")
+
     try:
-        # Try to bring the connection up
-        result = await run_nmcli_command(["connection", "up", connection_name], check=False)
+        _ensure_tracker_mode()
+
+        result = await run_nmcli_command(["connection", "up", connection_name], check=False, timeout=30)
 
         if result.returncode == 0:
             return {"message": f"Connection '{connection_name}' activated successfully", "connection_name": connection_name}
         else:
             # Parse error message from nmcli
-            error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
-            
+            error_msg = (result.stderr or "").strip() or (result.stdout or "").strip() or "Unknown error"
+
             # Check if already active
             if "already active" in error_msg.lower() or "is already active" in error_msg.lower():
                 return {
@@ -1137,7 +1054,7 @@ async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
                     "connection_name": connection_name,
                     "already_active": True,
                 }
-            
+
             raise HTTPException(status_code=500, detail=f"Failed to activate connection: {error_msg}")
 
     except HTTPException:
