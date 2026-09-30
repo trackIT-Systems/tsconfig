@@ -55,7 +55,7 @@ async def update_mqttutil(
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
     config_dict = _normalize_config_update(config)
-    return mqttutil_router.update_config_helper(config_dict, config_group)
+    return await mqttutil_router.update_config_helper(config_dict, config_group)
 
 
 @router.post("/validate")

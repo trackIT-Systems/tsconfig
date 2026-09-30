@@ -62,7 +62,7 @@ async def update_radiotracking(
         def model_dump(self):
             return config_dict
 
-    return radiotracking_router.update_config_helper(config_dict, config_group)
+    return await radiotracking_router.update_config_helper(config_dict, config_group)
 
 
 @router.post("/validate")

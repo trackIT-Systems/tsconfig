@@ -29,7 +29,7 @@ async def update_schedule(
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump()
-    return schedule_router.update_config_helper(config_dict, config_group)
+    return await schedule_router.update_config_helper(config_dict, config_group)
 
 
 @router.post("/validate")

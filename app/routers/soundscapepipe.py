@@ -143,7 +143,7 @@ async def update_soundscapepipe(
     config_dict = config.model_dump(exclude_none=True)
     if config_dict.get("output_device_match") == "none":
         config_dict.pop("output_device_match", None)
-    return soundscapepipe_router.update_config_helper(config_dict, config_group)
+    return await soundscapepipe_router.update_config_helper(config_dict, config_group)
 
 
 @router.post("/validate")

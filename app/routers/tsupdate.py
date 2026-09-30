@@ -49,7 +49,7 @@ async def update_tsupdate(
     config_group: Optional[str] = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump(exclude_none=True)
-    return tsupdate_router.update_config_helper(config_dict, config_group)
+    return await tsupdate_router.update_config_helper(config_dict, config_group)
 
 
 @router.post("/validate")

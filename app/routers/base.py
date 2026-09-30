@@ -6,12 +6,26 @@ from fastapi import APIRouter, HTTPException
 
 from app.config_loader import config_loader
 from app.configs import BaseConfig
+from app.utils.privileged import PrivilegedCallError, write_config
 
 
 class BaseConfigRouter:
     """Generic base router for configuration endpoints."""
 
     def __init__(self, config_class: Type[BaseConfig], prefix: str, tag: str):
+        # update_config_helper's tracker-mode save uses `prefix` directly as
+        # the config_type passed to the privileged write op, which requires
+        # it to be a real entry in app.configs.registry.CONFIG_TYPES - fail
+        # at startup rather than with a confusing rejection from the
+        # privileged CLI the first time someone saves this config.
+        from app.configs.registry import CONFIG_TYPES
+
+        if prefix not in CONFIG_TYPES:
+            raise ValueError(
+                f"BaseConfigRouter prefix '{prefix}' has no matching entry in "
+                f"app.configs.registry.CONFIG_TYPES - privileged writes for it would fail"
+            )
+
         self.config_class = config_class
         self.config_instance = config_class()
         self.router = APIRouter(prefix=f"/api/{prefix}", tags=[tag])
@@ -42,7 +56,9 @@ class BaseConfigRouter:
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail=f"{self.prefix.title()} configuration not found")
 
-    def update_config_helper(self, config_dict: Dict[str, Any], config_group: Optional[str] = None) -> Dict[str, Any]:
+    async def update_config_helper(
+        self, config_dict: Dict[str, Any], config_group: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Helper method to update configuration with a dictionary."""
         import traceback
 
@@ -53,7 +69,11 @@ class BaseConfigRouter:
         try:
             cfg_instance = self.get_config_instance(config_group)
 
-            # Validate the configuration
+            # Validate the configuration here too, even though the privileged
+            # write path (tracker mode) re-validates independently before
+            # writing - this copy is purely for fast, specific user feedback
+            # (a 400 with the actual field errors) rather than a generic
+            # failure from the privileged call.
             errors = cfg_instance.validate(config_dict)
             if errors:
                 raise HTTPException(
@@ -131,9 +151,19 @@ class BaseConfigRouter:
                         logger.error(traceback.format_exc())
                         raise
                 else:
-                    # In tracker mode, save directly
-                    logger.debug("Tracker mode, saving directly")
-                    cfg_instance.save(config_dict)
+                    # Tracker mode: this config lives on the root-owned boot
+                    # partition, so the write goes through the privileged op
+                    # (which independently re-validates before saving) rather
+                    # than calling cfg_instance.save() directly here - that
+                    # would just fail with PermissionError as pi.
+                    logger.debug("Tracker mode, saving via privileged op")
+                    try:
+                        await write_config(self.prefix, config_dict)
+                    except PrivilegedCallError as e:
+                        raise HTTPException(
+                            status_code=500,
+                            detail={"message": f"Failed to save {self.prefix} configuration", "error": str(e)},
+                        )
 
                 return {"message": f"{self.prefix.title()} configuration updated successfully", "config": config_dict}
             except HTTPException:
