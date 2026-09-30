@@ -9,10 +9,6 @@ file_locations:
 system:
   status_refresh_interval: 5  # Default system status refresh interval in seconds
 
-# Shell settings
-shell:
-  user: "pi"  # User to run shell sessions as (login shell)
-
 # Feature flags
 features:
   audioprotopnet: false  # set true to enable AudioProtoPNet detector UI

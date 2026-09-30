@@ -7,7 +7,6 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.config_loader import config_loader
 from app.logging_config import get_logger
 
 # Configure logging
@@ -46,10 +45,16 @@ class PtyProcess:
     """Manages a pseudo-terminal process for interactive shell sessions."""
 
     def __init__(self, command: Optional[str] = None):
-        # Get the configured shell user (defaults to 'pi')
-        shell_user = config_loader.get_shell_user()
-        # Use su -l to provide a login shell as the configured user
-        self.command = command or f"su -l {shell_user}"
+        # The web shell always runs as whichever user tsconfig.service runs
+        # as (pi, in tracker mode) - there is no separate "shell user" to
+        # pick, and there never should be: this used to exec `su -l
+        # <configured user>`, which (a) only worked because the service ran
+        # as root, since `su` to an arbitrary user needs root or the
+        # target's password, and (b) meant the target user was a config
+        # value instead of simply "whoever we already are". Now it execs
+        # the caller's own login shell directly - no su, no privilege
+        # change, no configurable target.
+        self.command = command or get_user_shell()
         self.pid = None
         self.fd = None
         self.process = None
@@ -65,20 +70,12 @@ class PtyProcess:
             self.pid, self.fd = pty.fork()
 
             if self.pid == 0:
-                # Child process - execute login shell as configured user
-                # Parse the command to handle 'su -l username' properly
-                if self.command.startswith("su -l "):
-                    # Extract username from 'su -l username'
-                    parts = self.command.split()
-                    if len(parts) >= 3:
-                        # Execute: su -l username
-                        os.execvp("su", parts)
-                    else:
-                        # Fallback: just execute su
-                        os.execvp("su", ["-l"])
-                else:
-                    # Direct command execution (backward compatibility)
-                    os.execvp(self.command, [self.command])
+                # Child process - exec our own shell as a login shell
+                # (leading "-" in argv[0] is the traditional way to signal
+                # that to the shell, same as what `su -l`/`login` do).
+                shell_path = self.command
+                argv0 = "-" + os.path.basename(shell_path)
+                os.execv(shell_path, [argv0])
             else:
                 # Parent process - we have the file descriptor
                 self.running = True
@@ -200,8 +197,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             return
 
         active_sessions[session_id] = pty_process
-        shell_user = config_loader.get_shell_user()
-        logger.info(f"Shell session {session_id} started as login shell for user: {shell_user}")
+        logger.info(f"Shell session {session_id} started (shell: {pty_process.command})")
     else:
         pty_process = active_sessions[session_id]
 
