@@ -13,6 +13,12 @@ from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
 from app.utils.subprocess_async import run_subprocess_async
+from app.utils.privileged import (
+    ALLOWED_SYSTEMCTL_VERBS,
+    PrivilegedCallError,
+    schedule_reboot,
+    systemctl_action,
+)
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
@@ -289,63 +295,55 @@ async def list_services():
 
 @router.post("/action")
 async def service_action(action: ServiceAction):
-    """Perform action on a systemd service."""
-    if action.action not in ["start", "stop", "restart"]:
-        raise HTTPException(status_code=400, detail="Invalid action. Must be start, stop, or restart")
+    """Perform a non-persistent systemd action on a configured service.
+
+    Accepts any verb in ALLOWED_SYSTEMCTL_VERBS (start/stop/restart/reload) -
+    never enable/disable/mask, which are a categorically separate polkit
+    action (org.freedesktop.systemd1.manage-unit-files) `pi`'s polkit rule
+    never grants (see docs/security.md's "Service control" section).
+    Rejecting an unsupported verb here gives a clean 400 instead of a 500
+    from systemd/polkit's own denial, but the real enforcement is the polkit
+    rule: even if this check were removed or bypassed, `systemctl enable ...`
+    simply fails for `pi` regardless of what this endpoint accepts.
+    """
+    if action.action not in ALLOWED_SYSTEMCTL_VERBS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action. Supported actions: {', '.join(sorted(ALLOWED_SYSTEMCTL_VERBS))}",
+        )
 
     # Validate service is in our configured list
     configured_services = get_configured_services(include_expert=True)
     service_names = [service.name for service in configured_services]
     if action.service not in service_names:
         raise HTTPException(status_code=400, detail="Service not in configured list")
-    
+
     # Prevent actions on kernel service (it's not a real systemd service)
     if action.service == "kernel" or action.service == "dmesg":
         raise HTTPException(status_code=400, detail="Cannot perform actions on kernel logs service")
 
-    try:
-        # Build systemctl command
-        cmd = ["systemctl", action.action, action.service]
+    success, error = await systemctl_action(action.service, action.action)
+    if not success:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to {action.action} service {action.service}: {error}"
+        )
 
-        # Execute systemctl command
-        result = await run_subprocess_async(cmd, capture_output=True, text=True, timeout=30)
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else f"Command failed with exit code {result.returncode}"
-            raise HTTPException(
-                status_code=500, detail=f"Failed to {action.action} service {action.service}: {error_msg}"
-            )
-
-        # Create success message
-        message = f"Successfully {action.action}ed service {action.service}"
-
-        return {"success": True, "message": message, "service": action.service, "action": action.action}
-
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
-        raise HTTPException(status_code=500, detail=f"Timeout while trying to {action.action} service {action.service}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error performing action: {str(e)}")
+    return {
+        "success": True,
+        "message": f"Successfully performed '{action.action}' on service {action.service}",
+        "service": action.service,
+        "action": action.action,
+    }
 
 
 @router.post("/reboot")
 async def reboot_system():
     """Initiate system reboot."""
     try:
-        # Use systemctl to reboot the system
-        result = await run_subprocess_async(["systemctl", "reboot"], capture_output=True, text=True, timeout=10)
-
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {result.stderr}")
-
+        await schedule_reboot(delay=0)
         return {"message": "System reboot initiated"}
-
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
-        # Timeout is expected as the system will be rebooting
-        return {"message": "System reboot initiated"}
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error during reboot: {str(e)}")
+    except PrivilegedCallError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to initiate reboot: {e}")
 
 
 @router.get("/config/system")
@@ -372,54 +370,27 @@ async def stream_service_logs(service_name: str):
             raise HTTPException(status_code=400, detail="Service not in configured list")
 
     async def generate_logs():
-        """Generate streaming logs using journalctl -fu, journalctl -kf for kernel, or journalctl -f for all."""
+        """Generate streaming logs via a direct, unprivileged `journalctl`
+        call - `pi` is a member of the `systemd-journal` group (see
+        docs/security.md's "Service control" section), which grants full
+        journal read access at the file-permission level; no wrapper or
+        elevation is involved at all."""
         # Send initial comment to establish the connection (comments don't trigger onmessage)
         yield f": Stream started\n\n"
-        
+
+        cmd = ["journalctl", "--no-pager", "--no-hostname", "--output", "short", "-n", "200", "-f"]
+        if service_name == "all":
+            pass  # no extra filter
+        elif service_name in ("kernel", "dmesg"):
+            cmd.append("-k")
+        else:
+            cmd += ["-u", service_name]
+
+        process = None
         try:
-            # Special handling for all system logs
-            if service_name == "all":
-                # Use journalctl -f for all system logs (follow mode, no unit filter)
-                process = await asyncio.create_subprocess_exec(
-                    "journalctl",
-                    "-f",
-                    "--no-pager",
-                    "--no-hostname",
-                    "--output", "short",
-                    "-n",
-                    "50",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
-                )
-            # Special handling for kernel logs
-            elif service_name == "kernel" or service_name == "dmesg":
-                # Use journalctl -k -f for kernel logs (kernel messages, follow mode)
-                process = await asyncio.create_subprocess_exec(
-                    "journalctl",
-                    "-k",
-                    "-f",
-                    "--no-pager",
-                    "--no-hostname",
-                    "--output", "short",
-                    "-n",
-                    "50",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
-                )
-            else:
-                # Start journalctl process with follow and unit flags
-                process = await asyncio.create_subprocess_exec(
-                    "journalctl",
-                    "-fu",
-                    service_name,
-                    "--no-pager",
-                    "--no-hostname",
-                    "--output", "short",
-                    "-n",
-                    "50",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
-                )
+            process = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+            )
 
             while True:
                 line = await process.stdout.readline()
