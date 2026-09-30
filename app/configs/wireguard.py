@@ -1,10 +1,20 @@
 """Wireguard configuration management."""
 
+import re
 from configparser import ConfigParser
 from pathlib import Path
 from typing import Any, Dict, List
 
 from app.configs import BaseConfig
+
+# wg-quick(8) executes these keys as shell commands (as root, since wg-quick@.service
+# runs as root) when it brings the interface up or down. A config uploaded through
+# tsconfig must never be allowed to set them - that would be arbitrary root code
+# execution via a "VPN config" upload. Matched case-insensitively at the start of a
+# line (optionally indented), same as wg-quick's own key parsing.
+_HOOK_KEY_PATTERN = re.compile(
+    r"^\s*(PreUp|PostUp|PreDown|PostDown|SaveConfig)\s*=", re.IGNORECASE | re.MULTILINE
+)
 
 
 class WireguardConfig(BaseConfig):
@@ -71,6 +81,19 @@ class WireguardConfig(BaseConfig):
 
         if not content or not content.strip():
             errors.append("Configuration file is empty")
+            return errors
+
+        # Reject wg-quick hook keys before attempting to parse: they run as root
+        # shell commands when the interface is brought up/down, so allowing them
+        # here would be arbitrary root code execution via a config upload. Checked
+        # on the raw text (not the parsed INI) so this can't be bypassed by a
+        # config that's otherwise malformed enough to dodge ConfigParser.
+        hook_match = _HOOK_KEY_PATTERN.search(content)
+        if hook_match:
+            errors.append(
+                f"Configuration must not contain '{hook_match.group(1)}' - "
+                "hook directives (PreUp/PostUp/PreDown/PostDown/SaveConfig) are not allowed"
+            )
             return errors
 
         # Parse as INI file to check structure
