@@ -1,17 +1,11 @@
 """Configuration loader for tsOS main configuration."""
 
 import os
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-
-
-def _bundled_main_config_path() -> Path:
-    """Absolute path to the bundled configs/tsconfig.yml (repository layout)."""
-    return Path(__file__).resolve().parent.parent / "configs" / "tsconfig.yml"
 
 
 def _default_main_config_path() -> Path:
@@ -21,11 +15,6 @@ def _default_main_config_path() -> Path:
     return Path("configs/tsconfig.yml")
 
 
-def _paths_same_file(a: Path, b: Path) -> bool:
-    """True if a and b refer to the same path after expanduser/resolve."""
-    return a.expanduser().resolve() == b.expanduser().resolve()
-
-
 class ConfigLoader:
     """Load and manage the main tsconfig.yml configuration."""
 
@@ -33,27 +22,18 @@ class ConfigLoader:
         self.config_path = config_path or _default_main_config_path()
         self._config_cache: Optional[Dict[str, Any]] = None
 
-    def _ensure_config_file_from_bundle(self) -> None:
-        """If TSCONFIG_CONFIG_FILE is set but missing, seed it from the bundled YAML."""
-        env_raw = os.environ.get("TSCONFIG_CONFIG_FILE", "").strip()
-        if not env_raw:
-            return
-        env_path = Path(env_raw).expanduser()
-        if not _paths_same_file(env_path, self.config_path):
-            return
-        if env_path.exists():
-            return
-        bundled = _bundled_main_config_path()
-        if not bundled.is_file() or _paths_same_file(bundled, env_path):
-            return
-        env_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(bundled, env_path)
-
     def load_config(self) -> Dict[str, Any]:
-        """Load the main configuration file."""
+        """Load the main configuration file.
+
+        In tracker mode this file (/boot/firmware/tsconfig.yml) is installed
+        by the image build and lives on the now root-owned boot partition,
+        so there's no seed-it-if-missing fallback here anymore - this
+        process (running as pi) couldn't write it there even if it wanted
+        to. A missing file just means an empty config, same as any other
+        read error below.
+        """
         if self._config_cache is None:
             try:
-                self._ensure_config_file_from_bundle()
                 if self.config_path.exists():
                     with open(self.config_path, "r") as f:
                         self._config_cache = yaml.safe_load(f) or {}
