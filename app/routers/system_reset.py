@@ -1,6 +1,5 @@
 """System reset endpoints."""
 
-import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -8,13 +7,11 @@ from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
 from app.routers.configs import _apply_config_zip_from_path
-from app.utils.subprocess_async import run_subprocess_async
+from app.utils.privileged import PrivilegedCallError, delete_config, schedule_reboot, wipe_overlay
 
 router = APIRouter(prefix="/api/system-reset", tags=["system-reset"])
 
 DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
-OVERLAY_PATH = Path("/media/root-rw")
-WIREGUARD_CONF = Path("/boot/firmware/wireguard.conf")
 
 
 class SystemResetRequest(BaseModel):
@@ -60,34 +57,24 @@ async def system_reset(request: SystemResetRequest) -> SystemResetResponse:
                 detail=f"Default config zip not found: {DEFAULT_CONFIG_ZIP}",
             )
         try:
-            saved_files, cmdline_updated = _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
+            saved_files, cmdline_updated = await _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
             reset_config_done = True
             if cmdline_updated:
                 reboot_needed = True
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        if WIREGUARD_CONF.exists():
-            try:
-                WIREGUARD_CONF.unlink()
-            except OSError as e:
-                errors.append(f"Failed to remove wireguard.conf: {e}")
+        try:
+            await delete_config("wireguard")
+        except PrivilegedCallError as e:
+            errors.append(f"Failed to remove wireguard.conf: {e}")
 
     if request.wipe_overlay:
-        if not OVERLAY_PATH.exists() or not OVERLAY_PATH.is_dir():
-            raise HTTPException(
-                status_code=500,
-                detail=f"Overlay path does not exist or is not a directory: {OVERLAY_PATH}",
-            )
         try:
-            for item in OVERLAY_PATH.iterdir():
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
+            await wipe_overlay()
             wipe_overlay_done = True
             reboot_needed = True
-        except OSError as e:
+        except PrivilegedCallError as e:
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to wipe overlay: {e}",
@@ -96,14 +83,9 @@ async def system_reset(request: SystemResetRequest) -> SystemResetResponse:
     reboot_initiated = False
     if reboot_needed:
         try:
-            await run_subprocess_async(
-                ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            await schedule_reboot(delay=10)
             reboot_initiated = True
-        except Exception as e:
+        except PrivilegedCallError as e:
             errors.append(f"Failed to schedule reboot: {e}")
 
     message_parts = []
