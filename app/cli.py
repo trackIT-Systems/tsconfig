@@ -1,10 +1,9 @@
 """Command-line interface for tsconfig configuration upload and system reset."""
 
 import argparse
+import asyncio
+import calendar
 import logging
-import os
-import shutil
-import subprocess
 import sys
 import zipfile
 from io import BytesIO
@@ -13,6 +12,7 @@ from typing import Dict, Any, Optional, Tuple
 
 from app.config_loader import config_loader
 from app.logging_config import setup_logging, get_logger
+from app.utils import privileged as priv
 from app.routers.configs import (
     RECOGNIZED_CONFIG_FILES,
     SERVICE_MAPPING,
@@ -22,73 +22,27 @@ from app.routers.configs import (
     parse_config_file,
     get_config_instance,
     truncate_mtime_for_fat32,
-    set_and_verify_file_mtime,
 )
 
 DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
-OVERLAY_PATH = Path("/media/root-rw")
-WIREGUARD_CONF = Path("/boot/firmware/wireguard.conf")
 
 # Logger will be initialized in main() after logging setup
 logger = None
 
 
-def restart_systemd_service_sync(service_name: str) -> Tuple[bool, Optional[str]]:
-    """Restart a systemd service synchronously.
-
-    Args:
-        service_name: Name of the service to restart
-
-    Returns:
-        Tuple of (success, error_message)
-    """
-    try:
-        result = subprocess.run(
-            ["systemctl", "restart", service_name],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else f"Command failed with exit code {result.returncode}"
-            return False, error_msg
-
-        return True, None
-
-    except subprocess.TimeoutExpired:
-        return False, "Service restart timed out"
-    except Exception as e:
-        return False, str(e)
+# restart_systemd_service_sync / schedule_reboot_sync used to shell out to
+# systemctl/systemd-run directly - removed in favor of
+# app.utils.privileged.systemctl_action/schedule_reboot (aliased `priv`),
+# which run as pi directly (systemctl_action, authorized by its own polkit
+# rule) or via pkcheck (schedule_reboot), rather than as root, now that this
+# CLI, like the web/BLE service, runs as pi rather than root. This is also
+# why process_system_reset and process_zip_upload below are now async: the
+# privileged client is asyncio-based (shared with the FastAPI service), and
+# main() runs them via asyncio.run() rather than duplicating a sync
+# HTTP-free codepath.
 
 
-def schedule_reboot_sync() -> Tuple[bool, Optional[str]]:
-    """Schedule a system reboot in 10 seconds synchronously.
-
-    Returns:
-        Tuple of (success, error_message)
-    """
-    try:
-        result = subprocess.run(
-            ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else f"Command failed with exit code {result.returncode}"
-            return False, error_msg
-
-        return True, None
-
-    except subprocess.TimeoutExpired:
-        return False, "Reboot scheduling timed out"
-    except Exception as e:
-        return False, str(e)
-
-
-def process_system_reset(
+async def process_system_reset(
     keep_config: bool = False,
     keep_overlay: bool = False,
 ) -> None:
@@ -112,7 +66,7 @@ def process_system_reset(
         sys.exit(1)
 
     reset_config = not keep_config
-    wipe_overlay = not keep_overlay
+    should_wipe_overlay = not keep_overlay
     reboot_needed = False
 
     if reset_config:
@@ -120,7 +74,7 @@ def process_system_reset(
             log.error(f"Default config zip not found: {DEFAULT_CONFIG_ZIP}")
             sys.exit(1)
         try:
-            saved_files, cmdline_updated = _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
+            saved_files, cmdline_updated = await _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
             log.info(f"Reset config: {', '.join(saved_files)}")
             if cmdline_updated:
                 reboot_needed = True
@@ -128,49 +82,44 @@ def process_system_reset(
             log.error(str(e))
             sys.exit(1)
 
-        if WIREGUARD_CONF.exists():
-            try:
-                WIREGUARD_CONF.unlink()
-                log.info("Removed wireguard.conf")
-            except OSError as e:
-                log.warning(f"Failed to remove wireguard.conf: {e}")
-
-    if wipe_overlay:
-        if not OVERLAY_PATH.exists() or not OVERLAY_PATH.is_dir():
-            log.error(f"Overlay path does not exist or is not a directory: {OVERLAY_PATH}")
-            sys.exit(1)
         try:
-            for item in OVERLAY_PATH.iterdir():
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
+            await priv.delete_config("wireguard")
+            log.info("Removed wireguard.conf")
+        except priv.PrivilegedCallError as e:
+            log.warning(f"Failed to remove wireguard.conf: {e}")
+
+    if should_wipe_overlay:
+        try:
+            await priv.wipe_overlay()
             log.info("Wiped overlay filesystem")
             reboot_needed = True
-        except OSError as e:
+        except priv.PrivilegedCallError as e:
             log.error(f"Failed to wipe overlay: {e}")
             sys.exit(1)
 
     if reboot_needed:
         log.info("Scheduling system reboot...")
-        success, error = schedule_reboot_sync()
-        if success:
+        try:
+            await priv.schedule_reboot(delay=10)
             log.info("Reboot scheduled")
-        else:
-            log.warning(f"Failed to schedule reboot: {error}")
+        except priv.PrivilegedCallError as e:
+            log.warning(f"Failed to schedule reboot: {e}")
 
 
-def process_zip_upload(
+async def process_zip_upload(
     zip_path: Path,
     restart_services: bool = False,
     pedantic: bool = False,
     force: bool = False,
     reboot: str = "allow",
 ) -> Dict[str, Any]:
-    """Process a zip file upload synchronously.
+    """Process a zip file upload.
 
     This function replicates the logic from the upload_config_zip API endpoint
-    but runs synchronously without requiring the API server.
+    for use outside the API server (an admin/operator running `tsconfig zip`
+    from a shell). Saves go through the same privileged path the API uses,
+    so a shell operator gets exactly the same capabilities as the web UI -
+    not more, not less.
 
     Args:
         zip_path: Path to the zip file
@@ -387,17 +336,20 @@ def process_zip_upload(
     for filename in files_to_save:
         try:
             log.debug(f"Saving {filename}...")
-            save_result = config_instances[filename].save(parsed_configs[filename])
-            # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
-            if save_result and isinstance(save_result, dict):
-                save_metadata[filename] = save_result
+            config_type = RECOGNIZED_CONFIG_FILES[filename]
 
             # Set mtime from zip timestamp (regardless of mode)
             zip_timestamp = zip_timestamps.get(filename)
+            mtime_epoch = None
             if zip_timestamp:
                 zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
-                config_file_path = config_instances[filename].config_file
-                set_and_verify_file_mtime(config_file_path, zip_timestamp_truncated)
+                mtime_epoch = calendar.timegm(zip_timestamp_truncated.timetuple())
+
+            priv_result = await priv.write_config(config_type, parsed_configs[filename], mtime=mtime_epoch)
+            save_result = priv_result.get("save_result")
+            # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
+            if save_result and isinstance(save_result, dict):
+                save_metadata[filename] = save_result
 
             saved_files.append(filename)
             log.info(f"Saved {filename}")
@@ -443,7 +395,7 @@ def process_zip_upload(
 
             if service_name:
                 log.debug(f"Restarting service {service_name}...")
-                success, error = restart_systemd_service_sync(service_name)
+                success, error = await priv.systemctl_action(service_name, "restart")
 
                 if success:
                     services_restarted.append(service_name)
@@ -473,19 +425,19 @@ def process_zip_upload(
     elif reboot_lower == "force":
         # Always reboot after successful upload
         log.info("Scheduling system reboot in 10 seconds (forced)...")
-        success, error = schedule_reboot_sync()
-        if success:
+        try:
+            await priv.schedule_reboot(delay=10)
             log.info("System reboot scheduled in 10 seconds (forced)")
-        else:
-            log.warning(f"Failed to schedule reboot: {error}")
+        except priv.PrivilegedCallError as e:
+            log.warning(f"Failed to schedule reboot: {e}")
     elif reboot_lower == "allow" and cmdline_updated:
         # "allow" mode with cmdline.txt updated - automatically reboot
         log.info("cmdline.txt updated - scheduling system reboot in 10 seconds...")
-        success, error = schedule_reboot_sync()
-        if success:
+        try:
+            await priv.schedule_reboot(delay=10)
             log.info("System reboot scheduled in 10 seconds (cmdline.txt updated)")
-        else:
-            log.warning(f"Failed to schedule reboot: {error}")
+        except priv.PrivilegedCallError as e:
+            log.warning(f"Failed to schedule reboot: {e}")
     # else: "allow" mode but cmdline.txt was not updated - no reboot
 
     return {
@@ -629,12 +581,14 @@ def main():
     # Handle commands
     if args.command == "zip":
         try:
-            process_zip_upload(
-                zip_path=args.zip_path,
-                restart_services=args.restart_services,
-                pedantic=args.pedantic,
-                force=args.force,
-                reboot=args.reboot,
+            asyncio.run(
+                process_zip_upload(
+                    zip_path=args.zip_path,
+                    restart_services=args.restart_services,
+                    pedantic=args.pedantic,
+                    force=args.force,
+                    reboot=args.reboot,
+                )
             )
             logger.info("Upload completed successfully")
             sys.exit(0)
@@ -646,9 +600,11 @@ def main():
             sys.exit(1)
     elif args.command == "system-reset":
         try:
-            process_system_reset(
-                keep_config=args.keep_config,
-                keep_overlay=args.keep_overlay,
+            asyncio.run(
+                process_system_reset(
+                    keep_config=args.keep_config,
+                    keep_overlay=args.keep_overlay,
+                )
             )
             sys.exit(0)
         except KeyboardInterrupt:

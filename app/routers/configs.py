@@ -1,10 +1,7 @@
 """Configuration file upload and download endpoints."""
 
-import asyncio
 import calendar
-import os
 import socket
-import subprocess
 import zipfile
 from ast import literal_eval
 from configparser import ConfigParser
@@ -20,7 +17,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config_loader import config_loader
 from app.logging_config import get_logger
-from app.utils.subprocess_async import run_subprocess_async
+from app.utils import privileged as priv
+from app.configs import registry
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.cmdline import CmdlineConfig
 from app.configs.geolocation import GeolocationConfig
@@ -61,69 +59,18 @@ def truncate_mtime_for_fat32(dt: datetime) -> datetime:
         return dt
 
 
-def set_and_verify_file_mtime(file_path: Path, expected_mtime: datetime) -> bool:
-    """Set file mtime, sync to disk, and verify it was persisted.
+# set_and_verify_file_mtime used to os.utime() the target file directly after
+# a direct save() - removed along with the direct save() calls it always
+# accompanied. Its logic (set mtime, os.sync(), verify within FAT32's 2-second
+# tolerance) now lives in app.privileged.ops._set_and_sync_mtime, run as root
+# as part of the same privileged write-config call that does the save.
 
-    FAT32 on /boot/firmware may not persist utime metadata until buffers are flushed.
-    A 2-second tolerance accounts for FAT32's coarse timestamp resolution.
-
-    Args:
-        file_path: Path to the file whose mtime should be set
-        expected_mtime: Expected modification time (naive UTC)
-
-    Returns:
-        True if the on-disk mtime matches expected_mtime within tolerance
-    """
-    timestamp = calendar.timegm(expected_mtime.timetuple())
-    os.utime(file_path, (timestamp, timestamp))
-
-    try:
-        os.sync()
-    except AttributeError:
-        pass
-
-    actual_mtime = datetime.utcfromtimestamp(file_path.stat().st_mtime)
-    diff_seconds = abs((actual_mtime - expected_mtime).total_seconds())
-    if diff_seconds > 2:
-        logger.warning(
-            "File mtime mismatch after sync for %s: expected %s, got %s (diff %.0fs)",
-            file_path,
-            expected_mtime.isoformat(),
-            actual_mtime.isoformat(),
-            diff_seconds,
-        )
-        return False
-
-    return True
-
-
-async def restart_systemd_service(service_name: str) -> tuple[bool, Optional[str]]:
-    """Restart a systemd service.
-
-    Args:
-        service_name: Name of the service to restart
-
-    Returns:
-        Tuple of (success, error_message)
-    """
-    try:
-        result = await run_subprocess_async(
-            ["systemctl", "restart", service_name],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else f"Command failed with exit code {result.returncode}"
-            return False, error_msg
-
-        return True, None
-
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
-        return False, "Service restart timed out"
-    except Exception as e:
-        return False, str(e)
+# restart_systemd_service used to run `systemctl restart <unit>` directly -
+# removed in favor of app.utils.privileged.systemctl_action (aliased `priv`
+# in this file to avoid clashing with the `restart_service: bool` request
+# parameters used throughout), which runs `systemctl restart <unit>` as pi
+# directly, authorized by etc/polkit-1/rules.d/20-tsos-systemctl.rules
+# rather than sudo.
 
 
 def parse_mqttutil_ini(content: str) -> Dict[str, Any]:
@@ -356,25 +303,20 @@ async def handle_service_restart(config_type: str, restart_service: bool) -> Dic
     if config_loader.is_server_mode():
         result["service_restart_error"] = "Service restart is not available in server mode"
         return result
-    
-    service_mapping = {
-        "radiotracking": "radiotracking",
-        "schedule": "tsschedule",
-        "soundscapepipe": "soundscapepipe",
-        "tsupdate": "tsupdate",
-        "mqttutil": "mqttutil",
-    }
-    
-    service_name = service_mapping.get(config_type)
+
+    # registry.SERVICE_MAPPING is the single source of truth for this (also
+    # used by the zip-upload path below) - it previously duplicated a subset
+    # of it here, missing wireguard/mosquitto_cert/mosquitto_conf.
+    service_name = registry.SERVICE_MAPPING.get(config_type)
     if not service_name:
         result["service_restart_error"] = f"No service mapping for config type: {config_type}"
         return result
-    
-    success, error = await restart_systemd_service(service_name)
+
+    success, error = await priv.systemctl_action(service_name, "restart")
     result["service_restarted"] = success
     if error:
         result["service_restart_error"] = error
-    
+
     return result
 
 
@@ -594,18 +536,23 @@ async def upload_config(
                     config_path=str(config_instance.config_file),
                 )
 
-    # Save configuration
+    # Save configuration via the privileged op (validate()+save()+mtime as one
+    # atomic root operation) - this process can no longer write
+    # config_instance.config_file directly once /boot/firmware is root-owned.
+    # No server-mode branch needed: this endpoint already rejects server mode
+    # with a 403 above, so by this point we're always in tracker mode.
     save_metadata = {}
+    upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
     try:
-        save_result = config_instance.save(parsed_config)
+        mtime_epoch = calendar.timegm(upload_mtime_truncated.timetuple())
+        priv_result = await priv.write_config(config_type, parsed_config, mtime=mtime_epoch)
+        save_result = priv_result.get("save_result")
         # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
         if save_result and isinstance(save_result, dict):
             save_metadata = save_result
-        
-        # Set file mtime from uploaded mtime
-        upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
-        set_and_verify_file_mtime(config_instance.config_file, upload_mtime_truncated)
-            
+
+    except priv.PrivilegedCallError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
 
@@ -645,13 +592,7 @@ async def upload_config(
         response_data["reboot_initiated"] = False
         response_data["reboot_delay_seconds"] = 10
         try:
-            # Use systemd-run to schedule reboot in 10 seconds
-            await run_subprocess_async(
-                ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            await priv.schedule_reboot(delay=10)
             response_data["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt requires reboot)"
             response_data["reboot_initiated"] = True
         except Exception as e:
@@ -672,31 +613,12 @@ async def upload_config(
 
 
 # Recognized configuration files
-RECOGNIZED_CONFIG_FILES = {
-    "radiotracking.ini": "radiotracking",
-    "schedule.yml": "schedule",
-    "soundscapepipe.yml": "soundscapepipe",
-    "authorized_keys": "authorized_keys",
-    "cmdline.txt": "cmdline",
-    "wireguard.conf": "wireguard",
-    "server.crt": "mosquitto_cert",
-    "server.conf": "mosquitto_conf",
-    "geolocation": "geolocation",
-    "tsupdate.yml": "tsupdate",
-    "mqttutil.conf": "mqttutil",
-}
-
-# Service mapping for restart
-SERVICE_MAPPING = {
-    "radiotracking": "radiotracking",
-    "schedule": "tsschedule",
-    "soundscapepipe": "soundscapepipe",
-    "wireguard": "wg-quick@wireguard",
-    "mosquitto_cert": "mosquitto",
-    "mosquitto_conf": "mosquitto",
-    "tsupdate": "tsupdate",
-    "mqttutil": "mqttutil",
-}
+# Moved to app.configs.registry, which is the single source of truth shared
+# with the privileged CLI ops (app.privileged). Re-exported here so existing
+# imports of app.routers.configs.RECOGNIZED_CONFIG_FILES / SERVICE_MAPPING
+# keep working.
+RECOGNIZED_CONFIG_FILES = registry.RECOGNIZED_CONFIG_FILES
+SERVICE_MAPPING = registry.SERVICE_MAPPING
 
 
 def get_config_instance(config_type: str, is_config_upload: bool = False):
@@ -705,35 +627,17 @@ def get_config_instance(config_type: str, is_config_upload: bool = False):
     Args:
         config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys,
                      cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
-        is_config_upload: Whether this is for config upload (affects authorized_keys behavior)
+        is_config_upload: Whether this is for config upload (affects authorized_keys behavior).
+            Only meaningful for "authorized_keys": True targets the boot-partition upload
+            file (privileged write required), False targets /home/pi/.ssh/authorized_keys
+            (pi-owned, no privilege needed).
 
     Returns:
         Config instance for the specified type
     """
-    if config_type == "radiotracking":
-        return RadioTrackingConfig()
-    elif config_type == "schedule":
-        return ScheduleConfig()
-    elif config_type == "soundscapepipe":
-        return SoundscapepipeConfig()
-    elif config_type == "authorized_keys":
+    if config_type == "authorized_keys":
         return AuthorizedKeysConfig(is_config_upload=is_config_upload)
-    elif config_type == "cmdline":
-        return CmdlineConfig()
-    elif config_type == "wireguard":
-        return WireguardConfig()
-    elif config_type == "mosquitto_cert":
-        return MosquittoCertConfig()
-    elif config_type == "mosquitto_conf":
-        return MosquittoConfConfig()
-    elif config_type == "geolocation":
-        return GeolocationConfig()
-    elif config_type == "tsupdate":
-        return TsupdateConfig()
-    elif config_type == "mqttutil":
-        return MqttUtilConfig()
-    else:
-        raise ValueError(f"Unknown config type: {config_type}")
+    return registry.get_privileged_config_instance(config_type)
 
 
 def extract_zip_file_timestamps(zip_buffer: BytesIO) -> Dict[str, datetime]:
@@ -866,14 +770,18 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
         raise ValueError(f"Unsupported file type: {filename}")
 
 
-def _apply_config_zip_from_path(
+async def _apply_config_zip_from_path(
     zip_path: Path,
     force: bool = True,
 ) -> Tuple[List[str], bool]:
     """Apply configuration files from a local zip file.
 
     Used by system reset to reset config from tsos-default-name_config.zip.
-    Does not restart services or reboot.
+    Does not restart services or reboot. Always targets the boot partition
+    (is_config_upload=True) and is only ever called in tracker mode (both
+    callers check config_loader.is_server_mode() first), so every save here
+    goes through the privileged op unconditionally - unlike the single-file
+    upload endpoint above, there's no server-mode direct-save branch needed.
 
     Args:
         zip_path: Path to the zip file
@@ -946,12 +854,16 @@ def _apply_config_zip_from_path(
 
     saved_files = []
     for filename in files_to_save:
-        config_instances[filename].save(parsed_configs[filename])
+        config_type = RECOGNIZED_CONFIG_FILES[filename]
         zip_timestamp = zip_timestamps.get(filename)
+        mtime_epoch = None
         if zip_timestamp:
             zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
-            config_file_path = config_instances[filename].config_file
-            set_and_verify_file_mtime(config_file_path, zip_timestamp_truncated)
+            mtime_epoch = calendar.timegm(zip_timestamp_truncated.timetuple())
+        try:
+            await priv.write_config(config_type, parsed_configs[filename], mtime=mtime_epoch)
+        except priv.PrivilegedCallError as e:
+            raise ValueError(f"Failed to save {filename}: {e}")
         saved_files.append(filename)
 
     cmdline_updated = "cmdline.txt" in saved_files
@@ -1209,19 +1121,24 @@ async def upload_config_zip(
 
     for filename in files_to_save:
         try:
-            save_result = config_instances[filename].save(parsed_configs[filename])
-            # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
-            if save_result and isinstance(save_result, dict):
-                save_metadata[filename] = save_result
-            
+            config_type = RECOGNIZED_CONFIG_FILES[filename]
             # Set mtime from zip timestamp (regardless of mode)
             # This matches the behavior in /api/config/update where uploaded mtime is always preserved
             zip_timestamp = zip_timestamps.get(filename)
+            mtime_epoch = None
             if zip_timestamp:
                 zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
-                config_file_path = config_instances[filename].config_file
-                set_and_verify_file_mtime(config_file_path, zip_timestamp_truncated)
-            
+                mtime_epoch = calendar.timegm(zip_timestamp_truncated.timetuple())
+
+            # This endpoint rejects server mode above, so every save here
+            # always targets the boot partition and always goes through the
+            # privileged op.
+            priv_result = await priv.write_config(config_type, parsed_configs[filename], mtime=mtime_epoch)
+            save_result = priv_result.get("save_result")
+            # Capture metadata if save() returns any (e.g., hostname changes for cmdline)
+            if save_result and isinstance(save_result, dict):
+                save_metadata[filename] = save_result
+
             saved_files.append(filename)
         except Exception as e:
             save_errors[filename] = str(e)
@@ -1275,7 +1192,7 @@ async def upload_config_zip(
                 service_name = SERVICE_MAPPING.get(config_type)
 
                 if service_name:
-                    success, error = await restart_systemd_service(service_name)
+                    success, error = await priv.systemctl_action(service_name, "restart")
 
                     if success:
                         response["services_restarted"].append(service_name)
@@ -1310,13 +1227,7 @@ async def upload_config_zip(
             response["reboot_initiated"] = False
         else:
             try:
-                # Use systemd-run to schedule reboot in 10 seconds
-                await run_subprocess_async(
-                    ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                await priv.schedule_reboot(delay=10)
                 response["message"] += ". System reboot scheduled in 10 seconds (forced)"
                 response["reboot_initiated"] = True
             except Exception as e:
@@ -1332,13 +1243,7 @@ async def upload_config_zip(
             response["reboot_initiated"] = False
         else:
             try:
-                # Use systemd-run to schedule reboot in 10 seconds
-                subprocess.run(
-                    ["systemd-run", "--on-active=10s", "systemctl", "reboot"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                await priv.schedule_reboot(delay=10)
                 response["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt updated)"
                 response["reboot_initiated"] = True
             except Exception as e:
