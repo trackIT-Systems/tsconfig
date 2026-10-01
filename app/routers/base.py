@@ -114,14 +114,9 @@ class BaseConfigRouter:
                     if old_latest_dir and old_latest_dir.exists():
                         import shutil
 
-                        config_files = [
-                            "radiotracking.ini",
-                            "schedule.yml",
-                            "soundscapepipe.yml",
-                            "authorized_keys",
-                            "mqttutil.conf",
-                        ]
-                        for config_file in config_files:
+                        from app.config_loader import VERSIONED_CONFIG_FILES
+
+                        for config_file in VERSIONED_CONFIG_FILES:
                             old_file = old_latest_dir / config_file
                             if old_file.exists():
                                 try:

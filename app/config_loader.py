@@ -8,6 +8,23 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 
+# Files copied forward into a new versioned config-group directory (server
+# mode) when any one of them is edited - a deliberate subset of
+# app.configs.registry.CONFIG_TYPES's basenames, not all of them (e.g.
+# cmdline.txt/wireguard.conf/geolocation are excluded). Single source of
+# truth for app.routers.base.BaseConfigRouter and app.routers.authorized_keys
+# - keeping one list means a type missing from it can't silently be dropped
+# from a config group whenever some other type in the group is saved.
+VERSIONED_CONFIG_FILES: List[str] = [
+    "radiotracking.ini",
+    "schedule.yml",
+    "soundscapepipe.yml",
+    "authorized_keys",
+    "mqttutil.conf",
+    "userconf.txt",
+]
+
+
 def _default_main_config_path() -> Path:
     env_path = os.environ.get("TSCONFIG_CONFIG_FILE", "").strip()
     if env_path:

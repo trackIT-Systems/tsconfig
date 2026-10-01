@@ -29,6 +29,7 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.configs.tsupdate import TsupdateConfig
+from app.configs.userconf import UserconfConfig
 from app.configs.wireguard import WireguardConfig
 
 # config_type -> (config_file basename, config class, extra __init__ kwargs)
@@ -47,6 +48,7 @@ CONFIG_TYPES: Dict[str, Dict[str, Any]] = {
     "geolocation": {"basename": "geolocation", "cls": GeolocationConfig, "kwargs": {}},
     "tsupdate": {"basename": "tsupdate.yml", "cls": TsupdateConfig, "kwargs": {}},
     "mqttutil": {"basename": "mqttutil.conf", "cls": MqttUtilConfig, "kwargs": {}},
+    "userconf": {"basename": "userconf.txt", "cls": UserconfConfig, "kwargs": {}},
 }
 
 # Zip/upload file basename -> config type name (unchanged mapping, moved here

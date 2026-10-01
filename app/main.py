@@ -41,6 +41,7 @@ from app.routers import (
     system_reset,
     tsupdate,
     mqttutil,
+    userconf,
 )
 from app.utils.subprocess_async import run_subprocess_async
 
@@ -102,6 +103,10 @@ tags_metadata = [
         "name": "mqttutil",
         "description": "MQTT system health reporting configuration (mqttutil.conf).",
     },
+    {
+        "name": "userconf",
+        "description": "pi account password (userconf.txt), applied by userconfig.service on next boot.",
+    },
 ]
 
 app = FastAPI(
@@ -158,6 +163,7 @@ app.include_router(authorized_keys.router)
 app.include_router(configs.router)
 app.include_router(tsupdate.router)
 app.include_router(mqttutil.router)
+app.include_router(userconf.router)
 app.include_router(deployment.router)  # Deployment proxy (for server mode)
 
 # Only include system-specific routers in tracker mode (default mode)

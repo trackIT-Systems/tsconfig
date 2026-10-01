@@ -1,4 +1,4 @@
-<!-- System Settings (Schedule + SSH Keys) -->
+<!-- System Settings (Schedule + Access) -->
 <div x-show="activeConfig === 'settings'" x-cloak x-data="{ 
     systemTab: 'schedule',
     
@@ -94,7 +94,7 @@
                             @click="systemTab = 'sshkeys'"
                             type="button">
                         <i class="fas fa-key me-1"></i>
-                        SSH Keys
+                        Access
                     </button>
                 </li>
                 <li class="nav-item" :class="{ 'ms-auto': expertMode && !serverMode }" role="presentation" x-show="expertMode && !serverMode">
@@ -556,7 +556,7 @@
                     </div>
                 </div>
 
-                <!-- SSH Keys Tab -->
+                <!-- Access Tab (SSH keys + operator account password) -->
                 <div x-show="systemTab === 'sshkeys' && expertMode">
                     <div class="card" x-data="sshKeysConfig()" x-init="init()" x-destroy="cleanup()">
                         <div class="card-header d-flex justify-content-between align-items-center">
@@ -830,6 +830,95 @@
                             </div>
 
                             <!-- Toast notifications appear in top-right corner -->
+                        </div>
+                    </div>
+
+                    <!-- pi account password -->
+                    <div class="card mt-3" x-data="userconfConfig()">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-user-lock me-2"></i>
+                                Operator Account Password
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">
+                                <span x-show="!serverMode">Takes effect on next reboot.</span>
+                                <span x-show="serverMode">Saved to this config group, for deployment to a device.</span>
+                            </p>
+
+                            <div class="btn-group mb-3" role="group">
+                                <input type="radio" class="btn-check" id="userconf-mode-password" value="password" x-model="inputMode">
+                                <label class="btn btn-outline-secondary btn-sm" for="userconf-mode-password">Password</label>
+
+                                <input type="radio" class="btn-check" id="userconf-mode-hash" value="hash" x-model="inputMode">
+                                <label class="btn btn-outline-secondary btn-sm" for="userconf-mode-hash">Pre-hashed userconf.txt</label>
+                            </div>
+
+                            <!-- Plaintext password (hashed server-side via openssl passwd -6) -->
+                            <div x-show="inputMode === 'password'">
+                                <div class="row g-2">
+                                    <div class="col-md-5">
+                                        <input type="password"
+                                               class="form-control"
+                                               x-model="password"
+                                               placeholder="New password"
+                                               autocomplete="new-password"
+                                               @keydown.enter="setPassword()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="password"
+                                               class="form-control"
+                                               x-model="passwordConfirm"
+                                               placeholder="Confirm password"
+                                               autocomplete="new-password"
+                                               @keydown.enter="setPassword()">
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-start">
+                                        <button type="button"
+                                                class="btn btn-primary w-100"
+                                                @click="setPassword()"
+                                                :disabled="!password || loading">
+                                            <template x-if="!loading">
+                                                <span><i class="fas fa-key me-1"></i>Set Password</span>
+                                            </template>
+                                            <template x-if="loading">
+                                                <span><i class="fas fa-spinner fa-spin me-1"></i>Saving...</span>
+                                            </template>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- A userconf.txt line already hashed elsewhere (e.g. openssl passwd -6 on another machine) -->
+                            <div x-show="inputMode === 'hash'">
+                                <div class="row g-2">
+                                    <div class="col-md-9">
+                                        <input type="text"
+                                               class="form-control font-monospace"
+                                               x-model="content"
+                                               placeholder="pi:$6$..."
+                                               @keydown.enter="setPassword()">
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-start">
+                                        <button type="button"
+                                                class="btn btn-primary w-100"
+                                                @click="setPassword()"
+                                                :disabled="!content.trim() || loading">
+                                            <template x-if="!loading">
+                                                <span><i class="fas fa-key me-1"></i>Set Password</span>
+                                            </template>
+                                            <template x-if="loading">
+                                                <span><i class="fas fa-spinner fa-spin me-1"></i>Saving...</span>
+                                            </template>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-text">
+                                    Generate with <code>openssl passwd -6</code> and paste the resulting
+                                    <code>pi:$6$...</code> line.
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

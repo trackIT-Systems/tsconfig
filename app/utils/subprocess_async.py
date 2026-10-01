@@ -11,22 +11,26 @@ async def run_subprocess_async(
     text: bool = True,
     timeout: Optional[float] = None,
     check: bool = False,
+    input_data: Optional[bytes] = None,
 ) -> subprocess.CompletedProcess:
     """Run a subprocess asynchronously without blocking the event loop.
-    
+
     This function provides the same interface as subprocess.run() but executes
     asynchronously, allowing other coroutines to run concurrently.
-    
+
     Args:
         cmd: Command to run as a list of strings
         capture_output: If True, capture stdout and stderr
         text: If True, decode stdout/stderr as text (default encoding)
         timeout: Maximum time in seconds to wait for the process
         check: If True, raise CalledProcessError on non-zero exit code
-        
+        input_data: Optional bytes written to the process's stdin - e.g. for
+            piping a secret in rather than passing it as a command-line
+            argument, where it would be visible via `ps`
+
     Returns:
         CompletedProcess instance with returncode, stdout, stderr attributes
-        
+
     Raises:
         subprocess.CalledProcessError: If check=True and process returns non-zero
         asyncio.TimeoutError: If timeout is exceeded
@@ -39,20 +43,21 @@ async def run_subprocess_async(
     else:
         stdout = None
         stderr = None
-    
+
     try:
         # Create subprocess asynchronously
         process = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE if input_data is not None else None,
             stdout=stdout,
             stderr=stderr,
         )
-        
+
         # Wait for process to complete with optional timeout
         if timeout is not None:
             try:
                 stdout_data, stderr_data = await asyncio.wait_for(
-                    process.communicate(),
+                    process.communicate(input=input_data),
                     timeout=timeout
                 )
             except asyncio.TimeoutError:
@@ -61,7 +66,7 @@ async def run_subprocess_async(
                 await process.wait()
                 raise subprocess.TimeoutExpired(cmd, timeout)
         else:
-            stdout_data, stderr_data = await process.communicate()
+            stdout_data, stderr_data = await process.communicate(input=input_data)
         
         # Get return code
         returncode = await process.wait()

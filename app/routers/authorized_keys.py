@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.config_loader import config_loader
+from app.config_loader import VERSIONED_CONFIG_FILES, config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
 
 router = APIRouter(prefix="/api/authorized-keys", tags=["authorized_keys"])
@@ -117,8 +117,7 @@ async def add_authorized_key(key_data: SSHKeyAdd, config_group: Optional[str] = 
 
             # Copy all config files from previous version
             if old_latest_dir and old_latest_dir.exists():
-                config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml", "authorized_keys"]
-                for config_file in config_files:
+                for config_file in VERSIONED_CONFIG_FILES:
                     old_file = old_latest_dir / config_file
                     if old_file.exists():
                         new_file = versioned_dir / config_file
@@ -184,8 +183,7 @@ async def remove_authorized_key(key_index: int, config_group: Optional[str] = Qu
 
             # Copy all config files from previous version
             if old_latest_dir and old_latest_dir.exists():
-                config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml", "authorized_keys"]
-                for config_file in config_files:
+                for config_file in VERSIONED_CONFIG_FILES:
                     old_file = old_latest_dir / config_file
                     if old_file.exists():
                         new_file = versioned_dir / config_file
@@ -274,8 +272,7 @@ async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: Optional[
 
             # Copy all config files from previous version
             if old_latest_dir and old_latest_dir.exists():
-                config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml", "authorized_keys"]
-                for config_file in config_files:
+                for config_file in VERSIONED_CONFIG_FILES:
                     old_file = old_latest_dir / config_file
                     if old_file.exists():
                         new_file = versioned_dir / config_file
@@ -472,8 +469,7 @@ async def import_ssh_keys_from_platform(
                     
                     # Copy all config files from previous version
                     if old_latest_dir and old_latest_dir.exists():
-                        config_files = ["radiotracking.ini", "schedule.yml", "soundscapepipe.yml", "authorized_keys"]
-                        for config_file in config_files:
+                        for config_file in VERSIONED_CONFIG_FILES:
                             old_file = old_latest_dir / config_file
                             if old_file.exists():
                                 new_file = versioned_dir / config_file
