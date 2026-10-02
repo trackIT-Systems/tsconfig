@@ -8,7 +8,7 @@ as pi in the first place.
 
 from unittest.mock import patch
 
-from app.routers.shell import PtyProcess, get_user_shell
+from app.routers.shell import PtyProcess, get_user_home, get_user_shell
 
 
 class TestPtyProcessCommand:
@@ -37,7 +37,38 @@ class TestPtyProcessStart:
         standard way to signal a login shell), and must never touch `su`.
         """
         process = PtyProcess(command="/bin/zsh")
-        with patch("pty.fork", return_value=(0, 5)), patch("os.execv") as mock_execv:
+        with patch("pty.fork", return_value=(0, 5)), patch("os.chdir"), patch("os.execv") as mock_execv:
+            process.start()
+        mock_execv.assert_called_once_with("/bin/zsh", ["-zsh"])
+
+    def test_child_starts_in_the_users_home_directory(self):
+        """The shell must start in the user's home, not in the service's
+        working directory (the tsconfig source tree), and chdir must happen
+        before the shell is exec'd."""
+        calls = []
+        process = PtyProcess(command="/bin/zsh")
+        with patch("app.routers.shell.get_user_home", return_value="/home/pi"), patch(
+            "pty.fork", return_value=(0, 5)
+        ), patch("os.chdir", side_effect=lambda path: calls.append(("chdir", path))), patch(
+            "os.execv", side_effect=lambda *a: calls.append(("execv", a))
+        ):
+            process.start()
+        assert calls == [("chdir", "/home/pi"), ("execv", ("/bin/zsh", ["-zsh"]))]
+
+    def test_home_directory_is_resolved_in_the_parent_before_forking(self):
+        order = []
+        process = PtyProcess(command="/bin/zsh")
+        with patch("app.routers.shell.get_user_home", side_effect=lambda: order.append("home") or "/home/pi"), patch(
+            "pty.fork", side_effect=lambda: order.append("fork") or (1234, 5)
+        ):
+            process.start()
+        assert order == ["home", "fork"]
+
+    def test_unusable_home_does_not_prevent_the_shell_from_starting(self):
+        process = PtyProcess(command="/bin/zsh")
+        with patch("app.routers.shell.get_user_home", return_value="/nonexistent"), patch(
+            "pty.fork", return_value=(0, 5)
+        ), patch("os.chdir", side_effect=OSError("gone")), patch("os.execv") as mock_execv:
             process.start()
         mock_execv.assert_called_once_with("/bin/zsh", ["-zsh"])
 
@@ -61,3 +92,19 @@ class TestGetUserShell:
             "os.path.isfile", return_value=True
         ):
             assert get_user_shell() == "/bin/bash"
+
+
+class TestGetUserHome:
+    def test_returns_the_passwd_home_of_the_current_user(self, tmp_path):
+        entry = type("Entry", (), {"pw_dir": str(tmp_path)})()
+        with patch("pwd.getpwuid", return_value=entry):
+            assert get_user_home() == str(tmp_path)
+
+    def test_falls_back_to_root_if_the_home_does_not_exist(self):
+        entry = type("Entry", (), {"pw_dir": "/definitely/not/a/directory"})()
+        with patch("pwd.getpwuid", return_value=entry):
+            assert get_user_home() == "/"
+
+    def test_falls_back_to_root_if_the_user_is_unknown(self):
+        with patch("pwd.getpwuid", side_effect=KeyError("no such uid")):
+            assert get_user_home() == "/"

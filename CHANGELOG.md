@@ -22,6 +22,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Changed
 
+- The web shell now starts in the home directory of the user the service runs as (was the tsconfig source directory)
 - BLE error responses for missing authorization are now `{"error": "Authentication required", "code": 401}` (was `Pairing required` / 403)
 - Consistent log-level policy (documented in README): INFO is limited to one-off events. HTTP access logs and httpx/httpcore client logs are now DEBUG-only (override with `ACCESS_LOG_LEVEL`); per-request token/auth INFO messages and BLE write messages moved to DEBUG; stray `print()` calls in the network and soundscapepipe routers now use the logger
 - Restrict 'maintenance' schedule entries to fixed clock times (HH:MM) and disable astronomical relative references

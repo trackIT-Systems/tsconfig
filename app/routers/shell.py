@@ -42,6 +42,18 @@ def get_user_shell() -> str:
         return "/bin/bash"
 
 
+def get_user_home() -> str:
+    """Get the home directory of the user the service runs as (the shell's
+    starting directory). Falls back to "/" if it cannot be determined."""
+    try:
+        home = pwd.getpwuid(os.getuid()).pw_dir
+        if home and os.path.isdir(home):
+            return home
+    except Exception as e:
+        logger.warning(f"Failed to detect the user's home directory: {e}")
+    return "/"
+
+
 class PtyProcess:
     """Manages a pseudo-terminal process for interactive shell sessions."""
 
@@ -67,13 +79,23 @@ class PtyProcess:
     def start(self):
         """Start the pty process."""
         try:
+            # Resolved before forking so the child only has to chdir and exec.
+            # The service's own working directory is the tsconfig source tree,
+            # which is not where an operator expects a shell to start.
+            home = get_user_home()
+
             # Create a pseudo-terminal pair
             self.pid, self.fd = pty.fork()
 
             if self.pid == 0:
-                # Child process - exec our own shell as a login shell
-                # (leading "-" in argv[0] is the traditional way to signal
-                # that to the shell, same as what `su -l`/`login` do).
+                # Child process - start in the user's home directory, then exec
+                # our own shell as a login shell (leading "-" in argv[0] is the
+                # traditional way to signal that to the shell, same as what
+                # `su -l`/`login` do).
+                try:
+                    os.chdir(home)
+                except OSError:
+                    pass  # keep the inherited directory rather than fail to start a shell
                 shell_path = self.command
                 argv0 = "-" + os.path.basename(shell_path)
                 os.execv(shell_path, [argv0])
