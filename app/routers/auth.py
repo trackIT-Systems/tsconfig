@@ -384,7 +384,7 @@ async def refresh_token(
                 detail=f"Access denied: {error_msg}",
             )
 
-        logger.info(f"Successfully refreshed token for user: {user_info.get('email')}")
+        logger.debug(f"Successfully refreshed token for user: {user_info.get('email')}")
 
         # Prepare response with updated cookies
         response = JSONResponse(content={"success": True, "user": user_info})

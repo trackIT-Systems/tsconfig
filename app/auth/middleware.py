@@ -376,7 +376,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                                     max_age=30 * 24 * 60 * 60,
                                 )
                                 
-                                logger.info(f"Successfully refreshed token for user: {user_info.get('email')}")
+                                logger.debug(f"Successfully refreshed token for user: {user_info.get('email')}")
                                 return response
                             else:
                                 logger.warning(f"User authorization failed after token refresh: {error_msg}")

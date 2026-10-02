@@ -154,7 +154,7 @@ class OIDCHandler:
 
             token_response = response.json()
 
-        logger.info("Successfully exchanged authorization code for tokens")
+        logger.debug("Successfully exchanged authorization code for tokens")
         return token_response
 
     async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
@@ -201,7 +201,7 @@ class OIDCHandler:
 
             token_response = response.json()
 
-        logger.info("Successfully refreshed access token")
+        logger.debug("Successfully refreshed access token")
         return token_response
 
     async def _get_jwks(self) -> Dict[str, Any]:
@@ -317,7 +317,7 @@ class OIDCHandler:
         # Check if user is in any of the required groups
         for group in user_groups:
             if group in required_groups:
-                logger.info(f"User authorized via group: {group}")
+                logger.debug(f"User authorized via group: {group}")
                 return True, None
 
         return False, f"User is not in any required groups. Required: {required_groups}, User has: {user_groups}"

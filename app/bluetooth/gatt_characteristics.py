@@ -438,7 +438,7 @@ class WriteOnlyCharacteristic(Characteristic):
 
             if parsed_data is not None:
                 # Successfully parsed - process the request
-                logger.info(f"Successfully parsed {len(self.write_buffer)} bytes of JSON for {self.uuid}")
+                logger.debug(f"Successfully parsed {len(self.write_buffer)} bytes of JSON for {self.uuid}")
                 self.write_buffer.clear()
                 self._process_write_data(parsed_data)
             else:
