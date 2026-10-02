@@ -13,16 +13,15 @@ from app import __version__
 from app.auth.dependencies import get_current_user, get_optional_user
 from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
 from app.auth.session import (
-    SESSION_COOKIE,
-    SESSION_TTL_SECONDS,
     client_source,
-    create_session_token,
+    delete_session_cookies,
     has_valid_session,
     is_trusted_local,
     login_retry_after,
     record_login_failure,
     record_login_success,
     sanitize_next,
+    set_session_cookie,
 )
 from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
@@ -161,14 +160,7 @@ async def operator_login(
     record_login_success(source, username)
     logger.info(f"Logged in as {username!r} from {source}")
     response = RedirectResponse(url=f"{_base_url()}{next_path}", status_code=303)
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=create_session_token(),
-        httponly=True,
-        samesite="lax",
-        path="/",
-        max_age=SESSION_TTL_SECONDS,
-    )
+    set_session_cookie(response, request)
     return response
 
 
@@ -439,7 +431,7 @@ async def logout(
     # Tracker mode: just drop the operator session
     if not config_loader.is_server_mode():
         response = RedirectResponse(url=f"{_base_url()}/auth/login", status_code=303)
-        response.delete_cookie(key=SESSION_COOKIE, path="/", samesite="lax")
+        delete_session_cookies(response)
         return response
 
     # Get base URL

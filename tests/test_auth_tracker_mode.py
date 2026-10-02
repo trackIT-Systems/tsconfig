@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.auth import session
 from app.auth.middleware import AuthenticationMiddleware
-from app.auth.session import SESSION_COOKIE, create_session_token, is_authorized
+from app.auth.session import SECURE_SESSION_COOKIE, SESSION_COOKIE, create_session_token, is_authorized
 from app.config_loader import config_loader
 from app.auth import middleware as auth_middleware
 from app.routers import auth as auth_router
@@ -378,6 +378,46 @@ class TestLogin:
         assert r.status_code == 303
         assert r.headers["location"] == "/auth/login"
         assert SESSION_COOKIE in r.headers["set-cookie"]
+
+
+class TestHttpsSession:
+    """Over HTTPS (Caddy's X-Forwarded-Proto) the session uses a Secure __Host- cookie."""
+
+    @pytest.fixture
+    def https(self):
+        return TestClient(make_app(), follow_redirects=False, headers={**REMOTE, "X-Forwarded-Proto": "https"})
+
+    def login(self, client):
+        with patch.object(auth_router, "authenticate_operator", AsyncMock(return_value=True)):
+            return client.post("/auth/login", data={"password": "natur"})
+
+    def test_https_login_sets_a_secure_host_cookie(self, https):
+        cookie = self.login(https).headers["set-cookie"]
+        assert cookie.startswith(f"{SECURE_SESSION_COOKIE}=")
+        assert "secure" in cookie.lower() and "httponly" in cookie.lower()
+        assert "domain" not in cookie.lower()
+
+    def test_http_login_keeps_the_plain_cookie(self, remote):
+        cookie = self.login(remote).headers["set-cookie"]
+        assert cookie.startswith(f"{SESSION_COOKIE}=") and "secure" not in cookie.lower()
+
+    def test_secure_cookie_opens_the_gate(self, https):
+        token = create_session_token()
+        assert https.get("/api/secret", cookies={SECURE_SESSION_COOKIE: token}).status_code == 200
+
+    def test_plain_cookie_still_works_over_https(self, https):
+        assert https.get("/api/secret", cookies=session_cookie()).status_code == 200
+
+    def test_sliding_refresh_over_https_issues_the_secure_cookie(self, https):
+        old = create_session_token(now=__import__("time").time() - session.SESSION_REFRESH_AFTER_SECONDS - 60)
+        r = https.get("/api/secret", cookies={SESSION_COOKIE: old})
+        assert r.headers["set-cookie"].startswith(f"{SECURE_SESSION_COOKIE}=")
+
+    def test_logout_clears_both_cookies(self, https):
+        r = https.get("/auth/logout", cookies=session_cookie())
+        cookies = r.headers.get_list("set-cookie")
+        assert any(c.startswith(f"{SESSION_COOKIE}=") for c in cookies)
+        assert any(c.startswith(f"{SECURE_SESSION_COOKIE}=") and "secure" in c.lower() for c in cookies)
 
 
 class TestWebsocket:

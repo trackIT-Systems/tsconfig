@@ -19,8 +19,14 @@ from typing import Dict, Optional, Tuple
 from urllib.parse import unquote
 
 from starlette.requests import HTTPConnection
+from starlette.responses import Response
 
 SESSION_COOKIE = "tsconfig_session"
+# Issued instead of SESSION_COOKIE when the login arrived over HTTPS. `Secure`
+# keeps the browser from ever sending it over plain HTTP (which stays
+# available), and the __Host- prefix keeps a plain-HTTP response from setting
+# or overwriting it.
+SECURE_SESSION_COOKIE = "__Host-tsconfig_session"
 SESSION_TTL_SECONDS = 8 * 60 * 60
 # The cookie is re-issued (sliding expiry) when it is older than this.
 SESSION_REFRESH_AFTER_SECONDS = 5 * 60
@@ -86,7 +92,36 @@ def is_trusted_local(conn: HTTPConnection) -> bool:
 
 
 def has_valid_session(conn: HTTPConnection) -> Optional[int]:
-    return verify_session_token(conn.cookies.get(SESSION_COOKIE))
+    for name in (SECURE_SESSION_COOKIE, SESSION_COOKIE):
+        issued = verify_session_token(conn.cookies.get(name))
+        if issued is not None:
+            return issued
+    return None
+
+
+def is_https(conn: HTTPConnection) -> bool:
+    """Whether the client reached Caddy over HTTPS (Caddy sets X-Forwarded-Proto)."""
+    return conn.headers.get("x-forwarded-proto", "").lower() == "https"
+
+
+def set_session_cookie(response: Response, conn: HTTPConnection) -> None:
+    """Issue a fresh session cookie, the Secure one if the request came over HTTPS."""
+    secure = is_https(conn)
+    response.set_cookie(
+        key=SECURE_SESSION_COOKIE if secure else SESSION_COOKIE,
+        value=create_session_token(),
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+        max_age=SESSION_TTL_SECONDS,
+    )
+
+
+def delete_session_cookies(response: Response) -> None:
+    response.delete_cookie(key=SESSION_COOKIE, path="/", samesite="lax")
+    # Browsers only honour this over HTTPS; over HTTP the Secure cookie is never sent anyway.
+    response.delete_cookie(key=SECURE_SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
 
 
 def is_authorized(conn: HTTPConnection) -> bool:

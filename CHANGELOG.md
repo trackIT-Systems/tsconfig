@@ -15,6 +15,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - New `GET /auth/check` for the reverse proxy's `forward_auth`, used to protect Filebrowser (`/data`). For WebDAV (`/data/dav/`) it also accepts `Authorization: Basic` with the `pi` password, verified through PAM with the same backoff and a 60-second in-memory cache of verified credentials; Basic is accepted nowhere else
 - BLE gateway: gated characteristics (writes, logs, the systemd service list) require an encrypted link (BlueZ Just Works pairing agent, `encrypt-*` GATT flags) and a per-connection login with `pi`'s password through the new Authenticate characteristic `00001005-...`; the old `check_pairing` stub is gone. `--no-pairing` is now an alias of `--no-auth`. The login ends on disconnect
 - New `hotspot.nmconnection` bundle member for the access-point profile. A bundle's `[connection]` section and `ssid` are ignored (the on-disk ones win), the profile is written root-only (0600), loaded into NetworkManager, and rolled back if NetworkManager rejects it. The profile is never served through the API and cannot be deleted through `delete-config`. New privileged op `stat-config` (existence and mtime only) lets the "bundle is newer" check work for it despite the root-only directory
+- A login over HTTPS (`X-Forwarded-Proto: https` from the reverse proxy) gets the `Secure` session cookie `__Host-tsconfig_session`, which browsers never send over plain HTTP; logins over HTTP keep `tsconfig_session`. Either cookie is accepted, and logout clears both
 
 ### Added
 

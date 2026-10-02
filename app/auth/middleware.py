@@ -13,10 +13,7 @@ from app import __version__
 from app.auth.oidc_config import oidc_config
 from app.auth.pam_auth import LOGIN_USERS, authenticate_operator
 from app.auth.session import (
-    SESSION_COOKIE,
-    SESSION_TTL_SECONDS,
     client_source,
-    create_session_token,
     has_valid_session,
     is_trusted_local,
     login_retry_after,
@@ -25,6 +22,7 @@ from app.auth.session import (
     record_login_success,
     sanitize_next,
     session_needs_refresh,
+    set_session_cookie,
     verified_basic_credentials,
 )
 from app.config_loader import config_loader
@@ -177,14 +175,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         if session_needs_refresh(issued):
             # Sliding expiry: re-issue the cookie while the operator is active.
-            response.set_cookie(
-                key=SESSION_COOKIE,
-                value=create_session_token(),
-                httponly=True,
-                samesite="lax",
-                path="/",
-                max_age=SESSION_TTL_SECONDS,
-            )
+            set_session_cookie(response, request)
         return response
 
     def _is_browser_request(self, request: Request) -> bool:
