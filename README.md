@@ -108,12 +108,12 @@ LOG_LEVEL=DEBUG python3 -m uvicorn app.main:app --reload
 ```
 
 **Log Levels:**
-- **WARNING** (default): Service operations, configuration changes, API issues
-- **INFO**: Application startup, service registration, completed operations
-- **DEBUG**: D-Bus communication, HTTP details, adapter states
-- **ERROR**: Failed operations, exceptions, resource failures
+- **ERROR**: an operation failed and needs attention
+- **WARNING** (default): unexpected but handled
+- **INFO**: one-off events only: startup, login/logout, config written, service restarted, deployment, shell/BLE session lifecycle. Never per-request or periodic.
+- **DEBUG**: everything chatty: request tracing, token refresh, polling, D-Bus communication, HTTP access logs
 
-**Note:** Third-party library logs (including HTTP access logs) respect the configured log level. At WARNING level, you'll only see warnings and errors from all libraries. At INFO level, you'll see operational messages from uvicorn, httpx, etc. At DEBUG level, you'll see detailed diagnostics from all components.
+**Note:** HTTP access logs (`uvicorn.access`) and HTTP client logs (`httpx`, `httpcore`) are only emitted at DEBUG, so INFO stays readable while the web UI polls the API. Set `ACCESS_LOG_LEVEL` (e.g. `INFO`) to override this independently of `LOG_LEVEL`. Other libraries (uvicorn, fastapi, dbus) follow `LOG_LEVEL`.
 
 ### Running Behind a Reverse Proxy
 

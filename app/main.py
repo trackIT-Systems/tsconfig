@@ -234,6 +234,13 @@ if config_loader.is_server_mode():
 templates = Jinja2Templates(directory="app/templates")
 
 
+# uvicorn applies its own logging config after this module is imported, which
+# resets the uvicorn/uvicorn.access levels; re-apply ours once the server is up.
+@app.on_event("startup")
+async def reapply_logging_config():
+    setup_logging()
+
+
 # Startup event to validate OIDC configuration in server mode
 @app.on_event("startup")
 async def validate_oidc_config():

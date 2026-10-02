@@ -2,6 +2,15 @@
 
 This module provides consistent logging setup across all components,
 optimized for journald consumption (no timestamps) with configurable verbosity.
+
+Level policy:
+    ERROR   - an operation failed and needs attention
+    WARNING - unexpected but handled (default)
+    INFO    - one-off events only: startup, login/logout, config written,
+              service restarted, deployment, shell/BLE session lifecycle.
+              Never per-request or periodic.
+    DEBUG   - everything chatty: request tracing, token refresh, polling,
+              per-write details, HTTP access logs
 """
 
 import logging
@@ -44,13 +53,20 @@ def setup_logging(verbose: bool = False, log_level: Optional[str] = None, verbos
         force=True,  # Override any existing configuration
     )
     
-    # Set specific loggers to appropriate levels
-    # Third-party libraries should respect the same log level as the main application
-    logging.getLogger("httpx").setLevel(level)
-    logging.getLogger("uvicorn").setLevel(level)
-    logging.getLogger("uvicorn.access").setLevel(level)  # HTTP access logs
-    logging.getLogger("fastapi").setLevel(level)
-    logging.getLogger("dbus").setLevel(level)
+    # Per-request chatter (HTTP access logs, httpx client calls) is DEBUG-only:
+    # at INFO it would log every UI polling GET. Below DEBUG, pin it to WARNING.
+    # ACCESS_LOG_LEVEL overrides this explicitly.
+    access_env = os.environ.get("ACCESS_LOG_LEVEL")
+    if access_env:
+        access_level = getattr(logging, access_env.upper(), logging.WARNING)
+    else:
+        access_level = level if level <= logging.DEBUG else max(level, logging.WARNING)
+    for name in ("httpx", "httpcore", "uvicorn.access"):
+        logging.getLogger(name).setLevel(access_level)
+
+    # Other third-party libraries follow the application level
+    for name in ("uvicorn", "fastapi", "dbus"):
+        logging.getLogger(name).setLevel(level)
 
 
 def get_logger(name: str) -> logging.Logger:
