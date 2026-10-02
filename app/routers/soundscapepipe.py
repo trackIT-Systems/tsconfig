@@ -25,7 +25,10 @@ from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.logging_config import get_logger
 from app.routers.base import BaseConfigRouter
+
+logger = get_logger(__name__)
 
 
 def is_system_default_device(device_name: str) -> bool:
@@ -214,7 +217,7 @@ def _parse_alsa_cards() -> List[Dict[str, Any]]:
                     }
                     cards.append(card_info)
     except Exception as e:
-        print(f"Could not read /proc/asound/cards: {e}")
+        logger.warning(f"Could not read /proc/asound/cards: {e}")
 
     return cards
 
@@ -311,7 +314,7 @@ def _query_alsa_devices() -> Dict[str, Any]:
                 output_devices.append(device_info)
 
     except Exception as e:
-        print(f"Error querying ALSA devices: {e}")
+        logger.error(f"Error querying ALSA devices: {e}")
 
     return {
         "input": input_devices,

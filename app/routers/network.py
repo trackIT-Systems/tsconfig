@@ -9,11 +9,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
+from app.logging_config import get_logger
 from app.privileged.ops import ALLOWED_CONNECTIONS
 from app.utils.privileged import PrivilegedCallError, unset_gsm_fields
 from app.utils.subprocess_async import run_subprocess_async
 
 router = APIRouter(prefix="/api/network", tags=["network"])
+logger = get_logger(__name__)
 
 
 def _ensure_tracker_mode() -> None:
@@ -848,7 +850,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
                 raise
             except Exception as e:
                 # If capabilities check fails, log but don't block the update
-                print(f"Warning: Could not validate WiFi capabilities: {e}")
+                logger.warning(f"Could not validate WiFi capabilities: {e}")
         
         # Validate channel width if provided
         if update.channel_width is not None:
@@ -1000,7 +1002,7 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
             try:
                 await unset_gsm_fields("cellular", fields_to_remove_from_netplan)
             except PrivilegedCallError as e:
-                print(f"Warning: Failed to remove GSM fields from netplan: {e}")
+                logger.warning(f"Failed to remove GSM fields from netplan: {e}")
 
         # Execute all modifications in a single nmcli connection modify call
         result = await nmcli_connection_modify("cellular", set_props)
@@ -1206,5 +1208,5 @@ async def get_modem_info() -> ModemInfo | None:
         raise
     except Exception as e:
         # Log the error but don't raise - return None for graceful degradation
-        print(f"Error getting modem information: {str(e)}")
+        logger.error(f"Error getting modem information: {str(e)}")
         return None
