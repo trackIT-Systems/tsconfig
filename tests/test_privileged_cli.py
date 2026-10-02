@@ -73,6 +73,27 @@ class TestDeleteConfigDispatch:
         assert payload["deleted"] is True
 
 
+class TestStatConfigDispatch:
+    def test_existing_file_reports_mtime(self, monkeypatch, capsys, tmp_path):
+        target = tmp_path / "wireguard.conf"
+        target.write_text("x")
+        monkeypatch.setattr(WireguardConfig, "config_file", property(lambda self: target))
+        exit_code, payload, _stderr = _run(monkeypatch, capsys, ["stat-config", "wireguard"])
+        assert exit_code == 0
+        assert payload["exists"] is True
+        assert payload["mtime"] == target.stat().st_mtime
+
+    def test_missing_file_reports_not_existing(self, monkeypatch, capsys, tmp_path):
+        monkeypatch.setattr(WireguardConfig, "config_file", property(lambda self: tmp_path / "nope"))
+        exit_code, payload, _stderr = _run(monkeypatch, capsys, ["stat-config", "wireguard"])
+        assert exit_code == 0
+        assert payload == {"success": True, "config_type": "wireguard", "exists": False, "mtime": None}
+
+    def test_unknown_config_type_is_rejected(self, monkeypatch, capsys):
+        exit_code, payload, _stderr = _run(monkeypatch, capsys, ["stat-config", "passwd"])
+        assert exit_code != 0 and payload["success"] is False
+
+
 class TestUnsetGsmFieldsDispatch:
     def test_success_roundtrip_passes_parsed_stdin_through(self, monkeypatch, capsys):
         captured = {}

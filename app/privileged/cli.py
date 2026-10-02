@@ -78,6 +78,11 @@ def build_parser() -> argparse.ArgumentParser:
     write_config.add_argument("config_type", help="One of app.configs.registry.CONFIG_TYPES")
     write_config.add_argument("--mtime", type=float, default=None, help="Epoch seconds to set as the file's mtime")
 
+    stat_config = subparsers.add_parser(
+        "stat-config", help="Report whether a config file exists and its mtime (for root-only files)."
+    )
+    stat_config.add_argument("config_type", help="One of app.configs.registry.CONFIG_TYPES")
+
     delete_config = subparsers.add_parser("delete-config", help="Delete one boot-partition config file, if present.")
     delete_config.add_argument("config_type", help="One of app.configs.registry.CONFIG_TYPES")
 
@@ -108,6 +113,9 @@ def dispatch_op(args: argparse.Namespace, stdin_data: Optional[Dict[str, Any]] =
     """
     if args.op == "write-config":
         return ops.write_config(args.config_type, (stdin_data or {}).get("config"), args.mtime)
+
+    if args.op == "stat-config":
+        return ops.stat_config(args.config_type)
 
     if args.op == "delete-config":
         return ops.delete_config(args.config_type)

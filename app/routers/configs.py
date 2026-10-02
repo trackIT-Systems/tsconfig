@@ -670,48 +670,108 @@ def extract_zip_file_timestamps(zip_buffer: BytesIO) -> Dict[str, datetime]:
     return timestamps
 
 
-def compare_file_timestamps(config_instances: Dict[str, Any], zip_timestamps: Dict[str, datetime]) -> Dict[str, Dict[str, Any]]:
+def _is_stat_able(path: Path) -> bool:
+    """False when `path` sits in a directory this process may not traverse."""
+    try:
+        path.exists()
+    except PermissionError:
+        return False
+    return True
+
+
+def _exists_or_unreadable(path: Path) -> bool:
+    try:
+        return path.exists()
+    except PermissionError:
+        return True
+
+
+async def collect_privileged_stats(config_instances: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Existence/mtime, fetched as root, for config files `pi` cannot stat.
+
+    Pass the result to compare_file_timestamps(). Files pi can stat itself
+    are not included. A failed lookup is left out, in which case the
+    comparison falls back to treating the file as updatable.
+    """
+    stats: Dict[str, Dict[str, Any]] = {}
+    for filename, config_instance in config_instances.items():
+        if _is_stat_able(config_instance.config_file):
+            continue
+        config_type = RECOGNIZED_CONFIG_FILES.get(filename)
+        if config_type is None:
+            continue
+        try:
+            stats[filename] = await priv.stat_config(config_type)
+        except priv.PrivilegedCallError as e:
+            logger.warning(f"Could not determine the modification time of {filename}: {e}")
+    return stats
+
+
+def compare_file_timestamps(
+    config_instances: Dict[str, Any],
+    zip_timestamps: Dict[str, datetime],
+    privileged_stats: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Dict[str, Any]]:
     """Compare zip file timestamps with existing files on disk.
-    
+
     Args:
         config_instances: Dictionary of config instances
         zip_timestamps: Dictionary of zip file timestamps
-        
+        privileged_stats: Result of collect_privileged_stats(), for files pi
+            cannot stat itself (root-only directories). Without an entry for
+            such a file it is treated as updatable.
+
     Returns:
         Dictionary with comparison results for each file
     """
     comparison_results = {}
-    
+    privileged_stats = privileged_stats or {}
+
     for filename, config_instance in config_instances.items():
         zip_timestamp = zip_timestamps.get(filename)
         if not zip_timestamp:
             continue
-            
+
+        # (exists, mtime epoch or None, mtime known)
+        if _is_stat_able(config_instance.config_file):
+            exists = config_instance.config_file.exists()
+            mtime = config_instance.config_file.stat().st_mtime if exists else None
+            known = True
+        elif filename in privileged_stats:
+            exists = bool(privileged_stats[filename].get("exists"))
+            mtime = privileged_stats[filename].get("mtime")
+            known = True
+        else:
+            # Root-only file with no privileged answer: assume it exists and
+            # is updatable. The privileged write is idempotent and skips
+            # unchanged content.
+            exists, mtime, known = True, None, False
+
         result = {
             "zip_timestamp": zip_timestamp.isoformat(),
             "zip_timestamp_truncated": truncate_mtime_for_fat32(zip_timestamp).isoformat(),
-            "exists_on_disk": config_instance.config_file.exists(),
+            "exists_on_disk": exists,
             "existing_timestamp": None,
             "is_newer": False,
             "should_update": False,
         }
-        
-        if config_instance.config_file.exists():
+
+        if exists and known and mtime is not None:
             # Read file mtime as UTC (naive datetime)
-            existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
+            existing_mtime = datetime.utcfromtimestamp(mtime)
             result["existing_timestamp"] = existing_mtime.isoformat()
-            
+
             # Compare truncated zip timestamp with existing timestamp
             zip_timestamp_truncated = truncate_mtime_for_fat32(zip_timestamp)
             result["is_newer"] = zip_timestamp_truncated > existing_mtime
             result["should_update"] = result["is_newer"]
         else:
-            # File doesn't exist, should update
+            # File doesn't exist (or its age is unknown), should update
             result["should_update"] = True
             result["is_newer"] = True
-            
+
         comparison_results[filename] = result
-    
+
     return comparison_results
 
 
@@ -746,7 +806,7 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
                 parsed["source"] = "server"
                 keys.append(parsed)
         return {"keys": keys}
-    elif filename in ["cmdline.txt", "wireguard.conf", "server.crt", "server.conf"]:
+    elif filename in ["cmdline.txt", "wireguard.conf", "server.crt", "server.conf", "hotspot.nmconnection"]:
         # Plain text files - return content as-is
         return {"content": content}
     elif filename == "geolocation":
@@ -845,7 +905,9 @@ async def _apply_config_zip_from_path(
             raise ValueError(f"Validation failed for {filename}: {'; '.join(validation_errors)}")
         parsed_configs[filename] = parsed_config
 
-    timestamp_comparisons = compare_file_timestamps(config_instances, zip_timestamps)
+    timestamp_comparisons = compare_file_timestamps(
+        config_instances, zip_timestamps, await collect_privileged_stats(config_instances)
+    )
     files_to_save = (
         list(recognized_files.keys())
         if force
@@ -1069,7 +1131,9 @@ async def upload_config_zip(
         return response
 
     # Perform timestamp comparisons for all valid files
-    timestamp_comparisons = compare_file_timestamps(config_instances, zip_timestamps)
+    timestamp_comparisons = compare_file_timestamps(
+        config_instances, zip_timestamps, await collect_privileged_stats(config_instances)
+    )
     
     # Handle pedantic mode timestamp checking (only if not in force mode)
     if pedantic and not force:
@@ -1292,8 +1356,16 @@ def _validate_config_filename_and_get_instance(filename: str):
     except ValueError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Check if file exists
-    if not config_instance.config_file.exists():
+    # Check if file exists (root-only files, e.g. the hotspot profile with its
+    # password, are never served to the API)
+    try:
+        file_exists = config_instance.config_file.exists()
+    except PermissionError:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Configuration file '{filename}' is not available for download",
+        )
+    if not file_exists:
         raise HTTPException(
             status_code=404,
             detail=f"Configuration file '{filename}' not found",

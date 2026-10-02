@@ -22,6 +22,7 @@ from app.configs import BaseConfig
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.cmdline import CmdlineConfig
 from app.configs.geolocation import GeolocationConfig
+from app.configs.hotspot import HotspotConfig
 from app.configs.mosquitto_cert import MosquittoCertConfig
 from app.configs.mosquitto_conf import MosquittoConfConfig
 from app.configs.mqttutil import MqttUtilConfig
@@ -49,7 +50,13 @@ CONFIG_TYPES: Dict[str, Dict[str, Any]] = {
     "tsupdate": {"basename": "tsupdate.yml", "cls": TsupdateConfig, "kwargs": {}},
     "mqttutil": {"basename": "mqttutil.conf", "cls": MqttUtilConfig, "kwargs": {}},
     "userconf": {"basename": "userconf.txt", "cls": UserconfConfig, "kwargs": {}},
+    "hotspot": {"basename": "hotspot.nmconnection", "cls": HotspotConfig, "kwargs": {}},
 }
+
+# Config types that must never be deleted through the privileged
+# `delete-config` op: removing the hotspot profile would take away the
+# device's recovery access point.
+NON_DELETABLE_CONFIG_TYPES = frozenset({"hotspot"})
 
 # Zip/upload file basename -> config type name (unchanged mapping, moved here
 # from app.routers.configs.RECOGNIZED_CONFIG_FILES so both the router and the

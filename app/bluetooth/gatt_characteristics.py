@@ -12,6 +12,7 @@ import dbus
 import dbus.service
 
 from app.bluetooth.api_client import TsConfigApiClient
+from app.bluetooth.auth import BleAuthenticator, BleRequestError, secure_flags
 from app.bluetooth.protocol import (
     BinaryChunker,
     formatter,
@@ -42,7 +43,8 @@ class Characteristic(dbus.service.Object):
         flags: List[str],
         service,
         api_client: TsConfigApiClient,
-        require_pairing: bool = True,
+        authenticator: Optional[BleAuthenticator] = None,
+        encrypted: Optional[bool] = None,
     ):
         """Initialize a GATT Characteristic.
 
@@ -53,15 +55,20 @@ class Characteristic(dbus.service.Object):
             flags: Characteristic flags (read, write, notify, etc.)
             service: Parent GATT service
             api_client: HTTP API client instance
-            require_pairing: Whether to require pairing for write operations
+            authenticator: If given, this characteristic is gated: it refuses to
+                work until the connection has logged in as the operator
+            encrypted: Require an encrypted LE link (BlueZ pairing) for this
+                characteristic. Defaults to True for gated characteristics.
         """
         self.path = f"{service.path}/char{index:04d}"
         self.bus = bus
         self.uuid = uuid
         self.service = service
-        self.flags = flags
+        if encrypted is None:
+            encrypted = authenticator is not None
+        self.flags = secure_flags(flags) if encrypted else flags
         self.api_client = api_client
-        self.require_pairing = require_pairing
+        self.authenticator = authenticator
         self.notifying = False
         self._mtu = DEFAULT_MTU  # Will be updated when device connects
         self._chunker = BinaryChunker(self._mtu)
@@ -190,34 +197,30 @@ class Characteristic(dbus.service.Object):
             self.send_notification(chunk)
             logger.debug(f"Sent chunk {i+1}/{len(chunks)} ({len(chunk)} bytes)")
 
-    def check_pairing(self, options: Dict[str, Any]) -> bool:
-        """Check if the requesting device is paired.
+    def is_authorized(self, options: Dict[str, Any]) -> bool:
+        """Whether the requesting connection may use this characteristic.
 
-        Args:
-            options: Options dictionary from D-Bus call
-
-        Returns:
-            True if paired or pairing not required, False otherwise
+        Open characteristics (no authenticator) always allow; gated ones need
+        the connection (BlueZ device path in `options`) to have logged in.
         """
-        if not self.require_pairing:
+        if self.authenticator is None:
             return True
-
-        # In a real implementation, check the device pairing status via BlueZ
-        # For now, we'll check if the device path is provided
-        device = options.get("device")
-        if not device:
-            logger.warning("No device in options, assuming not paired")
-            return False
-
-        # TODO: Query BlueZ for actual pairing status
-        # For now, we'll assume if a device is provided, it's paired
-        return True
+        return self.authenticator.is_authenticated(options.get("device"))
 
 
 class ReadOnlyCharacteristic(Characteristic):
     """Base class for read-only characteristics."""
 
-    def __init__(self, bus, index, uuid, service, api_client, read_handler: Callable):
+    def __init__(
+        self,
+        bus,
+        index,
+        uuid,
+        service,
+        api_client,
+        read_handler: Callable,
+        authenticator: Optional[BleAuthenticator] = None,
+    ):
         """Initialize a read-only characteristic.
 
         Args:
@@ -227,8 +230,10 @@ class ReadOnlyCharacteristic(Characteristic):
             service: Parent GATT service
             api_client: HTTP API client
             read_handler: Async function to call for reading data
+            authenticator: Gate this characteristic behind the operator login
+                (omit for the open discovery data of the system service)
         """
-        super().__init__(bus, index, uuid, ["read", "notify"], service, api_client, require_pairing=False)
+        super().__init__(bus, index, uuid, ["read", "notify"], service, api_client, authenticator)
         self.read_handler = read_handler
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
@@ -238,6 +243,17 @@ class ReadOnlyCharacteristic(Characteristic):
         All data is transferred via notifications. Read operations return only
         binary CBOR metadata about the data (length, chunks, content type, status).
         """
+        if not self.is_authorized(options):
+            return dbus.Array(
+                formatter.metadata_cbor(
+                    content_length=0,
+                    chunk_count=0,
+                    status=STATUS_ERROR,
+                    error_message="Authentication required",
+                ),
+                signature="y",
+            )
+
         try:
             # Check if notifications are enabled
             if not self.notifying:
@@ -323,7 +339,17 @@ class ReadOnlyCharacteristic(Characteristic):
 class WriteOnlyCharacteristic(Characteristic):
     """Base class for write-only characteristics."""
 
-    def __init__(self, bus, index, uuid, service, api_client, write_handler: Callable, require_pairing: bool = True):
+    def __init__(
+        self,
+        bus,
+        index,
+        uuid,
+        service,
+        api_client,
+        write_handler: Callable,
+        authenticator: Optional[BleAuthenticator] = None,
+        encrypted: Optional[bool] = None,
+    ):
         """Initialize a write-only characteristic.
 
         Args:
@@ -333,10 +359,16 @@ class WriteOnlyCharacteristic(Characteristic):
             service: Parent GATT service
             api_client: HTTP API client
             write_handler: Async function to call for writing data
-            require_pairing: Whether to require pairing
+            authenticator: Gate writes behind the operator login (None = open)
+            encrypted: Require an encrypted link (defaults to True when gated)
         """
-        super().__init__(bus, index, uuid, ["write", "notify"], service, api_client, require_pairing)
+        super().__init__(
+            bus, index, uuid, ["write", "notify"], service, api_client, authenticator, encrypted
+        )
         self.write_handler = write_handler
+        # BlueZ device path of the connection whose write is being processed
+        # (the GLib main loop is single-threaded, so one slot is enough).
+        self.current_device: Optional[str] = None
         # Buffer for accumulating multi-write data
         self.write_buffer = bytearray()
 
@@ -385,11 +417,14 @@ class WriteOnlyCharacteristic(Characteristic):
         For small writes: Direct JSON parsing
         For large writes: Sequential writes are accumulated until valid JSON is received
         """
-        # Check pairing if required
-        if self.require_pairing and not self.check_pairing(options):
-            error_response = formatter.pairing_required()
+        # Gated characteristics need the operator login for this connection
+        if not self.is_authorized(options):
+            error_response = formatter.auth_required()
             self.send_notification(error_response.encode("utf-8"))
             return
+
+        device = options.get("device")
+        self.current_device = str(device) if device else None
 
         try:
             # Add incoming data to buffer
@@ -410,12 +445,18 @@ class WriteOnlyCharacteristic(Characteristic):
                 # Not yet complete JSON - wait for more data
                 logger.debug(f"Incomplete JSON, waiting for more data (buffer: {len(self.write_buffer)} bytes)")
 
+        except BleRequestError as e:
+            self.write_buffer.clear()
+            error_response = formatter.error(str(e), e.code, **e.extra)
+            self.send_notification(error_response.encode("utf-8"))
         except Exception as e:
             logger.error(f"Error writing to {self.uuid}: {e}")
             # Clear buffer on error
             self.write_buffer.clear()
             error_response = formatter.error(str(e))
             self.send_notification(error_response.encode("utf-8"))
+        finally:
+            self.current_device = None
 
 
 # Specific characteristic implementations
@@ -460,42 +501,48 @@ class AvailableServicesCharacteristic(ReadOnlyCharacteristic):
 class SystemdServicesListCharacteristic(ReadOnlyCharacteristic):
     """Systemd Services List characteristic."""
 
-    def __init__(self, bus, index, service, api_client):
+    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
         super().__init__(
-            bus, index, "00002001-7473-4f53-636f-6e6669672121", service, api_client, api_client.get_systemd_services
+            bus,
+            index,
+            "00002001-7473-4f53-636f-6e6669672121",
+            service,
+            api_client,
+            api_client.get_systemd_services,
+            authenticator,
         )
 
 
 class SystemdServiceActionCharacteristic(WriteOnlyCharacteristic):
     """Systemd Service Action characteristic."""
 
-    def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
+    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
         async def action_handler(data: Dict[str, Any]):
             if not parser.validate_service_action(data):
                 raise ValueError("Invalid service action request. Required: service, action")
             return await api_client.systemd_service_action(data["service"], data["action"])
 
         super().__init__(
-            bus, index, "00002002-7473-4f53-636f-6e6669672121", service, api_client, action_handler, require_pairing
+            bus, index, "00002002-7473-4f53-636f-6e6669672121", service, api_client, action_handler, authenticator
         )
 
 
 class SystemdRebootCharacteristic(WriteOnlyCharacteristic):
     """System Reboot characteristic."""
 
-    def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
+    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
         async def reboot_handler(data: Dict[str, Any]):
             return await api_client.systemd_reboot()
 
         super().__init__(
-            bus, index, "00002003-7473-4f53-636f-6e6669672121", service, api_client, reboot_handler, require_pairing
+            bus, index, "00002003-7473-4f53-636f-6e6669672121", service, api_client, reboot_handler, authenticator
         )
 
 
 class SystemdServiceLogsCharacteristic(WriteOnlyCharacteristic):
     """Systemd Service Logs characteristic."""
 
-    def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
+    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
         async def logs_handler(data: Dict[str, Any]):
             if not parser.validate_log_request(data):
                 raise ValueError("Invalid log request. Required: service")
@@ -504,14 +551,14 @@ class SystemdServiceLogsCharacteristic(WriteOnlyCharacteristic):
             return {"logs": logs}
 
         super().__init__(
-            bus, index, "00002004-7473-4f53-636f-6e6669672121", service, api_client, logs_handler, require_pairing
+            bus, index, "00002004-7473-4f53-636f-6e6669672121", service, api_client, logs_handler, authenticator
         )
 
 
 class UploadConfigCharacteristic(WriteOnlyCharacteristic):
     """Config Upload characteristic (POST /api/configs/update)."""
 
-    def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
+    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
         async def upload_handler(data: Dict[str, Any]):
             if not parser.validate_upload_request(data):
                 raise ValueError("Invalid upload request. Required: filename, content")
@@ -523,14 +570,14 @@ class UploadConfigCharacteristic(WriteOnlyCharacteristic):
             )
 
         super().__init__(
-            bus, index, "00003001-7473-4f53-636f-6e6669672121", service, api_client, upload_handler, require_pairing
+            bus, index, "00003001-7473-4f53-636f-6e6669672121", service, api_client, upload_handler, authenticator
         )
 
 
 class UploadZipCharacteristic(WriteOnlyCharacteristic):
     """Zip Upload characteristic (POST /api/configs.zip)."""
 
-    def __init__(self, bus, index, service, api_client, require_pairing: bool = True):
+    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
         async def upload_zip_handler(data: Dict[str, Any]):
             if not parser.validate_upload_request(data):
                 raise ValueError("Invalid upload request. Required: filename, content")
@@ -544,5 +591,39 @@ class UploadZipCharacteristic(WriteOnlyCharacteristic):
             )
 
         super().__init__(
-            bus, index, "00003002-7473-4f53-636f-6e6669672121", service, api_client, upload_zip_handler, require_pairing
+            bus, index, "00003002-7473-4f53-636f-6e6669672121", service, api_client, upload_zip_handler, authenticator
+        )
+
+
+class AuthenticateCharacteristic(WriteOnlyCharacteristic):
+    """Operator login: write {"password": "<password>"} for `pi`, or add
+    "username": "root" for the staff login.
+
+    The login itself is not gated (that would be circular) but it does require
+    an encrypted link, so the password is never sent in clear over the air.
+    The result is notified: {"authenticated": true} on success, or an error
+    with code 401 (wrong password) / 429 (backing off, with retry_after).
+    """
+
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator):
+        async def login_handler(data: Dict[str, Any]):
+            password = data.get("password")
+            username = data.get("username", "pi")
+            if not isinstance(password, str) or not password or not isinstance(username, str):
+                raise ValueError("Invalid login request. Required: password; optional: username (pi or root)")
+            result = await authenticator.login(self.current_device, password, username)
+            if not result.ok:
+                extra = {"retry_after": int(result.retry_after) + 1} if result.retry_after else {}
+                raise BleRequestError(result.message, result.code, **extra)
+            return {"authenticated": True}
+
+        super().__init__(
+            bus,
+            index,
+            "00001005-7473-4f53-636f-6e6669672121",
+            service,
+            api_client,
+            login_handler,
+            authenticator=None,
+            encrypted=True,
         )

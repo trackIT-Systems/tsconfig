@@ -38,6 +38,9 @@ SYSTEM_STATUS_UUID = BASE_UUID.format(0x1001)
 SERVER_MODE_INFO_UUID = BASE_UUID.format(0x1002)
 TIMEDATECTL_STATUS_UUID = BASE_UUID.format(0x1003)
 AVAILABLE_SERVICES_UUID = BASE_UUID.format(0x1004)
+# Operator login: write {"password": "..."} (pi's password) to unlock the
+# gated characteristics of the current connection.
+AUTHENTICATE_UUID = BASE_UUID.format(0x1005)
 
 # Systemd Service Characteristics (0x2000)
 SYSTEMD_SERVICES_LIST_UUID = BASE_UUID.format(0x2001)
@@ -135,26 +138,30 @@ class ResponseFormatter:
         return json.dumps(data)
 
     @staticmethod
-    def error(message: str, code: int = 500) -> str:
+    def error(message: str, code: int = 500, **extra: Any) -> str:
         """Format an error response.
 
         Args:
             message: Error message
             code: HTTP status code
+            **extra: Additional fields to include (e.g. retry_after)
 
         Returns:
             JSON string with error information
         """
-        return json.dumps({"error": message, "code": code})
+        return json.dumps({"error": message, "code": code, **extra})
 
     @staticmethod
-    def pairing_required() -> str:
-        """Format a pairing required error response.
+    def auth_required() -> str:
+        """Format an authentication-required error response.
+
+        Returned for any gated characteristic until the connection has logged
+        in through the Authenticate characteristic.
 
         Returns:
-            JSON string indicating pairing is required
+            JSON string indicating a login is required
         """
-        return json.dumps({"error": "Pairing required", "code": 403})
+        return json.dumps({"error": "Authentication required", "code": 401})
 
     @staticmethod
     def metadata_cbor(

@@ -7,12 +7,22 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ## [Unreleased]
 
+### Security
+
+- Operator authentication in tracker mode. The web UI, API and web shell now require a login with the `pi` account's password, checked through PAM (`app/auth/pam_auth.py`, service `/etc/pam.d/tsconfig`). Sessions are an HttpOnly cookie with an 8-hour sliding expiry, signed with a key held only in memory (a restart logs everyone out). Failed logins back off per client and device-wide (no hard lockout). Server mode (OIDC) is unchanged
+- Requests made directly by a process on the device (loopback, without the forwarding headers the reverse proxy adds) need no login, so `mqttutil` and `tsconfig-ble` keep working by calling `127.0.0.1:8000` directly; anything arriving through Caddy is authenticated
+- Staff login: `root` with root's password is accepted on the web login form, on WebDAV (HTTP Basic) and by the BLE Authenticate characteristic (optional `"username"`, default `"pi"`), in addition to `pi`. Root's password is verified with `su -c true root` under a pty, since `pi` cannot verify another account through PAM; a locked root (no `TSOS_ROOT_PASSWORD`) simply fails, so the feature needs no setting. Root gets stricter, independent login throttling, at most two concurrent `su` checks, and control characters in its password are refused. Logging in as root grants no extra rights
+- New `GET /auth/check` for the reverse proxy's `forward_auth`, used to protect Filebrowser (`/data`). For WebDAV (`/data/dav/`) it also accepts `Authorization: Basic` with the `pi` password, verified through PAM with the same backoff and a 60-second in-memory cache of verified credentials; Basic is accepted nowhere else
+- BLE gateway: gated characteristics (writes, logs, the systemd service list) require an encrypted link (BlueZ Just Works pairing agent, `encrypt-*` GATT flags) and a per-connection login with `pi`'s password through the new Authenticate characteristic `00001005-...`; the old `check_pairing` stub is gone. `--no-pairing` is now an alias of `--no-auth`. The login ends on disconnect
+- New `hotspot.nmconnection` bundle member for the access-point profile. A bundle's `[connection]` section and `ssid` are ignored (the on-disk ones win), the profile is written root-only (0600), loaded into NetworkManager, and rolled back if NetworkManager rejects it. The profile is never served through the API and cannot be deleted through `delete-config`. New privileged op `stat-config` (existence and mtime only) lets the "bundle is newer" check work for it despite the root-only directory
+
 ### Added
 
 - Verification of file modification times (`mtime`) and filesystem synchronization (`sync`) on configuration updates
 
 ### Changed
 
+- BLE error responses for missing authorization are now `{"error": "Authentication required", "code": 401}` (was `Pairing required` / 403)
 - Restrict 'maintenance' schedule entries to fixed clock times (HH:MM) and disable astronomical relative references
 - Allow selecting and retaining 'No output device' (disabled) in the Soundscapepipe UI even when no output hardware is detected or list of devices is empty. The Expert Mode field is left blank when disabled, resolving to 'none' in memory and completely omitted from `soundscapepipe.yml` on disk (Issue #5)
 

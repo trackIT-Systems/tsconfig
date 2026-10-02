@@ -2,6 +2,7 @@
 
 import os
 from typing import Callable
+from urllib.parse import quote
 
 from fastapi import Request, Response
 from fastapi.templating import Jinja2Templates
@@ -10,18 +11,44 @@ from starlette.responses import RedirectResponse
 
 from app import __version__
 from app.auth.oidc_config import oidc_config
+from app.auth.pam_auth import LOGIN_USERS, authenticate_operator
+from app.auth.session import (
+    SESSION_COOKIE,
+    SESSION_TTL_SECONDS,
+    client_source,
+    create_session_token,
+    has_valid_session,
+    is_trusted_local,
+    login_retry_after,
+    parse_basic_auth,
+    record_login_failure,
+    record_login_success,
+    sanitize_next,
+    session_needs_refresh,
+    verified_basic_credentials,
+)
 from app.config_loader import config_loader
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 templates = Jinja2Templates(directory="app/templates")
 
+# WebDAV clients (Filebrowser's /data/dav/) cannot use the session cookie; they
+# send the operator's password as HTTP Basic. Caddy's forward_auth passes that
+# header to /auth/check together with the original URI, and only for requests
+# under this prefix is Basic accepted.
+DAV_PATH_PREFIX = "/data/dav"
+BASIC_CHALLENGE = {"WWW-Authenticate": 'Basic realm="tsOS"'}
+
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     """
-    Middleware to enforce authentication in server mode.
+    Middleware to enforce authentication.
 
-    In tracker mode: All requests pass through without authentication
+    In tracker mode: requires the operator's session cookie (PAM login of `pi`),
+    except for requests made directly by a process on the device itself
+    (loopback without proxy headers - mqttutil, tsconfig-ble) and the public
+    paths below
     In server mode: Validates JWT token for all non-public endpoints
     """
 
@@ -53,6 +80,14 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # Use public paths as-is
         self.public_paths = public_paths or default_public
 
+        # Tracker mode: the login form and its assets, nothing else. Unlike
+        # server mode, the API docs are not public (they describe a surface
+        # that is now behind the login).
+        tracker_public = ["/auth/login", "/auth/logout", "/auth/status", "/api/server-mode", "/static"]
+        if base_url:
+            tracker_public.extend([f"{base_url}{path}" for path in tracker_public.copy()])
+        self.tracker_public_paths = tracker_public
+
         self.base_url = base_url
         logger.debug(f"AuthenticationMiddleware initialized with base_url: {base_url}")
         logger.debug(f"Public paths: {self.public_paths}")
@@ -63,6 +98,94 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             if path.startswith(public_path):
                 return True
         return False
+
+    def _is_tracker_public_path(self, path: str) -> bool:
+        return any(path.startswith(public_path) for public_path in self.tracker_public_paths)
+
+    def _login_redirect_url(self, request: Request) -> str:
+        """Login URL carrying the page to return to. Behind Caddy's
+        forward_auth the original URI is in X-Forwarded-Uri."""
+        original = request.headers.get("x-forwarded-uri")
+        if original is None:
+            original = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+        next_path = sanitize_next(original)
+        return f"{self.base_url}/auth/login?next={quote(next_path, safe='')}"
+
+    def _is_dav_auth_check(self, request: Request) -> bool:
+        """Is this Caddy's forward_auth subrequest for a WebDAV URL?"""
+        if request.url.path != f"{self.base_url}/auth/check":
+            return False
+        original = request.headers.get("x-forwarded-uri", "")
+        return original == DAV_PATH_PREFIX or original.startswith(DAV_PATH_PREFIX + "/")
+
+    async def _check_basic_credentials(self, request: Request) -> Response:
+        """Verify `Authorization: Basic pi:<password>` for a WebDAV request."""
+        credentials = parse_basic_auth(request.headers.get("authorization"))
+        if credentials is None:
+            return Response(
+                content='{"detail":"Authentication required"}',
+                status_code=401,
+                media_type="application/json",
+                headers=BASIC_CHALLENGE,
+            )
+        username, password = credentials
+
+        if username in LOGIN_USERS and verified_basic_credentials.is_verified(username, password):
+            return Response(status_code=200)
+
+        source = client_source(request)
+        wait = login_retry_after(source, username)
+        if wait > 0:
+            return Response(
+                content='{"detail":"Too many failed attempts"}',
+                status_code=429,
+                media_type="application/json",
+                headers={"Retry-After": str(int(wait) + 1)},
+            )
+
+        if not await authenticate_operator(username, password):
+            record_login_failure(source, username)
+            logger.warning(f"Failed WebDAV login as {username!r} from {source}")
+            return Response(
+                content='{"detail":"Wrong credentials"}',
+                status_code=401,
+                media_type="application/json",
+                headers=BASIC_CHALLENGE,
+            )
+
+        record_login_success(source, username)
+        verified_basic_credentials.remember(username, password)
+        return Response(status_code=200)
+
+    async def _dispatch_tracker(self, request: Request, call_next: Callable) -> Response:
+        """Tracker mode: operator session cookie or trusted local request."""
+        if self._is_tracker_public_path(request.url.path) or is_trusted_local(request):
+            return await call_next(request)
+
+        issued = has_valid_session(request)
+        if issued is None:
+            if self._is_dav_auth_check(request):
+                return await self._check_basic_credentials(request)
+            if self._is_browser_request(request):
+                return RedirectResponse(url=self._login_redirect_url(request), status_code=302)
+            return Response(
+                content='{"detail":"Authentication required"}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        response = await call_next(request)
+        if session_needs_refresh(issued):
+            # Sliding expiry: re-issue the cookie while the operator is active.
+            response.set_cookie(
+                key=SESSION_COOKIE,
+                value=create_session_token(),
+                httponly=True,
+                samesite="lax",
+                path="/",
+                max_age=SESSION_TTL_SECONDS,
+            )
+        return response
 
     def _is_browser_request(self, request: Request) -> bool:
         """
@@ -103,9 +226,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process the request and enforce authentication if needed."""
-        # In tracker mode, pass through all requests without authentication
+        # Tracker mode: operator login (PAM) instead of OIDC
         if not config_loader.is_server_mode():
-            return await call_next(request)
+            return await self._dispatch_tracker(request, call_next)
 
         # In server mode, check if OIDC is configured
         if not oidc_config.is_configured():

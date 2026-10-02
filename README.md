@@ -52,7 +52,7 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
 - **Wireless Access**: Access all API endpoints via Bluetooth GATT
 - **Mobile Ready**: Connect from smartphones and tablets without network configuration
 - **Standalone Operation**: Runs as separate service, independent of web interface
-- **Secure**: Configurable pairing requirement for write operations
+- **Secure**: Encrypted link (BlueZ Just Works pairing) plus an operator login with `pi`'s password for everything except basic system info
 - **Standard Tools**: Works with nRF Connect, LightBlue, gatttool, and other BLE clients
 - **Organized Services**: Multiple GATT services mirroring REST API structure
 - **Auto-discovery**: Advertises using system hostname for easy identification
@@ -217,7 +217,7 @@ The BLE gateway provides wireless access to the tsconfig API via Bluetooth GATT,
 - **Wireless Access**: All system, systemd, and config endpoints accessible via BLE
 - **Mobile Ready**: Perfect for field configuration from smartphones/tablets
 - **Standalone**: Runs independently from the main web application
-- **Secure**: Optional pairing requirement for write operations
+- **Secure**: Encrypted link and operator login (`pi` password) required for writes, logs and config
 - **Auto-discovery**: Advertises using system hostname
 - **Standard Compliance**: Works with any BLE GATT client
 
@@ -241,8 +241,8 @@ The BLE gateway provides wireless access to the tsconfig API via Bluetooth GATT,
    # With custom API URL
    python3 -m app.ble_gateway --api-url http://192.168.1.100:8000
 
-   # Disable pairing requirement (insecure)
-   python3 -m app.ble_gateway --no-pairing
+   # Disable link encryption and the operator login (insecure)
+   python3 -m app.ble_gateway --no-auth
 
    # Enable debug logging
    python3 -m app.ble_gateway --verbose
@@ -267,7 +267,7 @@ The BLE gateway exposes three GATT services, each with multiple characteristics 
 
 #### System Service (`00001000-7473-4f53-636f-6e6669672121`)
 
-Read-only characteristics for system information:
+Read-only characteristics for system information (open: no login needed, so devices can be identified), plus the operator login:
 
 | Characteristic | UUID | REST Endpoint |
 |----------------|------|---------------|
@@ -275,10 +275,11 @@ Read-only characteristics for system information:
 | Server Mode Info | `00001002-...` | GET /api/server-mode |
 | Timedatectl Status | `00001003-...` | GET /api/timedatectl-status |
 | Available Services | `00001004-...` | GET /api/available-services |
+| Authenticate (write) | `00001005-...` | operator login, see [Security](#security) |
 
 #### Systemd Service (`00002000-7473-4f53-636f-6e6669672121`)
 
-Service management with pairing required for writes:
+Service management (operator login required):
 
 | Characteristic | UUID | REST Endpoint |
 |----------------|------|---------------|
@@ -289,7 +290,7 @@ Service management with pairing required for writes:
 
 #### Config Service (`00003000-7473-4f53-636f-6e6669672121`)
 
-Configuration file upload and download (pairing required):
+Configuration file upload and download (operator login required):
 
 | Characteristic | UUID | REST Endpoint |
 |----------------|------|---------------|
@@ -315,7 +316,7 @@ gatttool -b AA:BB:CC:DD:EE:FF -I
 # Read system status
 gatttool -b AA:BB:CC:DD:EE:FF --char-read --uuid=00001001-7473-4f53-636f-6e6669672121
 
-# Write service action (requires pairing)
+# Write service action (requires the operator login on this connection first)
 echo '{"service":"radiotracking","action":"restart"}' | \
   gatttool -b AA:BB:CC:DD:EE:FF --char-write-req --uuid=00002002-7473-4f53-636f-6e6669672121
 ```
@@ -343,7 +344,7 @@ bluetoothctl
 3. Connect to the device
 4. Tap on a service to expand characteristics
 5. Read values by tapping the download icon
-6. Write values by tapping the upload icon (requires pairing for write operations)
+6. Write values by tapping the upload icon (requires the operator login, see Security)
 
 #### Using Python with Bleak
 
@@ -441,10 +442,25 @@ Write operations send responses via notifications (no read required):
 
 ### Security
 
-- **Read operations**: No pairing required (open access)
-- **Write operations**: Pairing required by default
-- **Disable pairing**: Use `--no-pairing` flag (not recommended for production)
-- **Pairing process**: Use your BLE client's pairing feature before write operations
+Everything except the System Service's status characteristics requires two things:
+
+1. **An encrypted link.** The gated characteristics (and the login itself) are exposed with BlueZ's
+   `encrypt-*` flags, so your OS starts LE pairing the first time you touch one. The gateway registers a
+   `NoInputNoOutput` pairing agent: pairing is "Just Works" - no PIN or confirmation on the device. This
+   keeps the login from being sniffable; it does not protect against an active man-in-the-middle during
+   pairing (the device has no display to compare a passkey on).
+2. **The operator login, per connection.** Write `{"password": "<pi's password>"}` to the Authenticate
+   characteristic (`00001005-...`). The gateway checks it against PAM (the same check as the web login) and
+   notifies `{"authenticated": true}`, or an error: code `401` for a wrong password, `429` with a
+   `retry_after` (seconds) while it is backing off after repeated failures. Until a connection has logged
+   in, gated characteristics answer `{"error": "Authentication required", "code": 401}` and do nothing. The
+   login ends on disconnect, after 8 hours, or when the gateway restarts.
+
+The default `pi` password is `natur` until a config bundle (`userconf.txt`) changes it. Staff can log in as root instead: add `"username": "root"` to the login request (works only if the device has a root password).
+
+- **Disable authentication**: `--no-auth` (alias `--no-pairing`) turns off both the encryption requirement and the
+  login (not recommended for production)
+- **`test_ble_client.py`** logs in with `--password` (default `natur`)
 
 ### Requirements
 
@@ -472,8 +488,8 @@ Write operations send responses via notifications (no read required):
 - Grant capabilities: `setcap cap_net_admin+eip $(which python3)`
 
 **Cannot write to characteristics:**
-- Pair the device first using your BLE client
-- Or disable pairing requirement: `--no-pairing` flag
+- Pair the device first (your OS normally starts this on first access) and log in through the Authenticate characteristic
+- Or disable authentication: `--no-auth` flag
 
 **API connection errors:**
 - Verify tsconfig is running: `curl http://localhost:8000/api/server-mode`

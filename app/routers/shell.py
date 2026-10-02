@@ -7,6 +7,7 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.auth.session import is_authorized
 from app.logging_config import get_logger
 
 # Configure logging
@@ -186,6 +187,14 @@ active_sessions: Dict[str, PtyProcess] = {}
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for interactive shell sessions."""
+    # BaseHTTPMiddleware (AuthenticationMiddleware) does not see websocket
+    # connections, so the operator login has to be enforced here. Closing
+    # before accept() rejects the handshake.
+    if not is_authorized(websocket):
+        logger.warning("Rejected unauthenticated shell websocket connection")
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
 
     # Create or get existing session

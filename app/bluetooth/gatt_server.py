@@ -14,6 +14,7 @@ import dbus.service
 from gi.repository import GLib
 
 from app.bluetooth.api_client import TsConfigApiClient
+from app.bluetooth.auth import BleAuthenticator
 from app.bluetooth.services import SystemdService, SystemService, UploadService
 from app.logging_config import get_logger
 from app.main import _get_hardware_info
@@ -30,6 +31,10 @@ DBUS_PROP_IFACE = "org.freedesktop.DBus.Properties"
 GATT_SERVICE_IFACE = "org.bluez.GattService1"
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 LE_ADVERTISEMENT_IFACE = "org.bluez.LEAdvertisement1"
+AGENT_MANAGER_IFACE = "org.bluez.AgentManager1"
+AGENT_IFACE = "org.bluez.Agent1"
+DEVICE_IFACE = "org.bluez.Device1"
+AGENT_PATH = "/org/bluez/tsconfig/agent"
 
 
 class InvalidArgsException(dbus.exceptions.DBusException):
@@ -50,29 +55,94 @@ class NotPermittedException(dbus.exceptions.DBusException):
     _dbus_error_name = "org.bluez.Error.NotPermitted"
 
 
+class RejectedException(dbus.exceptions.DBusException):
+    """D-Bus exception for a rejected pairing request."""
+
+    _dbus_error_name = "org.bluez.Error.Rejected"
+
+
+class NoInputNoOutputAgent(dbus.service.Object):
+    """BlueZ pairing agent for a device without display or keyboard.
+
+    Registered with the NoInputNoOutput capability, so pairing is "Just Works":
+    the link gets encrypted (LE Secure Connections where supported) without any
+    user interaction. This protects against passive sniffing of the operator
+    login; it does not protect against an active man-in-the-middle during
+    pairing, which would need a displayed/typed passkey. The operator's
+    authorization is the password login on top (see app.bluetooth.auth).
+    """
+
+    def __init__(self, bus: dbus.Bus, path: str = AGENT_PATH):
+        self.path = path
+        dbus.service.Object.__init__(self, bus, path)
+
+    @dbus.service.method(AGENT_IFACE, in_signature="", out_signature="")
+    def Release(self):
+        logger.debug("Pairing agent released")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="os", out_signature="")
+    def AuthorizeService(self, device, uuid):
+        return  # services are protected by the login, not by per-service authorization
+
+    @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="")
+    def RequestAuthorization(self, device):
+        logger.debug(f"Accepting Just Works pairing request from {device}")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="ou", out_signature="")
+    def RequestConfirmation(self, device, passkey):
+        logger.debug(f"Accepting pairing confirmation from {device}")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="s")
+    def RequestPinCode(self, device):
+        raise RejectedException("PIN code entry is not supported")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="u")
+    def RequestPasskey(self, device):
+        raise RejectedException("Passkey entry is not supported")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="ouq", out_signature="")
+    def DisplayPasskey(self, device, passkey, entered):
+        return
+
+    @dbus.service.method(AGENT_IFACE, in_signature="os", out_signature="")
+    def DisplayPinCode(self, device, pincode):
+        return
+
+    @dbus.service.method(AGENT_IFACE, in_signature="", out_signature="")
+    def Cancel(self):
+        logger.debug("Pairing request cancelled")
+
+
 class Application(dbus.service.Object):
     """GATT Application for BlueZ D-Bus."""
 
-    def __init__(self, bus: dbus.Bus, path: str, api_client: TsConfigApiClient, require_pairing: bool = True):
+    def __init__(
+        self,
+        bus: dbus.Bus,
+        path: str,
+        api_client: TsConfigApiClient,
+        authenticator: Optional[BleAuthenticator] = None,
+    ):
         """Initialize the GATT application.
 
         Args:
             bus: D-Bus system bus
             path: D-Bus object path
             api_client: HTTP API client instance
-            require_pairing: Whether to require pairing for write operations
+            authenticator: Operator login tracker; None disables authentication
+                (and link encryption) entirely
         """
         self.path = path
         self.services: List = []
         self.api_client = api_client
-        self.require_pairing = require_pairing
+        self.authenticator = authenticator
 
         dbus.service.Object.__init__(self, bus, self.path)
 
         # Create services
-        self.add_service(SystemService(bus, 0, self.path, api_client))
-        self.add_service(SystemdService(bus, 1, self.path, api_client, require_pairing))
-        self.add_service(UploadService(bus, 2, self.path, api_client, require_pairing))
+        self.add_service(SystemService(bus, 0, self.path, api_client, authenticator))
+        self.add_service(SystemdService(bus, 1, self.path, api_client, authenticator))
+        self.add_service(UploadService(bus, 2, self.path, api_client, authenticator))
 
         logger.debug(f"GATT Application created with {len(self.services)} services")
 
@@ -191,7 +261,7 @@ class BleGattServer:
         self,
         api_url: str = "http://localhost:8000",
         device_name: Optional[str] = None,
-        require_pairing: bool = True,
+        require_auth: bool = True,
         discoverable: bool = True,
     ):
         """Initialize the BLE GATT server.
@@ -199,12 +269,15 @@ class BleGattServer:
         Args:
             api_url: Base URL of the tsconfig HTTP API
             device_name: BLE device name (defaults to system hostname)
-            require_pairing: Whether to require pairing for write operations
+            require_auth: Require an encrypted link and the operator login
+                (pi's password) for everything except the discovery data
             discoverable: Whether the device should be discoverable
         """
         self.api_url = api_url
         self.device_name = device_name or socket.gethostname()
-        self.require_pairing = require_pairing
+        self.require_auth = require_auth
+        self.authenticator: Optional[BleAuthenticator] = BleAuthenticator() if require_auth else None
+        self.agent: Optional[NoInputNoOutputAgent] = None
         self.discoverable = discoverable
 
         self.bus: Optional[dbus.Bus] = None
@@ -267,6 +340,9 @@ class BleGattServer:
         self.adapter_props.Set(ADAPTER_IFACE, "Powered", dbus.Boolean(True))
         self.adapter_props.Set(ADAPTER_IFACE, "Discoverable", dbus.Boolean(self.discoverable))
 
+        if self.require_auth:
+            self.setup_pairing(adapter_obj)
+
         # Get managers
         logger.debug("Getting LE Advertising and GATT managers...")
         self.ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
@@ -279,7 +355,7 @@ class BleGattServer:
         # Create GATT application
         logger.debug("Creating GATT application...")
         app_path = "/org/bluez/tsconfig/app"
-        self.application = Application(self.bus, app_path, self.api_client, self.require_pairing)
+        self.application = Application(self.bus, app_path, self.api_client, self.authenticator)
 
         # Create advertisement
         logger.debug("Creating BLE advertisement...")
@@ -304,6 +380,38 @@ class BleGattServer:
             # Continue without serial - device will still be discoverable
 
         logger.info("BLE GATT Server setup complete")
+
+    def setup_pairing(self, adapter_obj):
+        """Make the adapter pairable and register the Just Works pairing agent,
+        and forget a connection's login when it disconnects."""
+        try:
+            self.adapter_props.Set(ADAPTER_IFACE, "Pairable", dbus.Boolean(True))
+            self.adapter_props.Set(ADAPTER_IFACE, "PairableTimeout", dbus.UInt32(0))
+        except Exception as e:
+            logger.warning(f"Could not make the adapter pairable: {e}")
+
+        try:
+            self.agent = NoInputNoOutputAgent(self.bus)
+            agent_manager = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE_NAME, "/org/bluez"), AGENT_MANAGER_IFACE)
+            agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
+            agent_manager.RequestDefaultAgent(AGENT_PATH)
+            logger.info("Registered NoInputNoOutput pairing agent")
+        except Exception as e:
+            # Encrypted characteristics cannot be used without a way to pair.
+            logger.error(f"Could not register the pairing agent: {e}")
+
+        self.bus.add_signal_receiver(
+            self._on_device_properties_changed,
+            dbus_interface=DBUS_PROP_IFACE,
+            signal_name="PropertiesChanged",
+            arg0=DEVICE_IFACE,
+            path_keyword="path",
+        )
+
+    def _on_device_properties_changed(self, interface, changed, invalidated, path=None):
+        """A connection's login ends when its device disconnects."""
+        if self.authenticator and path and "Connected" in changed and not bool(changed["Connected"]):
+            self.authenticator.forget(str(path))
 
     def register_application(self):
         """Register the GATT application with BlueZ."""

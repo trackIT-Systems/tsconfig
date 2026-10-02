@@ -5,13 +5,15 @@ according to the REST API structure.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import dbus
 import dbus.service
 
 from app.bluetooth.api_client import TsConfigApiClient
+from app.bluetooth.auth import BleAuthenticator
 from app.bluetooth.gatt_characteristics import (
+    AuthenticateCharacteristic,
     AvailableServicesCharacteristic,
     ServerModeInfoCharacteristic,
     SystemdRebootCharacteristic,
@@ -48,7 +50,7 @@ class Service(dbus.service.Object):
         primary: bool,
         app_path: str,
         api_client: TsConfigApiClient,
-        require_pairing: bool = True,
+        authenticator: Optional[BleAuthenticator] = None,
     ):
         """Initialize a GATT Service.
 
@@ -59,14 +61,14 @@ class Service(dbus.service.Object):
             primary: Whether this is a primary service
             app_path: D-Bus path of the parent application
             api_client: HTTP API client instance
-            require_pairing: Whether to require pairing for write operations
+            authenticator: Operator login tracker (None = no authentication)
         """
         self.path = f"{app_path}/service{index:04d}"
         self.bus = bus
         self.uuid = uuid
         self.primary = primary
         self.api_client = api_client
-        self.require_pairing = require_pairing
+        self.authenticator = authenticator
         self.characteristics: List = []
 
         dbus.service.Object.__init__(self, bus, self.path)
@@ -108,7 +110,14 @@ class Service(dbus.service.Object):
 class SystemService(Service):
     """System Service - provides system status and information."""
 
-    def __init__(self, bus: dbus.Bus, index: int, app_path: str, api_client: TsConfigApiClient):
+    def __init__(
+        self,
+        bus: dbus.Bus,
+        index: int,
+        app_path: str,
+        api_client: TsConfigApiClient,
+        authenticator: Optional[BleAuthenticator] = None,
+    ):
         """Initialize System Service.
 
         Args:
@@ -116,10 +125,12 @@ class SystemService(Service):
             index: Service index
             app_path: Parent application D-Bus path
             api_client: HTTP API client
+            authenticator: If given, the Authenticate (login) characteristic is
+                added; the status characteristics themselves stay open
         """
-        super().__init__(bus, index, SYSTEM_SERVICE_UUID, True, app_path, api_client, require_pairing=False)
+        super().__init__(bus, index, SYSTEM_SERVICE_UUID, True, app_path, api_client)
 
-        # Add characteristics (read-only, no pairing required)
+        # Add characteristics (read-only discovery data, open to any connection)
         char_index = 0
         self.add_characteristic(SystemStatusCharacteristic(bus, char_index, self, api_client))
         char_index += 1
@@ -128,6 +139,9 @@ class SystemService(Service):
         self.add_characteristic(TimedatectlStatusCharacteristic(bus, char_index, self, api_client))
         char_index += 1
         self.add_characteristic(AvailableServicesCharacteristic(bus, char_index, self, api_client))
+        if authenticator is not None:
+            char_index += 1
+            self.add_characteristic(AuthenticateCharacteristic(bus, char_index, self, api_client, authenticator))
 
         logger.debug(f"System Service created with {len(self.characteristics)} characteristics")
 
@@ -141,7 +155,7 @@ class SystemdService(Service):
         index: int,
         app_path: str,
         api_client: TsConfigApiClient,
-        require_pairing: bool = True,
+        authenticator: Optional[BleAuthenticator] = None,
     ):
         """Initialize Systemd Service.
 
@@ -150,23 +164,23 @@ class SystemdService(Service):
             index: Service index
             app_path: Parent application D-Bus path
             api_client: HTTP API client
-            require_pairing: Whether to require pairing for write operations
+            authenticator: Operator login tracker (None = no authentication)
         """
-        super().__init__(bus, index, SYSTEMD_SERVICE_UUID, True, app_path, api_client, require_pairing)
+        super().__init__(bus, index, SYSTEMD_SERVICE_UUID, True, app_path, api_client, authenticator)
 
         # Add characteristics
         char_index = 0
 
-        # Read-only: Services list (no pairing required)
-        self.add_characteristic(SystemdServicesListCharacteristic(bus, char_index, self, api_client))
+        # Read-only: Services list (operator login required if enabled)
+        self.add_characteristic(SystemdServicesListCharacteristic(bus, char_index, self, api_client, authenticator))
         char_index += 1
 
-        # Write operations (pairing required if enabled)
-        self.add_characteristic(SystemdServiceActionCharacteristic(bus, char_index, self, api_client, require_pairing))
+        # Write operations (operator login required if enabled)
+        self.add_characteristic(SystemdServiceActionCharacteristic(bus, char_index, self, api_client, authenticator))
         char_index += 1
-        self.add_characteristic(SystemdRebootCharacteristic(bus, char_index, self, api_client, require_pairing))
+        self.add_characteristic(SystemdRebootCharacteristic(bus, char_index, self, api_client, authenticator))
         char_index += 1
-        self.add_characteristic(SystemdServiceLogsCharacteristic(bus, char_index, self, api_client, require_pairing))
+        self.add_characteristic(SystemdServiceLogsCharacteristic(bus, char_index, self, api_client, authenticator))
 
         logger.debug(f"Systemd Service created with {len(self.characteristics)} characteristics")
 
@@ -180,7 +194,7 @@ class UploadService(Service):
         index: int,
         app_path: str,
         api_client: TsConfigApiClient,
-        require_pairing: bool = True,
+        authenticator: Optional[BleAuthenticator] = None,
     ):
         """Initialize Upload Service.
 
@@ -189,14 +203,14 @@ class UploadService(Service):
             index: Service index
             app_path: Parent application D-Bus path
             api_client: HTTP API client
-            require_pairing: Whether to require pairing for write operations
+            authenticator: Operator login tracker (None = no authentication)
         """
-        super().__init__(bus, index, UPLOAD_SERVICE_UUID, True, app_path, api_client, require_pairing)
+        super().__init__(bus, index, UPLOAD_SERVICE_UUID, True, app_path, api_client, authenticator)
 
-        # Add characteristics (write operations, pairing required if enabled)
+        # Add characteristics (write operations, operator login required if enabled)
         char_index = 0
-        self.add_characteristic(UploadConfigCharacteristic(bus, char_index, self, api_client, require_pairing))
+        self.add_characteristic(UploadConfigCharacteristic(bus, char_index, self, api_client, authenticator))
         char_index += 1
-        self.add_characteristic(UploadZipCharacteristic(bus, char_index, self, api_client, require_pairing))
+        self.add_characteristic(UploadZipCharacteristic(bus, char_index, self, api_client, authenticator))
 
         logger.debug(f"Upload Service created with {len(self.characteristics)} characteristics")

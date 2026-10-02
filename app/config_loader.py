@@ -22,6 +22,7 @@ VERSIONED_CONFIG_FILES: List[str] = [
     "authorized_keys",
     "mqttutil.conf",
     "userconf.txt",
+    "hotspot.nmconnection",
 ]
 
 

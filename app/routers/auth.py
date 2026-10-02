@@ -1,14 +1,29 @@
 """Authentication endpoints for OIDC flow."""
 
 import os
+import socket
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app import __version__
 from app.auth.dependencies import get_current_user, get_optional_user
+from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
+from app.auth.session import (
+    SESSION_COOKIE,
+    SESSION_TTL_SECONDS,
+    client_source,
+    create_session_token,
+    has_valid_session,
+    is_trusted_local,
+    login_retry_after,
+    record_login_failure,
+    record_login_success,
+    sanitize_next,
+)
 from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
 from app.logging_config import get_logger
@@ -23,19 +38,52 @@ templates = Jinja2Templates(directory="app/templates")
 _pkce_store: dict[str, dict[str, Optional[str]]] = {}
 
 
+def _base_url() -> str:
+    return os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
+
+
+def _render_login(
+    request: Request,
+    next_path: str,
+    error: Optional[str] = None,
+    status_code: int = 200,
+    retry_after: float = 0,
+    username: str = OPERATOR_USER,
+):
+    response = templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "base_url": _base_url(),
+            "version": __version__,
+            "hostname": socket.gethostname(),
+            "next_path": next_path,
+            "username": username,
+            "error": error,
+        },
+        status_code=status_code,
+    )
+    if retry_after:
+        response.headers["Retry-After"] = str(int(retry_after) + 1)
+    return response
+
+
 @router.get(
     "/login",
-    summary="Initiate OIDC login",
-    description="Redirects to OIDC login page to start the authentication flow.",
+    summary="Login",
+    description="Tracker mode: shows the operator login form. Server mode: redirects to the OIDC login page.",
+    response_model=None,
 )
-async def login(return_to: Optional[str] = Query(None, description="URL to return to after successful login")):
-    """Initiate OIDC authorization code flow."""
-    # Only available in server mode
+async def login(
+    request: Request,
+    return_to: Optional[str] = Query(None, description="URL to return to after successful login"),
+    next: Optional[str] = Query(None, description="Path to return to after a successful operator login"),
+):
+    """Operator login form (tracker mode) or OIDC authorization code flow (server mode)."""
     if not config_loader.is_server_mode():
-        raise HTTPException(
-            status_code=404,
-            detail="Authentication is only available in server mode",
-        )
+        if has_valid_session(request) is not None or is_trusted_local(request):
+            return RedirectResponse(url=f"{_base_url()}{sanitize_next(next)}", status_code=303)
+        return _render_login(request, sanitize_next(next))
 
     # Check if OIDC is configured
     if not oidc_config.is_configured():
@@ -73,6 +121,66 @@ async def login(return_to: Optional[str] = Query(None, description="URL to retur
             status_code=500,
             detail=f"Failed to initiate login: {str(e)}",
         )
+
+
+@router.post(
+    "/login",
+    summary="Operator login (tracker mode)",
+    description="Checks the operator password against PAM (the `pi` account) and sets a session cookie.",
+    response_model=None,
+)
+async def operator_login(
+    request: Request,
+    password: str = Form(...),
+    username: str = Form(OPERATOR_USER),
+    next: Optional[str] = Form(None),
+):
+    if config_loader.is_server_mode():
+        raise HTTPException(status_code=404, detail="Operator login is only available in tracker mode")
+
+    next_path = sanitize_next(next)
+    source = client_source(request)
+
+    wait = login_retry_after(source, username)
+    if wait > 0:
+        return _render_login(
+            request,
+            next_path,
+            f"Too many failed attempts. Try again in {int(wait) + 1} seconds.",
+            429,
+            wait,
+            username=username,
+        )
+
+    if not await authenticate_operator(username, password):
+        record_login_failure(source, username)
+        logger.warning(f"Failed login as {username!r} from {source}")
+        wait = login_retry_after(source, username)
+        return _render_login(request, next_path, "Wrong username or password.", 401, wait, username=username)
+
+    record_login_success(source, username)
+    logger.info(f"Logged in as {username!r} from {source}")
+    response = RedirectResponse(url=f"{_base_url()}{next_path}", status_code=303)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=create_session_token(),
+        httponly=True,
+        samesite="lax",
+        path="/",
+        max_age=SESSION_TTL_SECONDS,
+    )
+    return response
+
+
+@router.get(
+    "/check",
+    summary="Authentication check",
+    description="Returns 200 if the request is authenticated. Used by the reverse proxy (forward_auth) to protect /data.",
+)
+async def auth_check():
+    # The authentication middleware has already decided: unauthenticated
+    # requests never reach this handler.
+    return Response(status_code=200)
 
 
 @router.get(
@@ -328,12 +436,11 @@ async def logout(
     auth_token: Optional[str] = Cookie(None),
 ):
     """Logout and clear authentication cookie, ending OIDC SSO session."""
-    # Only available in server mode
+    # Tracker mode: just drop the operator session
     if not config_loader.is_server_mode():
-        raise HTTPException(
-            status_code=404,
-            detail="Authentication is only available in server mode",
-        )
+        response = RedirectResponse(url=f"{_base_url()}/auth/login", status_code=303)
+        response.delete_cookie(key=SESSION_COOKIE, path="/", samesite="lax")
+        return response
 
     # Get base URL
     base_url = os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
@@ -470,7 +577,7 @@ async def userinfo(user: Optional[dict] = Depends(get_current_user)):
     summary="Get authentication status",
     description="Returns authentication configuration and status.",
 )
-async def auth_status(user: Optional[dict] = Depends(get_optional_user)):
+async def auth_status(request: Request, user: Optional[dict] = Depends(get_optional_user)):
     """Get authentication status."""
     is_server_mode = config_loader.is_server_mode()
     is_configured = oidc_config.is_configured()
@@ -478,6 +585,7 @@ async def auth_status(user: Optional[dict] = Depends(get_optional_user)):
     return {
         "server_mode": is_server_mode,
         "oidc_configured": is_configured,
-        "authenticated": user is not None,
+        "authenticated": user is not None
+        or (not is_server_mode and (has_valid_session(request) is not None or is_trusted_local(request))),
         "user": user if user else None,
     }

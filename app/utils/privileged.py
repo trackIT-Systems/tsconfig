@@ -256,6 +256,12 @@ async def write_config(
     return await run_privileged_op("write-config", args, stdin_json={"config": config}, timeout=timeout)
 
 
+async def stat_config(config_type: str, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+    """Existence and mtime of one config file as root (for files in root-only
+    directories that pi cannot stat itself). Returns {"exists", "mtime", ...}."""
+    return await run_privileged_op("stat-config", [config_type], timeout=timeout)
+
+
 async def delete_config(config_type: str, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
     """Delete one boot-partition config file, if present, as root."""
     return await run_privileged_op("delete-config", [config_type], timeout=timeout)

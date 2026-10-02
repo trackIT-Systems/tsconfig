@@ -18,6 +18,7 @@ from app.routers.configs import (
     SERVICE_MAPPING,
     _apply_config_zip_from_path,
     extract_zip_file_timestamps,
+    collect_privileged_stats,
     compare_file_timestamps,
     parse_config_file,
     get_config_instance,
@@ -268,7 +269,9 @@ async def process_zip_upload(
     log.info("All configuration files validated successfully")
 
     # Perform timestamp comparisons for all valid files
-    timestamp_comparisons = compare_file_timestamps(config_instances, zip_timestamps)
+    timestamp_comparisons = compare_file_timestamps(
+        config_instances, zip_timestamps, await collect_privileged_stats(config_instances)
+    )
 
     # Handle pedantic mode timestamp checking (only if not in force mode)
     if pedantic and not force:

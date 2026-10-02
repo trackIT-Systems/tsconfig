@@ -120,12 +120,37 @@ def write_config(config_type: str, config: Dict[str, Any], mtime: Optional[float
     }
 
 
+def stat_config(config_type: str) -> Dict[str, Any]:
+    """Report whether a config type's file exists and its mtime.
+
+    Exists for config files `pi` cannot stat itself because they live in a
+    root-only directory (the hotspot profile), so the "only overwrite if the
+    bundle is newer" decision can still be made for them. Reveals nothing
+    but existence and modification time - never content. Same fixed
+    config_type set as write_config.
+    """
+    try:
+        instance = registry.get_privileged_config_instance(config_type)
+    except ValueError as e:
+        raise PrivilegedOpError(str(e)) from e
+
+    try:
+        mtime = instance.config_file.stat().st_mtime
+    except FileNotFoundError:
+        return {"config_type": config_type, "exists": False, "mtime": None}
+    except OSError as e:
+        raise PrivilegedOpError(f"failed to stat {config_type}: {e}") from e
+    return {"config_type": config_type, "exists": True, "mtime": mtime}
+
+
 def delete_config(config_type: str) -> Dict[str, Any]:
     """Delete a single config type's file, if it exists.
 
     Used for e.g. removing wireguard.conf on system reset. Same fixed
     config_type set as write_config.
     """
+    if config_type in registry.NON_DELETABLE_CONFIG_TYPES:
+        raise PrivilegedOpError(f"config type '{config_type}' cannot be deleted")
     try:
         instance = registry.get_privileged_config_instance(config_type)
     except ValueError as e:

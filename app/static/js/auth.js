@@ -10,6 +10,7 @@ export const authManager = {
     initialized: false,
     refreshInterval: null,
     isRefreshing: false,
+    trackerMode: false,
 
     /**
      * Initialize authentication and fetch user info if authenticated
@@ -28,6 +29,7 @@ export const authManager = {
             }
 
             const serverModeData = await serverModeResponse.json();
+            this.trackerMode = !serverModeData.enabled;
             if (!serverModeData.enabled || !serverModeData.oidc_enabled) {
                 // OIDC not enabled, skip authentication
                 this.initialized = true;
@@ -157,7 +159,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.fetch = async function(...args) {
         let response = await originalFetch(...args);
-        
+
+        // Tracker mode: the operator session expired (or the device restarted)
+        // - send the user to the login form and bring them back afterwards.
+        if (response.status === 401 && authManager.trackerMode) {
+            const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+            if (!requestUrl.includes('/auth/') && !window.location.pathname.includes('/auth/login')) {
+                const next = window.location.pathname + window.location.search;
+                window.location.href = apiUrl('/auth/login?next=' + encodeURIComponent(next));
+            }
+            return response;
+        }
+
         // If we get a 401 and user is authenticated, try to refresh and retry
         if (response.status === 401 && authManager.isAuthenticated() && !requestsInRetry.has(args[0])) {
             // Don't intercept auth endpoints - they handle their own flow

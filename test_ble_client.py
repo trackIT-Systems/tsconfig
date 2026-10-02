@@ -8,10 +8,11 @@ Requirements:
     pip install bleak cbor2
 
 Usage:
-    python3 test_ble_client.py [--device DEVICE_NAME] [--write] [--timeout SECONDS] [--retries N]
+    python3 test_ble_client.py [--device DEVICE_NAME] [--password PASSWORD] [--write] [--timeout SECONDS] [--retries N]
 
 Options:
     --device, -d     Device name or address (auto-detects if not specified)
+    --password, -p   Operator (pi) password for the BLE login (default: natur)
     --write, -w      Enable write operations (service restart, file upload)
     --timeout, -t    Scan timeout in seconds per attempt (default: 10.0)
     --retries, -r    Number of retry attempts for device discovery (default: 3)
@@ -56,6 +57,7 @@ SYSTEM_STATUS_UUID = "00001001-7473-4f53-636f-6e6669672121"
 SERVER_MODE_INFO_UUID = "00001002-7473-4f53-636f-6e6669672121"
 TIMEDATECTL_STATUS_UUID = "00001003-7473-4f53-636f-6e6669672121"
 AVAILABLE_SERVICES_UUID = "00001004-7473-4f53-636f-6e6669672121"
+AUTHENTICATE_UUID = "00001005-7473-4f53-636f-6e6669672121"
 
 # Systemd Service Characteristics
 SYSTEMD_SERVICES_LIST_UUID = "00002001-7473-4f53-636f-6e6669672121"
@@ -508,6 +510,32 @@ async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, ret
     return None if return_single else []
 
 
+async def login(client: BleakClient, password: str) -> bool:
+    """Log in as the operator (pi's password) on this connection.
+
+    The gateway requires an encrypted link: the first access to the login
+    characteristic makes the OS start LE pairing (Just Works, no prompt on the
+    device). Gated characteristics refuse to work until this succeeds.
+    """
+    print_header("Operator Login")
+    response = await write_with_notifications(
+        client, AUTHENTICATE_UUID, "Authenticate", {"password": password}, timeout=5.0
+    )
+    if response is None:
+        print_error("No response to login (is the gateway running with authentication enabled?)")
+        return False
+    try:
+        result = json.loads(response)
+    except ValueError:
+        print_error(f"Unexpected login response: {response}")
+        return False
+    if result.get("authenticated"):
+        print_success("Logged in")
+        return True
+    print_error(f"Login failed: {result.get('error')} (code {result.get('code')})")
+    return False
+
+
 async def test_system_service(client: BleakClient):
     """Test System Service characteristics."""
     print_header("Testing System Service (0x1000)")
@@ -743,6 +771,13 @@ async def main():
         help="Device name or address (auto-detects if not specified)",
     )
     parser.add_argument(
+        "--password",
+        "-p",
+        type=str,
+        default="natur",
+        help="Operator (pi) password for the BLE login (default: natur)",
+    )
+    parser.add_argument(
         "--write",
         "-w",
         action="store_true",
@@ -826,6 +861,8 @@ async def main():
             # Run all tests
             await discover_services(client)
             await test_system_service(client)
+            if not await login(client, args.password):
+                print_warning("Continuing without login: gated characteristics will report 'Authentication required'")
             await test_systemd_service(client)
             await test_chunked_reads(client)
             await test_write_operations(client, enabled=args.write)
@@ -842,7 +879,7 @@ async def main():
         troubleshooting = [
             "1. Verify BLE gateway: sudo systemctl status tsconfig-ble",
             "2. Check Bluetooth enabled on both devices",
-            "3. Try pairing first if write operations needed",
+            "3. Pairing (Just Works) is started by the OS on first access; accept it if prompted",
             "4. Check logs: sudo journalctl -u tsconfig-ble -f",
         ]
         print_info("\nTroubleshooting:")

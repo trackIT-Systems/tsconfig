@@ -8,7 +8,8 @@ Usage:
 
 Options:
     --api-url URL           Base URL of tsconfig API (default: http://localhost:8000)
-    --no-pairing            Disable pairing requirement for write operations
+    --no-auth               Disable link encryption and the operator login
+                            (alias: --no-pairing)
     --no-discoverable       Start in non-discoverable mode
     -v                      Enable info logging
     -vv                     Enable debug logging
@@ -34,14 +35,14 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with defaults (localhost:8000, require pairing, discoverable)
+  # Run with defaults (localhost:8000, encrypted link + operator login, discoverable)
   python3 -m app.ble_gateway
 
   # Connect to remote API
   python3 -m app.ble_gateway --api-url http://192.168.1.100:8000
 
-  # Disable pairing requirement (insecure)
-  python3 -m app.ble_gateway --no-pairing
+  # Disable encryption and the operator login (insecure)
+  python3 -m app.ble_gateway --no-auth
 
   # Start in non-discoverable mode
   python3 -m app.ble_gateway --no-discoverable
@@ -64,9 +65,11 @@ The BLE device will advertise using the system hostname as its name.
     )
 
     parser.add_argument(
+        "--no-auth",
         "--no-pairing",
+        dest="no_auth",
         action="store_true",
-        help="Disable pairing requirement for write operations (insecure)",
+        help="Disable link encryption and the operator login (insecure; --no-pairing is the old name)",
     )
 
     parser.add_argument(
@@ -99,7 +102,7 @@ def main():
     logger.info("tsOS Configuration Manager - BLE GATT Gateway")
     logger.info("=" * 60)
     logger.info(f"API URL: {args.api_url}")
-    logger.info(f"Pairing required: {not args.no_pairing}")
+    logger.info(f"Operator login required: {not args.no_auth}")
     logger.info(f"Discoverable: {not args.no_discoverable}")
     logger.info("=" * 60)
 
@@ -146,7 +149,7 @@ def main():
         server = BleGattServer(
             api_url=args.api_url,
             device_name=None,  # Will use hostname
-            require_pairing=not args.no_pairing,
+            require_auth=not args.no_auth,
             discoverable=not args.no_discoverable,
         )
 
