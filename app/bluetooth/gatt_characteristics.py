@@ -6,6 +6,7 @@ for each tsconfig API endpoint exposed via BLE GATT.
 
 import asyncio
 import json
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 import dbus
@@ -30,6 +31,11 @@ logger = get_logger(__name__)
 # BlueZ D-Bus constants
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 DBUS_PROP_IFACE = "org.freedesktop.DBus.Properties"
+
+# Multi-write requests: an incomplete request is dropped after this many seconds without
+# another write, and a request may not grow beyond this many bytes (a config zip is ~10 kB)
+WRITE_IDLE_TIMEOUT = 15.0
+MAX_WRITE_BUFFER = 2 * 1024 * 1024
 
 
 class Characteristic(dbus.service.Object):
@@ -130,6 +136,9 @@ class Characteristic(dbus.service.Object):
         if interface != GATT_CHRC_IFACE:
             raise dbus.exceptions.DBusException("org.freedesktop.DBus.Error.InvalidArgs", "Invalid interface")
         return self.get_properties()[GATT_CHRC_IFACE]
+
+    def on_disconnect(self, device: str):
+        """Drop per-connection state when a device disconnects (override as needed)."""
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
@@ -369,8 +378,28 @@ class WriteOnlyCharacteristic(Characteristic):
         # BlueZ device path of the connection whose write is being processed
         # (the GLib main loop is single-threaded, so one slot is enough).
         self.current_device: Optional[str] = None
-        # Buffer for accumulating multi-write data
-        self.write_buffer = bytearray()
+        # Partially received requests, per connection (BlueZ device path) so that one
+        # client's aborted upload can never corrupt another client's request
+        self.write_buffers: Dict[str, bytearray] = {}
+        self._last_write: Dict[str, float] = {}
+
+    def on_disconnect(self, device: str):
+        """Discard the half-received request of a connection that ended."""
+        if self.write_buffers.pop(device, None):
+            logger.warning(f"Discarded incomplete write on {self.uuid}: {device} disconnected")
+        self._last_write.pop(device, None)
+
+    def _buffer_for(self, device: str) -> bytearray:
+        """The request buffer of a connection; a stale partial request is dropped first."""
+        now = time.monotonic()
+        buffer = self.write_buffers.get(device)
+        if buffer and now - self._last_write.get(device, now) > WRITE_IDLE_TIMEOUT:
+            logger.warning(f"Discarded {len(buffer)} bytes of stale incomplete write on {self.uuid} ({device})")
+            buffer.clear()
+        if buffer is None:
+            buffer = self.write_buffers[device] = bytearray()
+        self._last_write[device] = now
+        return buffer
 
     def _process_write_data(self, request_data: Dict[str, Any]):
         """Process write data by calling the write handler.
@@ -425,34 +454,42 @@ class WriteOnlyCharacteristic(Characteristic):
 
         device = options.get("device")
         self.current_device = str(device) if device else None
+        buffer_key = self.current_device or ""
+        buffer = self._buffer_for(buffer_key)
 
         try:
-            # Add incoming data to buffer
+            # Add incoming data to this connection's buffer
             data_bytes = bytes(value)
-            self.write_buffer.extend(data_bytes)
-            
-            logger.debug(f"Received {len(data_bytes)} bytes for {self.uuid}, buffer now {len(self.write_buffer)} bytes")
+            buffer.extend(data_bytes)
 
-            # Try to parse as JSON
-            parsed_data = parser.parse_json(bytes(self.write_buffer))
+            logger.debug(f"Received {len(data_bytes)} bytes for {self.uuid}, buffer now {len(buffer)} bytes")
 
-            if parsed_data is not None:
+            if len(buffer) > MAX_WRITE_BUFFER:
+                raise BleRequestError("Request too large", 413)
+
+            state, parsed_data = parser.classify_json(bytes(buffer))
+
+            if state == "complete":
                 # Successfully parsed - process the request
-                logger.debug(f"Successfully parsed {len(self.write_buffer)} bytes of JSON for {self.uuid}")
-                self.write_buffer.clear()
+                logger.debug(f"Successfully parsed {len(buffer)} bytes of JSON for {self.uuid}")
+                buffer.clear()
                 self._process_write_data(parsed_data)
-            else:
+            elif state == "incomplete":
                 # Not yet complete JSON - wait for more data
-                logger.debug(f"Incomplete JSON, waiting for more data (buffer: {len(self.write_buffer)} bytes)")
+                logger.debug(f"Incomplete JSON, waiting for more data (buffer: {len(buffer)} bytes)")
+            else:
+                # Can never become valid (garbage, or leftovers of an aborted request)
+                logger.warning(f"Invalid JSON request on {self.uuid} ({len(buffer)} bytes), discarding")
+                raise BleRequestError("Invalid JSON request", 400)
 
         except BleRequestError as e:
-            self.write_buffer.clear()
+            buffer.clear()
             error_response = formatter.error(str(e), e.code, **e.extra)
             self.send_notification(error_response.encode("utf-8"))
         except Exception as e:
             logger.error(f"Error writing to {self.uuid}: {e}")
             # Clear buffer on error
-            self.write_buffer.clear()
+            buffer.clear()
             error_response = formatter.error(str(e))
             self.send_notification(error_response.encode("utf-8"))
         finally:

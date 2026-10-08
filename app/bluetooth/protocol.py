@@ -18,7 +18,8 @@ UUID Scheme:
 """
 
 import json
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any, Dict, List, Optional, Tuple
 import cbor2
 
 # Base UUID pattern
@@ -200,6 +201,13 @@ class ResponseFormatter:
         return cbor2.dumps(metadata)
 
 
+# What may be left over at the end of a request that was cut in the middle of a JSON
+# literal (true, false, null, NaN, Infinity, -Infinity) or number (-, 1., 1e, 1e+)
+_CUT_SHORT_TOKEN = re.compile(
+    r"t(r(ue?)?)?|f(a(l(se?)?)?)?|n(u(ll?)?)?|N(a)?|I(n(f(i(n(i(ty?)?)?)?)?)?)?|-(I(n(f(i(n(i(ty?)?)?)?)?)?)?)?|\.|[eE][+-]?"
+)
+
+
 class RequestParser:
     """Parse incoming BLE write requests."""
 
@@ -218,6 +226,42 @@ class RequestParser:
             return json.loads(json_str)
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
+
+    @staticmethod
+    def classify_json(data: bytes) -> Tuple[str, Any]:
+        """Parse a possibly partial JSON request that arrives in several writes.
+
+        Unlike `parse_json`, this tells a request that is merely not complete yet
+        from one that can never become valid, so garbage or leftovers of an
+        aborted request are rejected instead of being waited on forever.
+
+        Args:
+            data: Everything received so far for one request
+
+        Returns:
+            ("complete", parsed_value), ("incomplete", None) or ("invalid", None)
+        """
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            # A multi-byte character cut in half at the end is still incomplete
+            if e.reason == "unexpected end of data" and e.end >= len(data):
+                return "incomplete", None
+            return "invalid", None
+        try:
+            return "complete", json.loads(text)
+        except json.JSONDecodeError as e:
+            # Running out of input is the main error a truncated request causes. The
+            # others are reported earlier than the end: an unterminated string (at its
+            # start), a \uXXXX escape cut short, and a literal or number cut short
+            # (`tr`, `-`, `1.`, `1e+`: at the token's start or at the unfinished part).
+            if e.pos >= len(text) or e.msg.startswith("Unterminated string"):
+                return "incomplete", None
+            if e.msg.startswith("Invalid \\uXXXX escape") and e.pos >= len(text) - 6:
+                return "incomplete", None
+            if e.msg.startswith("Expecting") and _CUT_SHORT_TOKEN.fullmatch(text[e.pos :]):
+                return "incomplete", None
+            return "invalid", None
 
     @staticmethod
     def validate_service_action(data: Dict[str, Any]) -> bool:

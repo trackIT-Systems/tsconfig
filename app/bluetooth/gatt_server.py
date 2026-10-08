@@ -36,6 +36,11 @@ AGENT_IFACE = "org.bluez.Agent1"
 DEVICE_IFACE = "org.bluez.Device1"
 AGENT_PATH = "/org/bluez/tsconfig/agent"
 
+# Advertising interval in milliseconds. Without it the kernel's default of 1280 ms applies, and a
+# scanner with a 3-10 s timeout then misses the device in most attempts (measured on Pi 3 and
+# Pi 5: 7-9 of 40 3-second scans found it, 38-40 of 40 at 100 ms).
+ADVERTISING_INTERVAL_MS = 100
+
 
 class InvalidArgsException(dbus.exceptions.DBusException):
     """D-Bus exception for invalid arguments."""
@@ -158,6 +163,16 @@ class Application(dbus.service.Object):
         """
         self.services.append(service)
 
+    def on_disconnect(self, device: str):
+        """Drop per-connection state (partial writes) of a device that disconnected.
+
+        Args:
+            device: BlueZ device path of the connection that ended
+        """
+        for service in self.services:
+            for chrc in service.characteristics:
+                chrc.on_disconnect(device)
+
     @dbus.service.method(DBUS_OM_IFACE, out_signature="a{oa{sa{sv}}}")
     def GetManagedObjects(self):
         """D-Bus GetManagedObjects method - return all services and characteristics."""
@@ -230,6 +245,8 @@ class Advertisement(dbus.service.Object):
             "ServiceUUIDs": dbus.Array(self.service_uuids, signature="s"),
             "LocalName": dbus.String(self.local_name),
             "IncludeTxPower": dbus.Boolean(self.include_tx_power),
+            "MinInterval": dbus.UInt32(ADVERTISING_INTERVAL_MS),
+            "MaxInterval": dbus.UInt32(ADVERTISING_INTERVAL_MS),
         }
         
         # Add service data if present
@@ -343,6 +360,15 @@ class BleGattServer:
         if self.require_auth:
             self.setup_pairing(adapter_obj)
 
+        # Registered regardless of authentication: partial writes must not outlive their connection
+        self.bus.add_signal_receiver(
+            self._on_device_properties_changed,
+            dbus_interface=DBUS_PROP_IFACE,
+            signal_name="PropertiesChanged",
+            arg0=DEVICE_IFACE,
+            path_keyword="path",
+        )
+
         # Get managers
         logger.debug("Getting LE Advertising and GATT managers...")
         self.ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
@@ -382,8 +408,7 @@ class BleGattServer:
         logger.info("BLE GATT Server setup complete")
 
     def setup_pairing(self, adapter_obj):
-        """Make the adapter pairable and register the Just Works pairing agent,
-        and forget a connection's login when it disconnects."""
+        """Make the adapter pairable and register the Just Works pairing agent."""
         try:
             self.adapter_props.Set(ADAPTER_IFACE, "Pairable", dbus.Boolean(True))
             self.adapter_props.Set(ADAPTER_IFACE, "PairableTimeout", dbus.UInt32(0))
@@ -400,18 +425,13 @@ class BleGattServer:
             # Encrypted characteristics cannot be used without a way to pair.
             logger.error(f"Could not register the pairing agent: {e}")
 
-        self.bus.add_signal_receiver(
-            self._on_device_properties_changed,
-            dbus_interface=DBUS_PROP_IFACE,
-            signal_name="PropertiesChanged",
-            arg0=DEVICE_IFACE,
-            path_keyword="path",
-        )
-
     def _on_device_properties_changed(self, interface, changed, invalidated, path=None):
-        """A connection's login ends when its device disconnects."""
-        if self.authenticator and path and "Connected" in changed and not bool(changed["Connected"]):
-            self.authenticator.forget(str(path))
+        """A connection's login and half-received writes end when its device disconnects."""
+        if path and "Connected" in changed and not bool(changed["Connected"]):
+            if self.authenticator:
+                self.authenticator.forget(str(path))
+            if self.application:
+                self.application.on_disconnect(str(path))
 
     def register_application(self):
         """Register the GATT application with BlueZ."""

@@ -32,6 +32,8 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 ### Fixed
 
 - Prevent writing empty or unset optional fields (e.g. `disk_reserve_mb` being written as `null`/`None`) to `soundscapepipe.yml` by filtering none values on model serialization (Issue #6)
+- BLE gateway: the device is found reliably when scanning. It advertised at the kernel default of 1280 ms, so a scanner with a 3-10 s timeout missed it in most attempts (7-9 of 40 3-second scans found it on a Pi 3 and a Pi 5); it now advertises at 100 ms (`MinInterval`/`MaxInterval` of the LE advertisement; 37-40 of 40)
+- BLE gateway: one aborted or malformed write no longer disables the write characteristics until the service is restarted. A request that arrives in several writes was collected in one buffer per characteristic that never emptied, so after a client disconnected mid-upload every later request, from any client, was silently ignored. The buffer is now per connection and dropped when it disconnects or has been idle for 15 s; a request that can never become valid JSON (or exceeds 2 MiB) is answered with an error (`400`/`413`) instead of being waited on, and the discard is logged
 
 ## [2026.7.1] - 2026-07-14
 
