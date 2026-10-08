@@ -6,16 +6,18 @@ services, and BLE advertising.
 
 import logging
 import socket
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import dbus
 import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
 
+from app.bluetooth import executor as ble_executor
 from app.bluetooth.api_client import TsConfigApiClient
 from app.bluetooth.auth import BleAuthenticator
 from app.bluetooth.services import SystemdService, SystemService, UploadService
+from app.bluetooth.supervisor import Supervisor, sd_notify
 from app.logging_config import get_logger
 from app.main import _get_hardware_info
 
@@ -40,6 +42,10 @@ AGENT_PATH = "/org/bluez/tsconfig/agent"
 # scanner with a 3-10 s timeout then misses the device in most attempts (measured on Pi 3 and
 # Pi 5: 7-9 of 40 3-second scans found it, 38-40 of 40 at 100 ms).
 ADVERTISING_INTERVAL_MS = 100
+
+# How often the gateway checks that BlueZ still advertises it (seconds)
+HEALTH_CHECK_INTERVAL_S = 10
+BLUEZ_ALREADY_EXISTS = "org.bluez.Error.AlreadyExists"
 
 
 class InvalidArgsException(dbus.exceptions.DBusException):
@@ -192,7 +198,14 @@ class Advertisement(dbus.service.Object):
 
     PATH_BASE = "/org/bluez/tsconfig/advertisement"
 
-    def __init__(self, bus: dbus.Bus, index: int, advertising_type: str, device_name: Optional[str] = None):
+    def __init__(
+        self,
+        bus: dbus.Bus,
+        index: int,
+        advertising_type: str,
+        device_name: Optional[str] = None,
+        on_release: Optional[Callable[[], None]] = None,
+    ):
         """Initialize the BLE advertisement.
 
         Args:
@@ -200,7 +213,9 @@ class Advertisement(dbus.service.Object):
             index: Advertisement index
             advertising_type: Type of advertisement (e.g., "peripheral")
             device_name: Optional device name to advertise
+            on_release: Called when BlueZ drops the advertisement
         """
+        self.on_release = on_release
         self.path = f"{self.PATH_BASE}{index}"
         self.bus = bus
         self.ad_type = advertising_type
@@ -267,12 +282,20 @@ class Advertisement(dbus.service.Object):
 
     @dbus.service.method(LE_ADVERTISEMENT_IFACE, in_signature="", out_signature="")
     def Release(self):
-        """Release the advertisement."""
+        """BlueZ no longer advertises this (bluetoothd stopping, adapter reset, ...)."""
         logger.info(f"Advertisement {self.path} released")
+        if self.on_release:
+            self.on_release()
 
 
 class BleGattServer:
-    """Main BLE GATT server managing D-Bus and BlueZ interactions."""
+    """Main BLE GATT server managing D-Bus and BlueZ interactions.
+
+    The objects the gateway exports (GATT application, advertisement, pairing agent) are
+    created once. What has to be registered with BlueZ is tracked by a `Supervisor`, which
+    registers it at startup and again whenever BlueZ loses it (bluetoothd restart,
+    advertisement released, adapter reset).
+    """
 
     def __init__(
         self,
@@ -298,7 +321,6 @@ class BleGattServer:
         self.discoverable = discoverable
 
         self.bus: Optional[dbus.Bus] = None
-        self.adapter: Optional[dbus.Interface] = None
         self.adapter_props: Optional[dbus.Interface] = None
         self.ad_manager: Optional[dbus.Interface] = None
         self.gatt_manager: Optional[dbus.Interface] = None
@@ -306,8 +328,20 @@ class BleGattServer:
         self.advertisement: Optional[Advertisement] = None
         self.api_client: Optional[TsConfigApiClient] = None
         self.mainloop: Optional[GLib.MainLoop] = None
+        self.executor: Optional[ble_executor.ThreadedExecutor] = None
+        self.supervisor = Supervisor(register=self._register_missing, schedule=self._schedule)
+
+        self._app_inflight = False
+        self._adv_inflight = False
+        self._active_instances: Optional[int] = None  # last ActiveInstances read from BlueZ
+        self._owner_reported = False
 
         logger.info(f"BLE GATT Server initialized for device: {self.device_name}")
+
+    @staticmethod
+    def _schedule(delay: float, fn: Callable[[], None]) -> None:
+        """Call `fn` once on the main loop after `delay` seconds."""
+        GLib.timeout_add(max(int(delay * 1000), 1), lambda: fn() or False)
 
     def find_adapter(self) -> str:
         """Find the first available Bluetooth adapter.
@@ -329,7 +363,7 @@ class BleGattServer:
         raise Exception("No Bluetooth adapter found")
 
     def setup(self):
-        """Set up the BLE GATT server."""
+        """Create what the gateway exports and subscribe to BlueZ events (nothing is registered yet)."""
         logger.debug("Setting up BLE GATT server...")
 
         # Initialize D-Bus
@@ -337,42 +371,9 @@ class BleGattServer:
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         self.bus = dbus.SystemBus()
 
-        # Find adapter
-        logger.debug("Finding Bluetooth adapter...")
-        adapter_path = self.find_adapter()
-        adapter_obj = self.bus.get_object(BLUEZ_SERVICE_NAME, adapter_path)
-        self.adapter = dbus.Interface(adapter_obj, ADAPTER_IFACE)
-        self.adapter_props = dbus.Interface(adapter_obj, DBUS_PROP_IFACE)
-
-        # Check current adapter state
-        try:
-            powered = self.adapter_props.Get(ADAPTER_IFACE, "Powered")
-            address = self.adapter_props.Get(ADAPTER_IFACE, "Address")
-            logger.debug(f"Adapter {address} - Powered: {powered}")
-        except Exception as e:
-            logger.warning(f"Could not read adapter properties: {e}")
-
-        # Set adapter properties
-        logger.debug("Configuring adapter properties...")
-        self.adapter_props.Set(ADAPTER_IFACE, "Powered", dbus.Boolean(True))
-        self.adapter_props.Set(ADAPTER_IFACE, "Discoverable", dbus.Boolean(self.discoverable))
-
-        if self.require_auth:
-            self.setup_pairing(adapter_obj)
-
-        # Registered regardless of authentication: partial writes must not outlive their connection
-        self.bus.add_signal_receiver(
-            self._on_device_properties_changed,
-            dbus_interface=DBUS_PROP_IFACE,
-            signal_name="PropertiesChanged",
-            arg0=DEVICE_IFACE,
-            path_keyword="path",
-        )
-
-        # Get managers
-        logger.debug("Getting LE Advertising and GATT managers...")
-        self.ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
-        self.gatt_manager = dbus.Interface(adapter_obj, GATT_MANAGER_IFACE)
+        # HTTP work runs on a background loop so that a slow API never blocks the main loop
+        self.executor = ble_executor.ThreadedExecutor(dispatch=lambda fn: GLib.idle_add(lambda: fn() or False))
+        ble_executor.set_executor(self.executor)
 
         # Create API client
         logger.debug("Creating API client...")
@@ -385,15 +386,17 @@ class BleGattServer:
 
         # Create advertisement
         logger.debug("Creating BLE advertisement...")
-        self.advertisement = Advertisement(self.bus, 0, "peripheral", self.device_name)
-        
+        self.advertisement = Advertisement(
+            self.bus, 0, "peripheral", self.device_name, on_release=self.supervisor.advertisement_released
+        )
+
         # Advertise with 16-bit tsOS UUID (0x7473) and serial number in service data
         # This is space-efficient and allows client-side filtering
         from app.bluetooth.protocol import TSOS_SERVICE_UUID_16BIT
-        
+
         self.advertisement.add_service_uuid(TSOS_SERVICE_UUID_16BIT)
         logger.debug(f"Advertising with tsOS service UUID: {TSOS_SERVICE_UUID_16BIT}")
-        
+
         # Get serial number and add to service data (last 8 hex chars → 4 bytes)
         try:
             hardware_info = _get_hardware_info()
@@ -405,9 +408,63 @@ class BleGattServer:
             logger.warning(f"Could not add serial to advertisement: {e}")
             # Continue without serial - device will still be discoverable
 
+        if self.require_auth:
+            self.agent = NoInputNoOutputAgent(self.bus)
+
+        # Registered regardless of authentication: partial writes must not outlive their connection
+        self.bus.add_signal_receiver(
+            self._on_device_properties_changed,
+            dbus_interface=DBUS_PROP_IFACE,
+            signal_name="PropertiesChanged",
+            arg0=DEVICE_IFACE,
+            path_keyword="path",
+        )
+        # Called with the current owner right away and whenever bluetoothd (re)starts or stops
+        self.bus.watch_name_owner(BLUEZ_SERVICE_NAME, self._on_bluez_owner)
+
         logger.info("BLE GATT Server setup complete")
 
-    def setup_pairing(self, adapter_obj):
+    # --- registration with BlueZ (driven by the supervisor) -------------------
+
+    def _on_bluez_owner(self, owner: str):
+        """bluetoothd appeared on or vanished from the bus."""
+        present = bool(owner)
+        self.ad_manager = self.gatt_manager = self.adapter_props = None
+        self._active_instances = None
+        self._app_inflight = self._adv_inflight = False
+        if not self._owner_reported:
+            # First report is the state at startup, not a change
+            self._owner_reported = True
+            self.supervisor.bluez_present = present
+            if present:
+                self.supervisor.request(0.0)
+            else:
+                logger.warning("bluetoothd is not on the bus yet, waiting for it")
+            return
+        self.supervisor.bluez_changed(present)
+
+    def _register_missing(self):
+        """Register whatever BlueZ does not have yet (called by the supervisor, may raise)."""
+        adapter_path = self.find_adapter()
+        adapter_obj = self.bus.get_object(BLUEZ_SERVICE_NAME, adapter_path)
+        self.adapter_props = dbus.Interface(adapter_obj, DBUS_PROP_IFACE)
+        self.ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
+        self.gatt_manager = dbus.Interface(adapter_obj, GATT_MANAGER_IFACE)
+
+        # Set adapter properties
+        logger.debug("Configuring adapter properties...")
+        self.adapter_props.Set(ADAPTER_IFACE, "Powered", dbus.Boolean(True))
+        self.adapter_props.Set(ADAPTER_IFACE, "Discoverable", dbus.Boolean(self.discoverable))
+
+        if self.require_auth and not self.supervisor.agent_registered:
+            self.setup_pairing()
+
+        if not self.supervisor.app_registered and not self._app_inflight:
+            self.register_application()
+        if not self.supervisor.adv_registered and not self._adv_inflight:
+            self.register_advertisement()
+
+    def setup_pairing(self):
         """Make the adapter pairable and register the Just Works pairing agent."""
         try:
             self.adapter_props.Set(ADAPTER_IFACE, "Pairable", dbus.Boolean(True))
@@ -416,12 +473,15 @@ class BleGattServer:
             logger.warning(f"Could not make the adapter pairable: {e}")
 
         try:
-            self.agent = NoInputNoOutputAgent(self.bus)
             agent_manager = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE_NAME, "/org/bluez"), AGENT_MANAGER_IFACE)
             agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
             agent_manager.RequestDefaultAgent(AGENT_PATH)
+            self.supervisor.agent_registered = True
             logger.info("Registered NoInputNoOutput pairing agent")
         except Exception as e:
+            if BLUEZ_ALREADY_EXISTS in str(e):
+                self.supervisor.agent_registered = True
+                return
             # Encrypted characteristics cannot be used without a way to pair.
             logger.error(f"Could not register the pairing agent: {e}")
 
@@ -436,66 +496,75 @@ class BleGattServer:
     def register_application(self):
         """Register the GATT application with BlueZ."""
         logger.info("Registering GATT application...")
+        self._app_inflight = True
+
+        def done():
+            self._app_inflight = False
+            self.supervisor.app_registered = True
+            self.supervisor.registration_ok()
+            logger.info("GATT application registered successfully")
+
+        def failed(error):
+            self._app_inflight = False
+            if BLUEZ_ALREADY_EXISTS in str(error):
+                self.supervisor.app_registered = True
+                return
+            self.supervisor.registration_failed("GATT application", error)
+
         self.gatt_manager.RegisterApplication(
-            self.application.get_path(),
-            {},
-            reply_handler=lambda: logger.info("GATT application registered successfully"),
-            error_handler=lambda e: logger.error(f"Failed to register GATT application: {e}"),
+            self.application.get_path(), {}, reply_handler=done, error_handler=failed
         )
 
     def register_advertisement(self):
         """Register the BLE advertisement with BlueZ."""
         logger.debug("Registering BLE advertisement...")
+        self._adv_inflight = True
 
-        def success_handler():
+        def done():
+            self._adv_inflight = False
+            self.supervisor.adv_registered = True
+            self.supervisor.registration_ok()
+            self._active_instances = None  # what we read before this is out of date
             logger.info(f"BLE advertisement registered successfully as '{self.device_name}'")
-            logger.info("Device is now discoverable via Bluetooth")
 
-        def error_handler(error):
-            logger.error("=" * 70)
-            logger.error(f"FAILED to register BLE advertisement: {error}")
-            logger.error("=" * 70)
-            logger.error("")
-            logger.error("Troubleshooting steps:")
-            logger.error("  1. Run the reset script: sudo ./reset_ble.sh")
-            logger.error("  2. Or manually reset:")
-            logger.error("     sudo systemctl stop tsconfig-ble")
-            logger.error("     sudo hciconfig hci0 down && sleep 2 && sudo hciconfig hci0 up")
-            logger.error("     sudo systemctl restart bluetooth && sleep 3")
-            logger.error("     sudo systemctl start tsconfig-ble")
-            logger.error("")
-            logger.error("  3. Check for other BLE services:")
-            logger.error("     sudo systemctl list-units | grep -i ble")
-            logger.error("")
-            logger.error("See TROUBLESHOOTING_BLE.md for detailed help")
-            logger.error("=" * 70)
-
-            # Stop the mainloop gracefully instead of raising
-            if self.mainloop:
-                logger.info("Stopping server due to advertisement failure...")
-                GLib.timeout_add(100, lambda: self.mainloop.quit())
+        def failed(error):
+            self._adv_inflight = False
+            if BLUEZ_ALREADY_EXISTS in str(error):
+                self.supervisor.adv_registered = True
+                return
+            self.supervisor.registration_failed("BLE advertisement", error)
 
         self.ad_manager.RegisterAdvertisement(
-            self.advertisement.get_path(),
-            {},
-            reply_handler=success_handler,
-            error_handler=error_handler,
+            self.advertisement.get_path(), {}, reply_handler=done, error_handler=failed
         )
+
+    # --- health ---------------------------------------------------------------
+
+    def _health_check(self) -> bool:
+        """Periodic self-check: feeds the systemd watchdog and triggers recovery."""
+        self.supervisor.check(self._active_instances)
+        # Ask BlueZ how many advertisements it has; the answer is used by the next check
+        if self.adapter_props is not None:
+            self.adapter_props.Get(
+                LE_ADVERTISING_MANAGER_IFACE,
+                "ActiveInstances",
+                reply_handler=lambda value: setattr(self, "_active_instances", int(value)),
+                error_handler=lambda error: setattr(self, "_active_instances", None),
+            )
+        return True
 
     def start(self):
         """Start the BLE GATT server."""
         logger.info("Starting BLE GATT server...")
 
         try:
-            # Setup
             self.setup()
 
-            # Register application and advertisement
-            self.register_application()
-            self.register_advertisement()
+            GLib.timeout_add_seconds(HEALTH_CHECK_INTERVAL_S, self._health_check)
 
-            # Start GLib main loop
+            # Start GLib main loop; registration with BlueZ is done by the supervisor
             self.mainloop = GLib.MainLoop()
+            sd_notify("READY=1")
             logger.info("BLE GATT server running. Press Ctrl+C to stop.")
 
             try:
@@ -511,6 +580,7 @@ class BleGattServer:
     def stop(self):
         """Stop the BLE GATT server."""
         logger.info("Stopping BLE GATT server...")
+        sd_notify("STOPPING=1")
 
         # Unregister advertisement
         if self.ad_manager and self.advertisement:
@@ -528,16 +598,14 @@ class BleGattServer:
             except Exception as e:
                 logger.error(f"Error unregistering application: {e}")
 
-        # Close API client
-        if self.api_client:
-            import asyncio
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        # Close API client and stop the executor
+        if self.executor:
             try:
-                loop.run_until_complete(self.api_client.close())
-            finally:
-                loop.close()
+                if self.api_client:
+                    self.executor.run_blocking(self.api_client.close())
+            except Exception as e:
+                logger.debug(f"Error closing API client: {e}")
+            self.executor.shutdown()
 
         # Quit mainloop
         if self.mainloop:

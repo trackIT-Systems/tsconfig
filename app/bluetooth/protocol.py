@@ -56,6 +56,9 @@ UPLOAD_ZIP_UUID = BASE_UUID.format(0x3002)
 # BLE GATT MTU constraints
 DEFAULT_MTU = 23  # BLE 4.0 minimum MTU
 ATT_HEADER_SIZE = 3  # ATT protocol header overhead
+# A GATT attribute value (and so a notification) is at most 512 bytes whatever the MTU is:
+# BlueZ reports an ATT MTU of 517 and silently trims anything longer than 512 bytes.
+ATT_MAX_VALUE_LEN = 512
 
 
 class BinaryChunker:

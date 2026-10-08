@@ -5,6 +5,7 @@ for each tsconfig API endpoint exposed via BLE GATT.
 """
 
 import asyncio
+import contextvars
 import json
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -13,6 +14,7 @@ import dbus
 import dbus.service
 
 from app.bluetooth.api_client import TsConfigApiClient
+from app.bluetooth import executor as ble_executor
 from app.bluetooth.auth import BleAuthenticator, BleRequestError, secure_flags
 from app.bluetooth.protocol import (
     BinaryChunker,
@@ -23,6 +25,8 @@ from app.bluetooth.protocol import (
     STATUS_READY,
     STATUS_ERROR,
     DEFAULT_MTU,
+    ATT_HEADER_SIZE,
+    ATT_MAX_VALUE_LEN,
 )
 from app.logging_config import get_logger
 
@@ -36,6 +40,14 @@ DBUS_PROP_IFACE = "org.freedesktop.DBus.Properties"
 # another write, and a request may not grow beyond this many bytes (a config zip is ~10 kB)
 WRITE_IDLE_TIMEOUT = 15.0
 MAX_WRITE_BUFFER = 2 * 1024 * 1024
+
+# BlueZ answers a client's read with an error ~5 s after it was asked (measured), so a read
+# that the API has not answered by then is not worth waiting for; its metadata says so.
+READ_TIMEOUT_S = 4.0
+
+# The connection (BlueZ device path) whose request a handler is serving. Handlers run on the
+# executor, possibly several at once for different connections, so this cannot be an attribute.
+_current_device: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("ble_current_device", default=None)
 
 
 class Characteristic(dbus.service.Object):
@@ -76,8 +88,11 @@ class Characteristic(dbus.service.Object):
         self.api_client = api_client
         self.authenticator = authenticator
         self.notifying = False
-        self._mtu = DEFAULT_MTU  # Will be updated when device connects
-        self._chunker = BinaryChunker(self._mtu)
+        # ATT MTU per connection, as BlueZ reports it with each read/write
+        self._mtus: Dict[str, int] = {}
+        # Counts a connection's disconnects: a response is only delivered if its request was
+        # made in the current epoch, so nothing of a closed connection reaches a later one
+        self._epoch: Dict[str, int] = {}
 
         dbus.service.Object.__init__(self, bus, self.path)
 
@@ -96,39 +111,46 @@ class Characteristic(dbus.service.Object):
         return dbus.ObjectPath(self.path)
 
     def get_mtu(self, options: Dict[str, Any]) -> int:
-        """Get the negotiated MTU for the connected device.
+        """The negotiated ATT MTU of the connection a call came from.
+
+        BlueZ passes it in the call's options (`mtu`); without it the BLE minimum is assumed.
 
         Args:
-            options: Options dictionary from D-Bus call (contains device path)
+            options: Options dictionary from the D-Bus call
 
         Returns:
-            Negotiated MTU or default if unavailable
+            Negotiated MTU or the default if BlueZ did not say
         """
         try:
-            device_path = options.get("device")
-            if not device_path:
-                return DEFAULT_MTU
-
-            # Query the device's MTU from BlueZ
-            device_obj = self.bus.get_object("org.bluez", device_path)
-            device_props = dbus.Interface(device_obj, "org.freedesktop.DBus.Properties")
-            mtu = device_props.Get("org.bluez.Device1", "MTU")
-            logger.debug(f"Negotiated MTU for {device_path}: {mtu}")
-            return int(mtu)
-        except Exception as e:
-            logger.debug(f"Could not get MTU from device, using default: {e}")
+            return max(int(options.get("mtu", DEFAULT_MTU)), DEFAULT_MTU)
+        except (TypeError, ValueError):
             return DEFAULT_MTU
 
-    def update_mtu(self, mtu: int):
-        """Update MTU and recreate chunker.
+    def note_connection(self, options: Dict[str, Any]) -> Optional[str]:
+        """Remember the MTU of the calling connection; returns its device path (None if unknown)."""
+        device = options.get("device")
+        device = str(device) if device else None
+        if device:
+            mtu = self.get_mtu(options)
+            if self._mtus.get(device) != mtu:
+                self._mtus[device] = mtu
+                logger.debug(f"MTU of {device} is {mtu} for {self.uuid}")
+        return device
 
-        Args:
-            mtu: New MTU value
+    def chunker_for(self, device: Optional[str]) -> BinaryChunker:
+        """Chunker sized for a connection's MTU (the BLE minimum if it is not known).
+
+        Chunks never exceed `ATT_MAX_VALUE_LEN`: BlueZ reports an ATT MTU of 517 for a
+        connection but trims every notification to 512 bytes, which cut the end off
+        each full chunk.
         """
-        if mtu != self._mtu:
-            self._mtu = mtu
-            self._chunker = BinaryChunker(mtu)
-            logger.debug(f"Updated MTU to {mtu} for {self.uuid}, chunk size: {self._chunker.chunk_size}")
+        mtu = self._mtus.get(device or "", DEFAULT_MTU)
+        return BinaryChunker(min(mtu, ATT_MAX_VALUE_LEN + ATT_HEADER_SIZE))
+
+    def on_disconnect(self, device: str):
+        """Drop per-connection state when a device disconnects."""
+        self._mtus.pop(device, None)
+        self._epoch[device] = self._epoch.get(device, 0) + 1
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
@@ -136,9 +158,6 @@ class Characteristic(dbus.service.Object):
         if interface != GATT_CHRC_IFACE:
             raise dbus.exceptions.DBusException("org.freedesktop.DBus.Error.InvalidArgs", "Invalid interface")
         return self.get_properties()[GATT_CHRC_IFACE]
-
-    def on_disconnect(self, device: str):
-        """Drop per-connection state when a device disconnects (override as needed)."""
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
@@ -185,11 +204,12 @@ class Characteristic(dbus.service.Object):
         # This updates the "Value" property of the characteristic
         self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": dbus.Array(value, signature="y")}, [])
 
-    def send_chunked_response(self, data: str):
+    def send_chunked_response(self, data: str, device: Optional[str] = None):
         """Send a chunked response via notifications.
 
         Args:
             data: String data to send (will be chunked if necessary)
+            device: Connection the response is for; its MTU sets the chunk size
         """
         if not self.notifying:
             logger.warning(f"Cannot send chunked response on {self.uuid}: not notifying")
@@ -197,10 +217,10 @@ class Characteristic(dbus.service.Object):
 
         # Convert string to bytes and chunk
         data_bytes = data.encode("utf-8")
-        chunks = self._chunker.chunk_data(data_bytes)
-        
+        chunks = self.chunker_for(device).chunk_data(data_bytes)
+
         logger.debug(f"Sending {len(data_bytes)} bytes in {len(chunks)} chunks for {self.uuid}")
-        
+
         # Send chunks sequentially (no delays - rely on BlueZ queuing)
         for i, chunk in enumerate(chunks):
             self.send_notification(chunk)
@@ -245,104 +265,81 @@ class ReadOnlyCharacteristic(Characteristic):
         super().__init__(bus, index, uuid, ["read", "notify"], service, api_client, authenticator)
         self.read_handler = read_handler
 
-    @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
-    def ReadValue(self, options):
+    def _error_metadata(self, message: str) -> "dbus.Array":
+        return dbus.Array(
+            formatter.metadata_cbor(content_length=0, chunk_count=0, status=STATUS_ERROR, error_message=message),
+            signature="y",
+        )
+
+    @dbus.service.method(
+        GATT_CHRC_IFACE,
+        in_signature="a{sv}",
+        out_signature="ay",
+        async_callbacks=("reply_cb", "error_cb"),
+    )
+    def ReadValue(self, options, reply_cb, error_cb):
         """Handle read operation with notification-only protocol.
 
         All data is transferred via notifications. Read operations return only
         binary CBOR metadata about the data (length, chunks, content type, status).
+
+        The API request runs on the executor and the reply is sent when it is done, so
+        a slow API never blocks the gateway's main loop (and with it every other
+        connection); a request that takes longer than BlueZ waits is answered with an
+        error in the metadata instead.
         """
         if not self.is_authorized(options):
-            return dbus.Array(
-                formatter.metadata_cbor(
-                    content_length=0,
-                    chunk_count=0,
-                    status=STATUS_ERROR,
-                    error_message="Authentication required",
-                ),
-                signature="y",
-            )
+            reply_cb(self._error_metadata("Authentication required"))
+            return
 
-        try:
-            # Check if notifications are enabled
-            if not self.notifying:
-                logger.warning(f"Read attempt on {self.uuid} without notifications enabled")
-                error_metadata = formatter.metadata_cbor(
-                    content_length=0,
-                    chunk_count=0,
-                    status=STATUS_ERROR,
-                    error_message="Notifications must be enabled to receive data"
-                )
-                return dbus.Array(error_metadata, signature="y")
+        if not self.notifying:
+            logger.warning(f"Read attempt on {self.uuid} without notifications enabled")
+            reply_cb(self._error_metadata("Notifications must be enabled to receive data"))
+            return
 
-            # Update MTU from device
-            mtu = self.get_mtu(options)
-            self.update_mtu(mtu)
+        device = self.note_connection(options)
+        epoch = self._epoch.get(device or "", 0)
 
-            # Run the async handler in a synchronous context
-            # Handle event loop carefully to avoid "Event loop is closed" errors
+        def done(data, error):
             try:
-                # Try to get existing event loop
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    # Loop exists but is closed, create a new one
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop_created = True
-                else:
-                    # Use existing loop
-                    loop_created = False
-            except RuntimeError:
-                # No event loop exists, create one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop_created = True
+                if self._epoch.get(device or "", 0) != epoch:
+                    logger.debug(f"Dropping read result for {device}: it disconnected meanwhile")
+                    reply_cb(self._error_metadata("Connection closed"))
+                    return
+                if error is not None:
+                    if isinstance(error, asyncio.TimeoutError):
+                        logger.error(f"Reading {self.uuid} timed out after {READ_TIMEOUT_S} s")
+                        reply_cb(self._error_metadata("Request timed out"))
+                    else:
+                        logger.error(f"Error reading {self.uuid}: {error}")
+                        reply_cb(self._error_metadata(str(error)))
+                    return
 
-            try:
-                data = loop.run_until_complete(self.read_handler())
-                # Ensure httpx client is closed before closing the loop
-                if hasattr(self.api_client, "client") and self.api_client.client:
-                    loop.run_until_complete(self.api_client.client.aclose())
-                    self.api_client.client = None
                 response = formatter.success(data)
                 response_bytes = response.encode("utf-8")
-
-                # Calculate chunks using binary chunker
-                chunk_count = self._chunker.get_chunk_count(response_bytes)
-
-                # Detect content type
+                chunk_count = self.chunker_for(device).get_chunk_count(response_bytes)
                 content_type = CONTENT_TYPE_JSON if response.strip().startswith(("{", "[")) else CONTENT_TYPE_TEXT
 
-                # Schedule data to be sent via notifications AFTER read completes
-                # This prevents the notification from overwriting the read response value
+                # The data follows as notifications AFTER this reply, so that the notification
+                # does not overwrite the read response value
                 logger.debug(f"Preparing {len(response_bytes)} bytes in {chunk_count} notification chunks for {self.uuid}")
-                from gi.repository import GLib
-
-                GLib.idle_add(lambda: self.send_chunked_response(response) or False)
-
-                # Return CBOR metadata about the data
-                metadata_response = formatter.metadata_cbor(
-                    content_length=len(response_bytes),
-                    chunk_count=chunk_count,
-                    content_type=content_type,
-                    status=STATUS_READY,
+                reply_cb(
+                    dbus.Array(
+                        formatter.metadata_cbor(
+                            content_length=len(response_bytes),
+                            chunk_count=chunk_count,
+                            content_type=content_type,
+                            status=STATUS_READY,
+                        ),
+                        signature="y",
+                    )
                 )
-                return dbus.Array(metadata_response, signature="y")
+                ble_executor.get_executor().defer(lambda: self.send_chunked_response(response, device))
+            except Exception as e:  # noqa: BLE001 - the caller is waiting for a reply
+                logger.error(f"Error replying to read of {self.uuid}: {e}")
+                reply_cb(self._error_metadata(str(e)))
 
-            finally:
-                # Only close the loop if we created it
-                if loop_created:
-                    loop.close()
-        except Exception as e:
-            logger.error(f"Error reading {self.uuid}: {e}")
-            # Return error in CBOR metadata format to maintain notification-only protocol
-            error_metadata = formatter.metadata_cbor(
-                content_length=0,
-                chunk_count=0,
-                status=STATUS_ERROR,
-                error_message=str(e)
-            )
-            return dbus.Array(error_metadata, signature="y")
+        ble_executor.get_executor().submit(self.read_handler(), done, key=device or "", timeout=READ_TIMEOUT_S)
 
 
 class WriteOnlyCharacteristic(Characteristic):
@@ -375,9 +372,6 @@ class WriteOnlyCharacteristic(Characteristic):
             bus, index, uuid, ["write", "notify"], service, api_client, authenticator, encrypted
         )
         self.write_handler = write_handler
-        # BlueZ device path of the connection whose write is being processed
-        # (the GLib main loop is single-threaded, so one slot is enough).
-        self.current_device: Optional[str] = None
         # Partially received requests, per connection (BlueZ device path) so that one
         # client's aborted upload can never corrupt another client's request
         self.write_buffers: Dict[str, bytearray] = {}
@@ -385,6 +379,7 @@ class WriteOnlyCharacteristic(Characteristic):
 
     def on_disconnect(self, device: str):
         """Discard the half-received request of a connection that ended."""
+        super().on_disconnect(device)
         if self.write_buffers.pop(device, None):
             logger.warning(f"Discarded incomplete write on {self.uuid}: {device} disconnected")
         self._last_write.pop(device, None)
@@ -401,61 +396,54 @@ class WriteOnlyCharacteristic(Characteristic):
         self._last_write[device] = now
         return buffer
 
-    def _process_write_data(self, request_data: Dict[str, Any]):
-        """Process write data by calling the write handler.
+    @property
+    def current_device(self) -> Optional[str]:
+        """The connection whose request the running handler is serving (None outside a handler)."""
+        return _current_device.get()
 
-        Args:
-            request_data: Parsed request data
-        """
-        # Run the async handler
-        # Handle event loop carefully to avoid "Event loop is closed" errors
+    async def _run_handler(self, device: Optional[str], request_data: Dict[str, Any]):
+        token = _current_device.set(device)
         try:
-            # Try to get existing event loop
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                # Loop exists but is closed, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop_created = True
-            else:
-                # Use existing loop
-                loop_created = False
-        except RuntimeError:
-            # No event loop exists, create one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop_created = True
-
-        try:
-            result = loop.run_until_complete(self.write_handler(request_data))
-            # Ensure httpx client is closed before closing the loop
-            if hasattr(self.api_client, "client") and self.api_client.client:
-                loop.run_until_complete(self.api_client.client.aclose())
-                self.api_client.client = None
-            response = formatter.success(result)
-            self.send_chunked_response(response)
+            return await self.write_handler(request_data)
         finally:
-            # Only close the loop if we created it
-            if loop_created:
-                loop.close()
+            _current_device.reset(token)
+
+    def _dispatch(self, request_data: Dict[str, Any], device: Optional[str]):
+        """Run a complete request on the executor; the response follows as notifications."""
+        epoch = self._epoch.get(device or "", 0)
+
+        def done(result, error):
+            if self._epoch.get(device or "", 0) != epoch:
+                logger.warning(f"Dropping response on {self.uuid}: {device} disconnected meanwhile")
+                return
+            if error is None:
+                response = formatter.success(result)
+            elif isinstance(error, BleRequestError):
+                response = formatter.error(str(error), error.code, **error.extra)
+            else:
+                logger.error(f"Error writing to {self.uuid}: {error}")
+                response = formatter.error(str(error))
+            self.send_chunked_response(response, device)
+
+        ble_executor.get_executor().submit(self._run_handler(device, request_data), done, key=device or "")
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="aya{sv}")
     def WriteValue(self, value, options):
         """Handle write operation with simplified protocol.
-        
+
         For small writes: Direct JSON parsing
         For large writes: Sequential writes are accumulated until valid JSON is received
+
+        A complete request is handed to the executor and this call returns right away;
+        the response arrives as notifications, in the order the requests were made.
         """
         # Gated characteristics need the operator login for this connection
         if not self.is_authorized(options):
-            error_response = formatter.auth_required()
-            self.send_notification(error_response.encode("utf-8"))
+            self.send_chunked_response(formatter.auth_required(), self.note_connection(options))
             return
 
-        device = options.get("device")
-        self.current_device = str(device) if device else None
-        buffer_key = self.current_device or ""
-        buffer = self._buffer_for(buffer_key)
+        device = self.note_connection(options)
+        buffer = self._buffer_for(device or "")
 
         try:
             # Add incoming data to this connection's buffer
@@ -473,7 +461,7 @@ class WriteOnlyCharacteristic(Characteristic):
                 # Successfully parsed - process the request
                 logger.debug(f"Successfully parsed {len(buffer)} bytes of JSON for {self.uuid}")
                 buffer.clear()
-                self._process_write_data(parsed_data)
+                self._dispatch(parsed_data, device)
             elif state == "incomplete":
                 # Not yet complete JSON - wait for more data
                 logger.debug(f"Incomplete JSON, waiting for more data (buffer: {len(buffer)} bytes)")
@@ -484,16 +472,12 @@ class WriteOnlyCharacteristic(Characteristic):
 
         except BleRequestError as e:
             buffer.clear()
-            error_response = formatter.error(str(e), e.code, **e.extra)
-            self.send_notification(error_response.encode("utf-8"))
+            self.send_chunked_response(formatter.error(str(e), e.code, **e.extra), device)
         except Exception as e:
             logger.error(f"Error writing to {self.uuid}: {e}")
             # Clear buffer on error
             buffer.clear()
-            error_response = formatter.error(str(e))
-            self.send_notification(error_response.encode("utf-8"))
-        finally:
-            self.current_device = None
+            self.send_chunked_response(formatter.error(str(e)), device)
 
 
 # Specific characteristic implementations

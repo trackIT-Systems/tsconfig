@@ -28,10 +28,11 @@ class TsConfigApiClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.client: Optional[httpx.AsyncClient] = None
+        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def __aenter__(self):
         """Async context manager entry."""
-        self.client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+        await self._ensure_client()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -41,9 +42,16 @@ class TsConfigApiClient:
             self.client = None
 
     async def _ensure_client(self):
-        """Ensure the HTTP client is initialized."""
-        if not self.client:
+        """Ensure the HTTP client exists and belongs to the running event loop.
+
+        One client is shared by all requests (they run on the executor's persistent
+        loop). A client made on another loop cannot be used here, nor closed from
+        here, so it is dropped and replaced.
+        """
+        loop = asyncio.get_running_loop()
+        if not self.client or self._client_loop is not loop:
             self.client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+            self._client_loop = loop
 
     async def _get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Perform a GET request.

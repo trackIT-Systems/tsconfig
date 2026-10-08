@@ -117,11 +117,12 @@ def main():
         logger.error(f"Missing: {e}")
         sys.exit(1)
 
-    # Verify API is reachable with retry logic
+    # Wait a little for the API, but start anyway: the gateway must stay reachable (and answer
+    # requests with errors) while tsconfig is restarting or down, and works again once it is back.
     logger.debug(f"Verifying API connectivity to {args.api_url}...")
     max_retries = 10  # 10 seconds with 1-second intervals
     retry_interval = 1
-    
+
     for attempt in range(max_retries):
         try:
             import httpx
@@ -140,9 +141,8 @@ def main():
                 import time
                 time.sleep(retry_interval)
             else:
-                logger.error(f"✗ Cannot reach API after {max_retries} attempts: {e}")
-                logger.error("Please ensure tsconfig is running and accessible")
-                sys.exit(1)
+                logger.warning(f"✗ Cannot reach API after {max_retries} attempts: {e}")
+                logger.warning("Starting anyway; requests will fail until tsconfig is reachable")
 
     # Create and start the BLE GATT server
     try:

@@ -228,7 +228,7 @@ def make_write_char(chars, authenticator, handler=None):
     char.notifying = True
     sent = []
     char.send_notification = lambda data: sent.append(json.loads(data))
-    char.send_chunked_response = lambda data: sent.append(json.loads(data))
+    char.send_chunked_response = lambda data, device=None: sent.append(json.loads(data))
     return char, handler, sent
 
 
@@ -279,11 +279,12 @@ class TestCharacteristicGating:
         handler = AsyncMock(return_value={"services": []})
         char = chars.ReadOnlyCharacteristic(None, 1, "u", FakeService(), None, handler, BleAuthenticator())
         char.notifying = True
-        metadata = char.ReadValue({"device": DEVICE})
+        replies = []
+        char.ReadValue({"device": DEVICE}, replies.append, replies.append)
         handler.assert_not_called()
         import cbor2
 
-        decoded = cbor2.loads(bytes(metadata))
+        decoded = cbor2.loads(bytes(replies[0]))
         assert "Authentication required" in json.dumps(decoded, default=str)
 
 
@@ -294,7 +295,7 @@ class TestAuthenticateCharacteristic:
         char.notifying = True
         sent = []
         char.send_notification = lambda data: sent.append(json.loads(data))
-        char.send_chunked_response = lambda data: sent.append(json.loads(data))
+        char.send_chunked_response = lambda data, device=None: sent.append(json.loads(data))
         return auth, char, sent
 
     def test_is_reachable_without_login_but_needs_an_encrypted_link(self, chars):
