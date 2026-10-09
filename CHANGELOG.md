@@ -19,10 +19,14 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Added
 
+- BLE protocol reference for client developers (`docs/ble-protocol.md`) and the design of a possible protocol v2 (`docs/ble-protocol-v2-design.md`, proposal only). The README's BLE usage and protocol sections, which described an old format, now link to them
+- `GET /api/systemd/logs/{service}` takes `follow=false` (a bounded plain-text answer, no stream) and `lines` (1 to 5000, default 200)
+- BLE config upload takes optional `mtime`, `force` and `encoding` (`base64` or `utf-8`)
 - Verification of file modification times (`mtime`) and filesystem synchronization (`sync`) on configuration updates
 
 ### Changed
 
+- `test_ble_client.py` no longer overwrites the device's config files by default: the config upload is sent with an old `mtime` and expects the refusal, the zip upload and real uploads need `--write-destructive`; the service action test restarts `mqttutil` instead of `chrony`
 - The web shell now starts in the home directory of the user the service runs as (was the tsconfig source directory)
 - BLE error responses for missing authorization are now `{"error": "Authentication required", "code": 401}` (was `Pairing required` / 403)
 - Consistent log-level policy (documented in README): INFO is limited to one-off events. HTTP access logs and httpx/httpcore client logs are now DEBUG-only (override with `ACCESS_LOG_LEVEL`); per-request token/auth INFO messages and BLE write messages moved to DEBUG; stray `print()` calls in the network and soundscapepipe routers now use the logger
@@ -31,6 +35,9 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Fixed
 
+- BLE config upload (`00003001`) works again: it passed a `config_group` argument the API client does not have (every upload failed) and never sent the `mtime` the API requires; it now forwards `mtime` (default: now) and `force`. HTTP errors of the API reach the BLE client with their status code and reason (e.g. a refused older file) instead of a generic server error
+- BLE service logs (`00002004`) answer: the endpoint was an endless `journalctl -f` stream that the gateway could only time out on; the gateway now asks for `follow=false` and gets the last `lines` lines (1 to 1000)
+- A systemd action that polkit denies (a configured service that is not on the polkit allow list, such as `chrony`) now answers `403` with systemd's message instead of `500`
 - Prevent writing empty or unset optional fields (e.g. `disk_reserve_mb` being written as `null`/`None`) to `soundscapepipe.yml` by filtering none values on model serialization (Issue #6)
 - BLE gateway: the device is found reliably when scanning. It advertised at the kernel default of 1280 ms, so a scanner with a 3-10 s timeout missed it in most attempts (7-9 of 40 3-second scans found it on a Pi 3 and a Pi 5); it now advertises at 100 ms (`MinInterval`/`MaxInterval` of the LE advertisement; 37-40 of 40)
 - BLE gateway: one aborted or malformed write no longer disables the write characteristics until the service is restarted. A request that arrives in several writes was collected in one buffer per characteristic that never emptied, so after a client disconnected mid-upload every later request, from any client, was silently ignored. The buffer is now per connection and dropped when it disconnects or has been idle for 15 s; a request that can never become valid JSON (or exceeds 2 MiB) is answered with an error (`400`/`413`) instead of being waited on, and the discard is logged

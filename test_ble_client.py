@@ -8,12 +8,13 @@ Requirements:
     pip install bleak cbor2
 
 Usage:
-    python3 test_ble_client.py [--device DEVICE_NAME] [--password PASSWORD] [--write] [--timeout SECONDS] [--retries N]
+    python3 test_ble_client.py [--device DEVICE_NAME] [--password PASSWORD] [--write] [--write-destructive] [--timeout SECONDS] [--retries N]
 
 Options:
     --device, -d     Device name or address (auto-detects if not specified)
     --password, -p   Operator (pi) password for the BLE login (default: natur)
-    --write, -w      Enable write operations (service restart, file upload)
+    --write, -w      Enable safe write operations (service restart, refused-by-design config upload)
+    --write-destructive  Also upload configs/ files for real (OVERWRITES the device's config files)
     --timeout, -t    Scan timeout in seconds per attempt (default: 10.0)
     --retries, -r    Number of retry attempts for device discovery (default: 3)
 
@@ -616,15 +617,15 @@ async def test_chunked_reads(client: BleakClient):
 
 
 async def test_write_operations(client: BleakClient, enabled: bool = False):
-    """Test write operations - restart chrony service."""
+    """Test write operations - restart a harmless, polkit-allowed service."""
     print_header("Testing Write Operations")
 
     if not enabled:
         print_warning("Write operations disabled (use --write to enable)")
-        print_info("Would restart chrony service")
+        print_info("Would restart mqttutil service")
         return
 
-    action_data = {"service": "chrony", "action": "restart"}
+    action_data = {"service": "mqttutil", "action": "restart"}
     response = await write_with_notifications(client, SYSTEMD_SERVICE_ACTION_UUID, "Service Action", action_data)
 
     if response:
@@ -653,8 +654,12 @@ async def upload_file(filepath: str) -> Optional[bytes]:
         return None
 
 
-async def test_upload_service(client: BleakClient, enabled: bool = False):
-    """Test Upload Service - upload a schedule.yml file."""
+async def test_upload_service(client: BleakClient, enabled: bool = False, destructive: bool = False):
+    """Test Upload Service - upload a schedule.yml file.
+
+    By default the upload carries an old mtime and force=false, so the API refuses it as
+    older than the file on the device: the whole path is exercised and nothing changes.
+    """
     print_header("Testing Upload Service (0x3000)")
 
     if not enabled:
@@ -669,6 +674,12 @@ async def test_upload_service(client: BleakClient, enabled: bool = False):
 
     # Prepare upload request
     upload_data = {"filename": "schedule.yml", "content": content_b64, "restart_service": False}
+    if destructive:
+        print_warning("Destructive: the device's schedule.yml will be overwritten")
+        upload_data["force"] = True
+    else:
+        upload_data["mtime"] = "2000-01-01T00:00:00"
+        print_info("Expecting the API to refuse the upload (older than the file on the device)")
 
     # Send upload
     response = await write_with_notifications(client, UPLOAD_CONFIG_UUID, "Config Upload", upload_data)
@@ -710,12 +721,12 @@ async def create_zip_upload(file_paths: list) -> Optional[str]:
         return None
 
 
-async def test_zip_upload(client: BleakClient, enabled: bool = False):
+async def test_zip_upload(client: BleakClient, enabled: bool = False, destructive: bool = False):
     """Test Zip Upload - upload multiple config files as a zip."""
     print_header("Testing Zip Upload")
 
-    if not enabled:
-        print_warning("Upload operations disabled (use --write to enable)")
+    if not enabled or not destructive:
+        print_warning("Zip upload overwrites config files: skipped (needs --write-destructive)")
         print_info("Would upload: radiotracking.ini, soundscapepipe.yml, schedule.yml")
         return
 
@@ -784,6 +795,11 @@ async def main():
         help="Enable write operations (service restart, file upload)",
     )
     parser.add_argument(
+        "--write-destructive",
+        action="store_true",
+        help="Also upload the configs/ files for real, overwriting the device's config files",
+    )
+    parser.add_argument(
         "--timeout",
         "-t",
         type=float,
@@ -799,6 +815,8 @@ async def main():
     )
 
     args = parser.parse_args()
+    if args.write_destructive:
+        args.write = True
 
     print_header("tsOS Configuration Manager - BLE GATT Client Test")
 
@@ -866,8 +884,8 @@ async def main():
             await test_systemd_service(client)
             await test_chunked_reads(client)
             await test_write_operations(client, enabled=args.write)
-            await test_upload_service(client, enabled=args.write)
-            await test_zip_upload(client, enabled=args.write)
+            await test_upload_service(client, enabled=args.write, destructive=args.write_destructive)
+            await test_zip_upload(client, enabled=args.write, destructive=args.write_destructive)
 
             print_header("Test Complete")
             print_success("All tests completed!")

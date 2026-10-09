@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import psutil
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
@@ -324,8 +324,11 @@ async def service_action(action: ServiceAction):
 
     success, error = await systemctl_action(action.service, action.action)
     if not success:
+        # polkit's refusal is the caller's lack of permission for this unit, not a server fault
+        denied = any(marker in (error or "") for marker in ("Access denied", "Interactive authentication required"))
         raise HTTPException(
-            status_code=500, detail=f"Failed to {action.action} service {action.service}: {error}"
+            status_code=403 if denied else 500,
+            detail=f"Failed to {action.action} service {action.service}: {error}",
         )
 
     return {
@@ -357,8 +360,16 @@ async def get_system_config():
 
 
 @router.get("/logs/{service_name}")
-async def stream_service_logs(service_name: str):
-    """Stream journalctl logs for a specific service, kernel logs, or all system logs."""
+async def stream_service_logs(
+    service_name: str,
+    follow: bool = True,
+    lines: int = Query(200, ge=1, le=5000, description="Number of recent lines"),
+):
+    """Stream journalctl logs for a specific service, kernel logs, or all system logs.
+
+    With follow=false the last `lines` lines are returned as plain text and the
+    request ends (for clients that cannot consume a stream, e.g. the BLE gateway).
+    """
     # Special handling for "all" logs - bypass validation
     if service_name == "all":
         pass  # Allow "all" without validation
@@ -369,6 +380,31 @@ async def stream_service_logs(service_name: str):
         if service_name not in service_names:
             raise HTTPException(status_code=400, detail="Service not in configured list")
 
+    def journalctl_command(extra: List[str]) -> List[str]:
+        cmd = ["journalctl", "--no-pager", "--no-hostname", "--output", "short", "-n", str(lines)] + extra
+        if service_name == "all":
+            pass  # no extra filter
+        elif service_name in ("kernel", "dmesg"):
+            cmd.append("-k")
+        else:
+            cmd += ["-u", service_name]
+        return cmd
+
+    if not follow:
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *journalctl_command([]), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+            )
+            try:
+                output, _ = await asyncio.wait_for(process.communicate(), timeout=10)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                raise HTTPException(status_code=504, detail="journalctl timed out")
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to run journalctl: {e}")
+        return PlainTextResponse(output.decode("utf-8", errors="replace"))
+
     async def generate_logs():
         """Generate streaming logs via a direct, unprivileged `journalctl`
         call - `pi` is a member of the `systemd-journal` group (see
@@ -378,13 +414,7 @@ async def stream_service_logs(service_name: str):
         # Send initial comment to establish the connection (comments don't trigger onmessage)
         yield f": Stream started\n\n"
 
-        cmd = ["journalctl", "--no-pager", "--no-hostname", "--output", "short", "-n", "200", "-f"]
-        if service_name == "all":
-            pass  # no extra filter
-        elif service_name in ("kernel", "dmesg"):
-            cmd.append("-k")
-        else:
-            cmd += ["-u", service_name]
+        cmd = journalctl_command(["-f"])
 
         process = None
         try:

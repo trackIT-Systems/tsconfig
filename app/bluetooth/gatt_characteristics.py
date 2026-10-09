@@ -568,6 +568,9 @@ class SystemdServiceLogsCharacteristic(WriteOnlyCharacteristic):
             if not parser.validate_log_request(data):
                 raise ValueError("Invalid log request. Required: service")
             lines = data.get("lines", 100)
+            if isinstance(lines, bool) or not isinstance(lines, int):
+                raise BleRequestError("lines must be an integer", 400)
+            lines = max(1, min(lines, 1000))
             logs = await api_client.get_systemd_logs(data["service"], lines)
             return {"logs": logs}
 
@@ -583,11 +586,20 @@ class UploadConfigCharacteristic(WriteOnlyCharacteristic):
         async def upload_handler(data: Dict[str, Any]):
             if not parser.validate_upload_request(data):
                 raise ValueError("Invalid upload request. Required: filename, content")
+            mtime, force, encoding = data.get("mtime"), data.get("force", False), data.get("encoding")
+            if not isinstance(data["filename"], str) or not isinstance(data["content"], str):
+                raise BleRequestError("filename and content must be strings", 400)
+            if (mtime is not None and not isinstance(mtime, str)) or not isinstance(force, bool):
+                raise BleRequestError("mtime must be a string and force a boolean", 400)
+            if encoding not in (None, "base64", "utf-8"):
+                raise BleRequestError('encoding must be "base64" or "utf-8"', 400)
             return await api_client.upload_config(
                 filename=data["filename"],
                 content=data["content"],
-                config_group=data.get("config_group"),
                 restart_service=data.get("restart_service", False),
+                mtime=mtime,
+                force=force,
+                encoding=encoding,
             )
 
         super().__init__(

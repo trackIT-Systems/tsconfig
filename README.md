@@ -286,7 +286,7 @@ Service management (operator login required):
 | Services List | `00002001-...` | GET /api/systemd/services |
 | Service Action | `00002002-...` | POST /api/systemd/action |
 | System Reboot | `00002003-...` | POST /api/systemd/reboot |
-| Service Logs | `00002004-...` | GET /api/systemd/logs/{service} |
+| Service Logs | `00002004-...` | GET /api/systemd/logs/{service}?follow=false |
 
 #### Config Service (`00003000-7473-4f53-636f-6e6669672121`)
 
@@ -299,146 +299,11 @@ Configuration file upload and download (operator login required):
 
 **Note**: Download endpoints (`GET /api/configs/{filename}` and `GET /api/configs.zip`) are available via the REST API but not exposed as BLE characteristics.
 
-### Usage Examples
+### Protocol
 
-#### Using gatttool (Linux)
+Reads return a small CBOR metadata record; the data itself follows as notifications of at most 512 bytes. Writes carry a JSON request (split over several writes when it is longer than the MTU) and are answered by notifications. The full reference for client developers, including request and response formats, framing, limits and error codes, is in [docs/ble-protocol.md](docs/ble-protocol.md). `test_ble_client.py` is a working example client (bleak).
 
-```bash
-# Scan for devices (may require appropriate permissions)
-hcitool lescan
-
-# Connect and explore services
-gatttool -b AA:BB:CC:DD:EE:FF -I
-> connect
-> primary
-> characteristics
-
-# Read system status
-gatttool -b AA:BB:CC:DD:EE:FF --char-read --uuid=00001001-7473-4f53-636f-6e6669672121
-
-# Write service action (requires the operator login on this connection first)
-echo '{"service":"radiotracking","action":"restart"}' | \
-  gatttool -b AA:BB:CC:DD:EE:FF --char-write-req --uuid=00002002-7473-4f53-636f-6e6669672121
-```
-
-#### Using bluetoothctl (Linux)
-
-```bash
-# Scan and connect
-bluetoothctl
-> scan on
-> connect AA:BB:CC:DD:EE:FF
-> pair AA:BB:CC:DD:EE:FF
-
-# List GATT attributes
-> menu gatt
-> list-attributes
-> select-attribute /org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF/service0010/char0011
-> read
-```
-
-#### Using nRF Connect (Android/iOS)
-
-1. Open nRF Connect app
-2. Scan for devices, find device named with your sensor's hostname
-3. Connect to the device
-4. Tap on a service to expand characteristics
-5. Read values by tapping the download icon
-6. Write values by tapping the upload icon (requires the operator login, see Security)
-
-#### Using Python with Bleak
-
-```python
-import asyncio
-import json
-from bleak import BleakClient, BleakScanner
-
-SYSTEM_STATUS_UUID = "00001001-7473-4f53-636f-6e6669672121"
-
-# Notification handler to collect chunks
-chunks = {}
-complete_data = None
-
-def notification_handler(sender, data):
-    global chunks, complete_data
-    chunk = json.loads(data.decode('utf-8'))
-    chunks[chunk['seq']] = chunk['data']
-    if chunk.get('complete') and len(chunks) == chunk['total']:
-        complete_data = ''.join(chunks[i] for i in range(chunk['total']))
-
-async def main():
-    global complete_data
-    
-    # Find device by name
-    device = await BleakScanner.find_device_by_name("your-hostname")
-    
-    async with BleakClient(device) as client:
-        # Enable notifications
-        await client.start_notify(SYSTEM_STATUS_UUID, notification_handler)
-        
-        # Read characteristic to get metadata and trigger data transfer
-        metadata = await client.read_gatt_char(SYSTEM_STATUS_UUID)
-        print("Metadata:", json.loads(metadata.decode('utf-8')))
-        
-        # Wait for notification data
-        await asyncio.sleep(2.0)
-        
-        # Stop notifications
-        await client.stop_notify(SYSTEM_STATUS_UUID)
-        
-        if complete_data:
-            print("Data:", complete_data)
-
-asyncio.run(main())
-```
-
-### Data Protocol
-
-**Notification-Only Protocol:**
-All actual data is transferred via BLE notifications. Read operations return only metadata.
-
-**Reading Data (Notification-Only):**
-1. **Enable notifications** on the characteristic
-2. **Read the characteristic** to trigger data transfer and get metadata
-3. **Receive actual data** via notification chunks
-4. **Reassemble chunks** in order to get complete data
-
-Metadata response format:
-```json
-{
-  "metadata": true,
-  "content_length": 1234,
-  "chunks_expected": 4,
-  "content_type": "application/json",
-  "status": "ready",
-  "hint": "Data will be delivered via notifications"
-}
-```
-
-Data chunks format:
-```json
-{
-  "seq": 0,
-  "total": 4,
-  "data": "...",
-  "complete": false
-}
-```
-
-**Important:** Notifications must be enabled before reading, or you'll receive an error:
-```json
-{
-  "metadata": true,
-  "status": "error",
-  "error": "Notifications must be enabled to receive data"
-}
-```
-
-**Write Operations:**
-Write operations send responses via notifications (no read required):
-- Service actions: `{"service": "name", "action": "restart"}`
-- Logs: `{"service": "name", "lines": 100}`
-- File uploads: `{"filename": "config.yml", "content": "base64data..."}`
+A redesigned protocol (framed, encrypted, password-authenticated key exchange, no pairing) is described in [docs/ble-protocol-v2-design.md](docs/ble-protocol-v2-design.md). It is a proposal and not implemented.
 
 ### Security
 

@@ -6,13 +6,30 @@ to the tsconfig HTTP API endpoints.
 
 import asyncio
 import base64
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import httpx
 
+from app.bluetooth.auth import BleRequestError
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+def _request_error(e: httpx.HTTPError) -> Exception:
+    """Turn an HTTP error status into a BleRequestError carrying the API's status code
+    and its `detail`, so the BLE client learns why (e.g. 403 or "file is newer") instead
+    of a generic server error. Other errors (connection, timeout) are returned unchanged."""
+    if isinstance(e, httpx.HTTPStatusError):
+        try:
+            detail = e.response.json().get("detail")
+        except Exception:
+            detail = None
+        if isinstance(detail, (list, dict)):
+            detail = str(detail)
+        return BleRequestError(detail or str(e), e.response.status_code)
+    return e
 
 
 class TsConfigApiClient:
@@ -96,7 +113,7 @@ class TsConfigApiClient:
             return response.json()
         except httpx.HTTPError as e:
             logger.error(f"HTTP POST error for {endpoint}: {e}")
-            raise
+            raise _request_error(e) from e
 
     async def _put(self, endpoint: str, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Perform a PUT request.
@@ -201,13 +218,13 @@ class TsConfigApiClient:
         """
         await self._ensure_client()
         try:
-            # Note: This endpoint returns plain text, not JSON
-            response = await self.client.get(f"/api/systemd/logs/{service}", params={"lines": lines})
+            # follow=false: a bounded plain-text answer instead of the endless stream
+            response = await self.client.get(f"/api/systemd/logs/{service}", params={"lines": lines, "follow": "false"})
             response.raise_for_status()
             return response.text
         except httpx.HTTPError as e:
             logger.error(f"HTTP GET error for logs/{service}: {e}")
-            raise
+            raise _request_error(e) from e
 
     # Config Service endpoints (upload and download)
 
@@ -218,27 +235,37 @@ class TsConfigApiClient:
         restart_service: bool = False,
         mtime: Optional[str] = None,
         force: bool = False,
+        encoding: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Upload a configuration file.
 
         Args:
             filename: Name of the config file
-            content: File content (base64 encoded for binary files)
+            content: File content: base64 (encoding="base64"), UTF-8 text (encoding="utf-8"),
+                or, without `encoding`, base64 if it decodes as such and text otherwise
             restart_service: Whether to restart the service after upload
-            mtime: Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50)
+            mtime: Last modified timestamp in ISO format (e.g., 2025-10-17T08:59:50);
+                defaults to now (UTC), as the API requires one
             force: Force overwrite regardless of file modification time
+            encoding: "base64", "utf-8" or None (guess)
 
         Returns:
             Upload result
         """
         await self._ensure_client()
         try:
-            # Decode base64 content if it looks like it's encoded
-            try:
-                file_content = base64.b64decode(content)
-            except Exception:
-                # If not base64, use as-is
+            if encoding == "utf-8":
                 file_content = content.encode("utf-8")
+            elif encoding == "base64":
+                file_content = base64.b64decode(content, validate=True)
+            else:
+                # Without a hint, text that happens to be valid base64 is taken as base64
+                try:
+                    file_content = base64.b64decode(content, validate=True)
+                except Exception:
+                    file_content = content.encode("utf-8")
+            if mtime is None:
+                mtime = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
             # Create multipart form data
             files = {"file": (filename, file_content)}
@@ -246,15 +273,14 @@ class TsConfigApiClient:
                 "restart_service": str(restart_service).lower(),
                 "force": str(force).lower(),
             }
-            if mtime is not None:
-                data["mtime"] = str(mtime)
+            data["mtime"] = str(mtime)
 
             response = await self.client.post("/api/configs/update", files=files, data=data)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:
             logger.error(f"HTTP POST error for upload: {e}")
-            raise
+            raise _request_error(e) from e
 
     async def upload_zip(
         self,
@@ -298,7 +324,7 @@ class TsConfigApiClient:
             return response.json()
         except httpx.HTTPError as e:
             logger.error(f"HTTP POST error for upload/zip: {e}")
-            raise
+            raise _request_error(e) from e
 
     async def download_config(self, filename: str) -> Dict[str, Any]:
         """Download a configuration file.
