@@ -37,8 +37,44 @@ Every characteristic also supports notify; responses arrive there.
 - Per connection, write `{"password": "...", "username": "pi"}` to Authenticate (`username` optional,
   `pi` or `root`). The reply is a notification: `{"authenticated": true}` or an error with code
   `401` (wrong password) or `429` (backing off, `retry_after` in seconds).
+- Instead of the password, a client can send pi's password hash: `{"hash": "$6$..."}` (`username`
+  optional, only `pi`). It must equal pi's entry in `/etc/shadow` exactly, so it is the hash from the
+  `userconf.txt` of the config bundle applied to the device, and it works only as long as the password
+  has not been changed since. It is a convenience for the common case: try the hash **once**, and on
+  `401` ask for the password. Failed hash and password attempts count toward the same backoff.
+  Errors: `400` for `root`, for `hash` together with `password`, or a hash that is not a string.
 - Until then gated characteristics answer `{"error": "Authentication required", "code": 401}`.
 - The login ends on disconnect, after 8 hours or when the gateway restarts.
+
+### Changing pi's password with a bundle
+
+`userconf.txt` is applied at boot, so the device keeps its current password until it reboots:
+
+1. Log in with the current password (or the hash of the bundle applied last).
+2. Upload the bundle with the new `userconf.txt`.
+3. Reboot (for example through the Reboot characteristic).
+4. Log in with the new password, or the new bundle's hash.
+
+## Device identity and reflashing
+
+- **Identify a device by the serial in the service data** (`0x7473`, the last 4 bytes of the board's
+  serial; the hostname `tsos-base-<serial>` is derived from the same serial). Do not use the name,
+  the Bluetooth address or the UUID the OS shows for it: the name is only a label, and the address
+  changes (below).
+- **The Bluetooth address belongs to the install.** At every boot the device gives its controller the
+  vendor prefix of the board plus three random bytes that are stored next to the pairing keys on the
+  SD card (`tsos-bluetooth-address.service`). After a reflash the keys are gone and the address is
+  new, so a phone sees a new device, pairs afresh, and the bond to the old address just stays unused.
+  Phones key their bond by address, so this avoids a stale bond.
+- **A stale bond can still occur** (for example after only the key store was deleted, or on a device
+  without this mechanism). It shows as a failed connection or a failed access to an encrypted
+  characteristic: iOS and macOS report `CBError.peerRemovedPairingInformation` ("Peer removed pairing
+  information") at connect, Android a GATT status of 5 or 15 (insufficient authentication or
+  encryption) or a bond state change to none. iOS cannot remove a bond from an app: tell the user to
+  forget the device in the Bluetooth settings. Android can remove it (the hidden `removeBond`) and
+  pair again.
+- A card that was cloned after its first boot gives all clones of one board type the same address;
+  flash the image fresh instead.
 
 ## Reading
 
@@ -86,7 +122,11 @@ API errors are passed on with their HTTP status as `code` and their `detail` as 
 - Notifications go to every subscribed connection. With two clients connected, each receives the
   other's responses (ignore a response you did not ask for; better, use one client at a time).
 - Responses carry no request id, so only one request per connection may be in flight.
-- The password is sent in clear inside a Just Works link, which resists only passive sniffing.
+- The password, or the hash, is sent in clear inside a Just Works link, which resists only passive
+  sniffing. A fake device or someone intercepting the pairing can capture it. A captured hash logs in as
+  `pi` over BLE on every device with the same `userconf.txt` until the password is re-hashed with a new
+  salt, and it allows offline guessing of the password. Treat bundles that contain `userconf.txt` as
+  secrets.
 - Reading a characteristic costs two steps (read metadata, then notifications).
 - Logs are bounded text, there is no live stream.
 

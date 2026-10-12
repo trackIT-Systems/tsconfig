@@ -2,7 +2,9 @@
 
 Link encryption (BlueZ pairing) is configured elsewhere; this module is the
 application-level login on top of it. A BLE central proves it is the operator
-by sending `pi`'s password (checked through PAM, exactly like the web login).
+by sending `pi`'s password (checked through PAM, exactly like the web login),
+or `pi`'s password hash from the config bundle applied to the device (compared
+with /etc/shadow; a convenience for when the password has not changed since).
 Until it does, every gated characteristic refuses to work for that connection.
 
 State is per connection (BlueZ device object path) and in memory only:
@@ -16,6 +18,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Optional
 
 from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
+from app.auth.shadow import hash_matches
 from app.auth.session import (
     SESSION_TTL_SECONDS,
     login_retry_after,
@@ -71,10 +74,12 @@ class BleAuthenticator:
     def __init__(
         self,
         verify: Callable[[str, str], Awaitable[bool]] = authenticate_operator,
+        verify_hash: Callable[[str, str], bool] = hash_matches,
         ttl_seconds: float = SESSION_TTL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
     ):
         self._verify = verify
+        self._verify_hash = verify_hash
         self._ttl = ttl_seconds
         self._clock = clock
         # device path -> time of login
@@ -100,6 +105,26 @@ class BleAuthenticator:
         account. Failed attempts back off per device and device-wide, with
         stricter buckets for root (see app.auth.session); attempts made while
         backing off are refused without checking the password."""
+
+        async def check() -> bool:
+            return isinstance(password, str) and await self._verify(username, password)
+
+        return await self._login(device, username, "password", check)
+
+    async def login_with_hash(self, device: Optional[str], token: str) -> LoginResult:
+        """Attempt a login for `device` as the operator (`pi`) with `pi`'s password
+        hash (the `$6$...` string from a config bundle's userconf.txt). Only `pi`
+        can log in this way. Throttled exactly like a password login, in the same
+        buckets, so failed hash and password attempts add up."""
+
+        async def check() -> bool:
+            return isinstance(token, str) and self._verify_hash(OPERATOR_USER, token)
+
+        return await self._login(device, OPERATOR_USER, "hash", check)
+
+    async def _login(
+        self, device: Optional[str], username: str, method: str, check: Callable[[], Awaitable[bool]]
+    ) -> LoginResult:
         if not device:
             return LoginResult(False, CODE_UNAUTHENTICATED, "Unknown connection")
         if not isinstance(username, str):
@@ -110,9 +135,9 @@ class BleAuthenticator:
         if wait > 0:
             return LoginResult(False, CODE_TOO_MANY_ATTEMPTS, "Too many failed attempts", retry_after=wait)
 
-        if not isinstance(password, str) or not await self._verify(username, password):
+        if not await check():
             record_login_failure(source, username)
-            logger.warning(f"Failed BLE login as {username!r} from {device}")
+            logger.warning(f"Failed BLE login as {username!r} ({method}) from {device}")
             return LoginResult(
                 False,
                 CODE_UNAUTHENTICATED,
@@ -122,7 +147,7 @@ class BleAuthenticator:
 
         record_login_success(source, username)
         self._authenticated[str(device)] = self._clock()
-        logger.info(f"BLE login succeeded as {username!r} for {device}")
+        logger.info(f"BLE login succeeded as {username!r} ({method}) for {device}")
         return LoginResult(True)
 
     def forget(self, device: str) -> None:

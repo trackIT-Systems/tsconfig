@@ -1,9 +1,13 @@
 # tsconfig BLE protocol v2: design proposal
 
-**Status: proposal, not implemented.** The current protocol is documented in
-[ble-protocol.md](ble-protocol.md). v2 was designed in October 2026 and shelved; the fixes that
-were practical without a breaking change went into v1. This document keeps the design, its
-decisions and the checks already done, so it can be picked up later.
+**Status: not pursued.** The current protocol is documented in
+[ble-protocol.md](ble-protocol.md). v2 was designed in October 2026 and dropped: it uses BLE only
+as a transport and builds framing, sessions and encryption of its own, while v1 simply tunnels the
+API through one characteristic per endpoint. v1 was kept and extended instead: the fixes that
+were practical without a breaking change, and the convenience of logging in with pi's hash from a
+config bundle, as a plain token rather than a key exchange (see "Link and login" in
+[ble-protocol.md](ble-protocol.md)). This document keeps the design, its decisions and the checks
+already done as a record.
 
 ## Why
 

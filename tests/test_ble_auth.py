@@ -351,3 +351,85 @@ class TestAuthenticateCharacteristic:
         _, char, _ = self.make(chars, AsyncMock(return_value=True))
         char.WriteValue(list(b'{"password": "natur"}'), {"device": DEVICE})
         assert char.current_device is None
+
+
+class TestHashLogin:
+    PI_HASH = "$6$salt$digest"
+
+    def make(self, chars, verify=None):
+        verify_hash = lambda user, token: user == "pi" and token == self.PI_HASH  # noqa: E731
+        auth = BleAuthenticator(verify=verify or AsyncMock(return_value=True), verify_hash=verify_hash)
+        char = chars.AuthenticateCharacteristic(None, 0, FakeService(), types.SimpleNamespace(client=None), auth)
+        char.notifying = True
+        sent = []
+        char.send_chunked_response = lambda data, device=None: sent.append(json.loads(data))
+        return auth, char, sent
+
+    def write(self, char, body):
+        char.WriteValue(list(json.dumps(body).encode()), {"device": DEVICE})
+
+    def test_matching_hash_logs_the_connection_in(self, chars):
+        auth, char, sent = self.make(chars)
+        self.write(char, {"hash": self.PI_HASH})
+        assert sent == [{"authenticated": True}]
+        assert auth.is_authenticated(DEVICE)
+
+    def test_explicit_pi_username_is_accepted(self, chars):
+        auth, char, sent = self.make(chars)
+        self.write(char, {"username": "pi", "hash": self.PI_HASH})
+        assert sent == [{"authenticated": True}]
+
+    def test_wrong_hash_is_a_401_and_stays_locked(self, chars):
+        auth, char, sent = self.make(chars)
+        self.write(char, {"hash": "$6$salt$other"})
+        assert sent[0]["code"] == 401
+        assert not auth.is_authenticated(DEVICE)
+
+    def test_failed_hash_logins_back_off_the_password_login_too(self, chars):
+        verify = AsyncMock(return_value=True)
+        auth, char, sent = self.make(chars, verify)
+        for _ in range(8):
+            self.write(char, {"hash": "$6$salt$other"})
+        self.write(char, {"password": "natur"})
+        assert sent[-1]["code"] == 429 and sent[-1]["retry_after"] >= 1
+        verify.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"username": "root", "hash": "$6$salt$digest"},
+            {"hash": "$6$salt$digest", "password": "natur"},
+            {"hash": 5},
+            {"hash": ""},
+            {"hash": None},
+        ],
+    )
+    def test_invalid_hash_requests_are_400_and_check_nothing(self, chars, body):
+        verify = AsyncMock(return_value=True)
+        auth, char, sent = self.make(chars, verify)
+        self.write(char, body)
+        assert sent[0]["code"] == 400
+        assert not auth.is_authenticated(DEVICE)
+        verify.assert_not_awaited()
+
+    def test_password_login_is_unchanged(self, chars):
+        verify = AsyncMock(return_value=True)
+        auth, char, sent = self.make(chars, verify)
+        self.write(char, {"username": "root", "password": "rootpw"})
+        assert sent == [{"authenticated": True}]
+        verify.assert_awaited_once_with("root", "rootpw")
+
+
+class TestHashLoginAuthenticator:
+    @pytest.mark.asyncio
+    async def test_checks_pis_hash_only(self):
+        seen = []
+        auth = BleAuthenticator(verify=AsyncMock(), verify_hash=lambda user, token: seen.append((user, token)) or True)
+        assert (await auth.login_with_hash(DEVICE, "$6$x$y")).ok
+        assert seen == [("pi", "$6$x$y")]
+
+    @pytest.mark.asyncio
+    async def test_unknown_connection_cannot_log_in(self):
+        auth = BleAuthenticator(verify=AsyncMock(), verify_hash=lambda user, token: True)
+        result = await auth.login_with_hash(None, "$6$x$y")
+        assert not result.ok and result.code == 401

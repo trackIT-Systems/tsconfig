@@ -630,7 +630,9 @@ class UploadZipCharacteristic(WriteOnlyCharacteristic):
 
 class AuthenticateCharacteristic(WriteOnlyCharacteristic):
     """Operator login: write {"password": "<password>"} for `pi`, or add
-    "username": "root" for the staff login.
+    "username": "root" for the staff login. Alternatively {"hash": "$6$..."}
+    logs in as `pi` with pi's password hash (as in a config bundle's
+    userconf.txt), which works while the password has not been changed since.
 
     The login itself is not gated (that would be circular) but it does require
     an encrypted link, so the password is never sent in clear over the air.
@@ -639,16 +641,30 @@ class AuthenticateCharacteristic(WriteOnlyCharacteristic):
     """
 
     def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator):
-        async def login_handler(data: Dict[str, Any]):
-            password = data.get("password")
-            username = data.get("username", "pi")
-            if not isinstance(password, str) or not password or not isinstance(username, str):
-                raise ValueError("Invalid login request. Required: password; optional: username (pi or root)")
-            result = await authenticator.login(self.current_device, password, username)
+        def outcome(result):
             if not result.ok:
                 extra = {"retry_after": int(result.retry_after) + 1} if result.retry_after else {}
                 raise BleRequestError(result.message, result.code, **extra)
             return {"authenticated": True}
+
+        async def login_handler(data: Dict[str, Any]):
+            if "hash" in data:
+                token, username = data["hash"], data.get("username", "pi")
+                if "password" in data:
+                    raise BleRequestError("Send either password or hash, not both", 400)
+                if username != "pi":
+                    raise BleRequestError("Hash login is only available for pi", 400)
+                if not isinstance(token, str) or not token:
+                    raise BleRequestError("hash must be a non-empty string", 400)
+                return outcome(await authenticator.login_with_hash(self.current_device, token))
+
+            password = data.get("password")
+            username = data.get("username", "pi")
+            if not isinstance(password, str) or not password or not isinstance(username, str):
+                raise ValueError(
+                    "Invalid login request. Required: password (or hash, for pi); optional: username (pi or root)"
+                )
+            return outcome(await authenticator.login(self.current_device, password, username))
 
         super().__init__(
             bus,

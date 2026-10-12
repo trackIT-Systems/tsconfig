@@ -8,11 +8,13 @@ Requirements:
     pip install bleak cbor2
 
 Usage:
-    python3 test_ble_client.py [--device DEVICE_NAME] [--password PASSWORD] [--write] [--write-destructive] [--timeout SECONDS] [--retries N]
+    python3 test_ble_client.py [--device DEVICE_NAME] [--password PASSWORD] [--userconf FILE | --hash HASH] [--write] [--write-destructive] [--timeout SECONDS] [--retries N]
 
 Options:
     --device, -d     Device name or address (auto-detects if not specified)
     --password, -p   Operator (pi) password for the BLE login (default: natur)
+    --userconf FILE  Log in with pi's hash from a config bundle's userconf.txt first
+    --hash HASH      Log in with this pi hash ($6$...) first
     --write, -w      Enable safe write operations (service restart, refused-by-design config upload)
     --write-destructive  Also upload configs/ files for real (OVERWRITES the device's config files)
     --timeout, -t    Scan timeout in seconds per attempt (default: 10.0)
@@ -511,30 +513,60 @@ async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, ret
     return None if return_single else []
 
 
-async def login(client: BleakClient, password: str) -> bool:
-    """Log in as the operator (pi's password) on this connection.
-
-    The gateway requires an encrypted link: the first access to the login
-    characteristic makes the OS start LE pairing (Just Works, no prompt on the
-    device). Gated characteristics refuse to work until this succeeds.
-    """
-    print_header("Operator Login")
-    response = await write_with_notifications(
-        client, AUTHENTICATE_UUID, "Authenticate", {"password": password}, timeout=5.0
-    )
+async def send_login(client: BleakClient, request: dict, method: str) -> Optional[dict]:
+    """Send one login request; return the decoded response, or None if there was none."""
+    response = await write_with_notifications(client, AUTHENTICATE_UUID, "Authenticate", request, timeout=5.0)
     if response is None:
         print_error("No response to login (is the gateway running with authentication enabled?)")
-        return False
+        return None
     try:
         result = json.loads(response)
     except ValueError:
         print_error(f"Unexpected login response: {response}")
-        return False
+        return None
     if result.get("authenticated"):
-        print_success("Logged in")
-        return True
-    print_error(f"Login failed: {result.get('error')} (code {result.get('code')})")
-    return False
+        print_success(f"Logged in ({method})")
+    else:
+        print_error(f"Login ({method}) failed: {result.get('error')} (code {result.get('code')})")
+    return result
+
+
+def read_userconf_hash(path: str) -> Optional[str]:
+    """Return pi's hash from a userconf.txt (`pi:$6$...`), or None."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            user, _, password_hash = f.readline().strip().partition(":")
+    except OSError as e:
+        print_error(f"Cannot read {path}: {e}")
+        return None
+    if user != "pi" or not password_hash:
+        print_error(f"{path} is not a 'pi:<hash>' line")
+        return None
+    return password_hash
+
+
+async def login(client: BleakClient, password: str, password_hash: Optional[str] = None) -> bool:
+    """Log in as the operator on this connection.
+
+    With `password_hash` (pi's hash from the bundle applied to the device) that is
+    tried once first; it only works while the password has not been changed since.
+    On a 401 the password is tried. The gateway requires an encrypted link: the
+    first access to the login characteristic makes the OS start LE pairing (Just
+    Works, no prompt on the device). Gated characteristics refuse to work until
+    this succeeds.
+    """
+    print_header("Operator Login")
+    if password_hash:
+        result = await send_login(client, {"hash": password_hash}, "hash")
+        if result is None:
+            return False
+        if result.get("authenticated"):
+            return True
+        if result.get("code") != 401:
+            return False
+        print_info("Falling back to the password")
+    result = await send_login(client, {"password": password}, "password")
+    return bool(result and result.get("authenticated"))
 
 
 async def test_system_service(client: BleakClient):
@@ -788,6 +820,17 @@ async def main():
         default="natur",
         help="Operator (pi) password for the BLE login (default: natur)",
     )
+    login_hash = parser.add_mutually_exclusive_group()
+    login_hash.add_argument(
+        "--userconf",
+        metavar="FILE",
+        help="Log in with pi's hash from a config bundle's userconf.txt first (password as fallback)",
+    )
+    login_hash.add_argument(
+        "--hash",
+        metavar="HASH",
+        help="Log in with this pi hash ($6$...) first (password as fallback)",
+    )
     parser.add_argument(
         "--write",
         "-w",
@@ -879,7 +922,8 @@ async def main():
             # Run all tests
             await discover_services(client)
             await test_system_service(client)
-            if not await login(client, args.password):
+            password_hash = read_userconf_hash(args.userconf) if args.userconf else args.hash
+            if not await login(client, args.password, password_hash):
                 print_warning("Continuing without login: gated characteristics will report 'Authentication required'")
             await test_systemd_service(client)
             await test_chunked_reads(client)

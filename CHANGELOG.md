@@ -19,6 +19,8 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Added
 
+- BLE login with pi's password hash: `{"hash": "$6$..."}` on the Authenticate characteristic logs in as `pi` if it equals pi's entry in `/etc/shadow`, i.e. with the `userconf.txt` line of the config bundle applied to the device, as long as the password has not been changed since. Only for `pi`; throttled together with the password login. `test_ble_client.py` takes `--userconf FILE` / `--hash HASH`. The gateway reads shadow, so it must run as a user in the `shadow` group (`tsconfig-ble` in tsOS-base)
+- BLE protocol reference: a section on device identity (use the serial) and on reflashing (tsOS-base gives each install its own Bluetooth address) with how to recognise and handle a stale bond
 - BLE protocol reference for client developers (`docs/ble-protocol.md`) and the design of a possible protocol v2 (`docs/ble-protocol-v2-design.md`, proposal only). The README's BLE usage and protocol sections, which described an old format, now link to them
 - `GET /api/systemd/logs/{service}` takes `follow=false` (a bounded plain-text answer, no stream) and `lines` (1 to 5000, default 200)
 - BLE config upload takes optional `mtime`, `force` and `encoding` (`base64` or `utf-8`)

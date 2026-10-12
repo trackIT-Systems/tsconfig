@@ -321,11 +321,13 @@ Everything except the System Service's status characteristics requires two thing
    in, gated characteristics answer `{"error": "Authentication required", "code": 401}` and do nothing. The
    login ends on disconnect, after 8 hours, or when the gateway restarts.
 
+Instead of the password, `{"hash": "$6$..."}` logs in as `pi` with pi's password hash, i.e. the line in the `userconf.txt` of the config bundle applied to the device; it works while the password has not been changed since (see [docs/ble-protocol.md](docs/ble-protocol.md)). To read `/etc/shadow` the gateway runs as its own user `tsconfig-ble` in the `shadow` group.
+
 The default `pi` password is `natur` until a config bundle (`userconf.txt`) changes it. Staff can log in as root instead: add `"username": "root"` to the login request (works only if the device has a root password).
 
 - **Disable authentication**: `--no-auth` (alias `--no-pairing`) turns off both the encryption requirement and the
   login (not recommended for production)
-- **`test_ble_client.py`** logs in with `--password` (default `natur`)
+- **`test_ble_client.py`** logs in with `--password` (default `natur`), or first with pi's hash from `--userconf FILE` / `--hash HASH`
 
 ### Requirements
 
