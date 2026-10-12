@@ -6,12 +6,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
+from app.identity import OPERATOR_HOME
 from app.routers.configs import _apply_config_zip_from_path
 from app.utils.privileged import PrivilegedCallError, delete_config, schedule_reboot, wipe_overlay
 
 router = APIRouter(prefix="/api/system-reset", tags=["system-reset"])
 
-DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
+DEFAULT_CONFIG_ZIP = OPERATOR_HOME / "tsos-default-name_config.zip"
 
 
 class SystemResetRequest(BaseModel):

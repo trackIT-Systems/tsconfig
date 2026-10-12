@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.configs import BaseConfig
+from app.identity import OPERATOR_HOME
 
 
 class AuthorizedKeysConfig(BaseConfig):
@@ -23,7 +24,7 @@ class AuthorizedKeysConfig(BaseConfig):
         # In server mode, config_dir points to the group's latest directory
         if config_dir is None:
             # Tracker mode: use a sentinel to indicate multi-file mode
-            super().__init__(Path("/home/pi/.ssh"))
+            super().__init__(OPERATOR_HOME / ".ssh")
             self._is_tracker_mode = True
             self._is_config_upload = is_config_upload
         else:
@@ -41,7 +42,7 @@ class AuthorizedKeysConfig(BaseConfig):
                 return Path("/boot/firmware/authorized_keys")
             else:
                 # Regular UI operations use user keys file
-                return Path("/home/pi/.ssh/authorized_keys")
+                return OPERATOR_HOME / ".ssh" / "authorized_keys"
         else:
             # In server mode, use the config directory
             return self.config_dir / "authorized_keys"
@@ -49,12 +50,12 @@ class AuthorizedKeysConfig(BaseConfig):
     @property
     def user_keys_file(self) -> Path:
         """Return the user keys file path (tracker mode only)."""
-        return Path("/home/pi/.ssh/authorized_keys")
+        return OPERATOR_HOME / ".ssh" / "authorized_keys"
     
     @property
     def server_keys_file(self) -> Path:
         """Return the server keys file path (tracker mode only)."""
-        return Path("/home/pi/.ssh/authorized_keys2")
+        return OPERATOR_HOME / ".ssh" / "authorized_keys2"
 
     def _ensure_directory_with_permissions(self, file_path: Path) -> None:
         """Ensure the parent directory exists with proper SSH permissions.

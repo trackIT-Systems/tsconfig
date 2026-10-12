@@ -21,6 +21,8 @@ from urllib.parse import unquote
 from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
+from app.identity import OPERATOR_USER, STAFF_USER
+
 SESSION_COOKIE = "tsconfig_session"
 # Issued instead of SESSION_COOKIE when the login arrived over HTTPS. `Secure`
 # keeps the browser from ever sending it over plain HTTP (which stays
@@ -276,29 +278,28 @@ GLOBAL_KEY = "global"
 # operator's: root's password - if the image has one - is the more valuable
 # secret and is also tried over SSH, and a flood of operator guesses must not
 # lock staff out (or the other way round).
-STAFF_USERNAME = "root"
 staff_source_limiter = BackoffLimiter(free_attempts=2, cap_seconds=120.0)
 staff_global_limiter = BackoffLimiter(free_attempts=5, cap_seconds=60.0)
 
 
 def _limiters(username: str) -> Tuple[BackoffLimiter, BackoffLimiter]:
-    if username == STAFF_USERNAME:
+    if username == STAFF_USER:
         return staff_source_limiter, staff_global_limiter
     return source_limiter, global_limiter
 
 
-def login_retry_after(source: str, username: str = "pi") -> float:
+def login_retry_after(source: str, username: str = OPERATOR_USER) -> float:
     per_source, device_wide = _limiters(username)
     return max(per_source.retry_after(source), device_wide.retry_after(GLOBAL_KEY))
 
 
-def record_login_failure(source: str, username: str = "pi") -> None:
+def record_login_failure(source: str, username: str = OPERATOR_USER) -> None:
     per_source, device_wide = _limiters(username)
     per_source.register_failure(source)
     device_wide.register_failure(GLOBAL_KEY)
 
 
-def record_login_success(source: str, username: str = "pi") -> None:
+def record_login_success(source: str, username: str = OPERATOR_USER) -> None:
     per_source, device_wide = _limiters(username)
     per_source.reset(source)
     device_wide.reset(GLOBAL_KEY)

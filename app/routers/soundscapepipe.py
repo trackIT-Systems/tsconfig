@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from app.config_loader import config_loader
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.identity import OPERATOR_HOME
 from app.logging_config import get_logger
 from app.routers.base import BaseConfigRouter
 
@@ -475,7 +476,7 @@ async def get_model_files() -> Dict[str, List[str]]:
     model_files = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
 
     # Look for BirdEdge models (only in subfolders, not root models directory)
-    birdedge_paths = ["/home/pi/pybirdedge/birdedge/models", "/opt/pybirdedge/models"]
+    birdedge_paths = [str(OPERATOR_HOME / "pybirdedge/birdedge/models"), "/opt/pybirdedge/models"]
 
     for base_path in birdedge_paths:
         if os.path.exists(base_path):
@@ -490,7 +491,7 @@ async def get_model_files() -> Dict[str, List[str]]:
                                 model_files["birdedge"].append(os.path.join(root, file))
 
     # Look for YoloBat models
-    yolobat_paths = ["/home/pi/yolobat/models", "/opt/yolobat/models"]
+    yolobat_paths = [str(OPERATOR_HOME / "yolobat/models"), "/opt/yolobat/models"]
 
     for base_path in yolobat_paths:
         if os.path.exists(base_path):
@@ -500,7 +501,7 @@ async def get_model_files() -> Dict[str, List[str]]:
                         model_files["yolobat"].append(os.path.join(root, file))
 
     # Look for AudioProtoPNet models
-    audioprotopnet_paths = ["/home/pi/audioprotopnet/models", "/opt/audioprotopnet/models"]
+    audioprotopnet_paths = [str(OPERATOR_HOME / "audioprotopnet/models"), "/opt/audioprotopnet/models"]
 
     for base_path in audioprotopnet_paths:
         if os.path.exists(base_path):
@@ -517,7 +518,7 @@ async def get_lure_files() -> Dict[str, Any]:
     """Get available lure files and directories."""
     lure_base_paths = [
         "/data/lure",
-        "/home/pi/lure",
+        str(OPERATOR_HOME / "lure"),
     ]
 
     directories = []
@@ -549,7 +550,7 @@ async def get_species() -> Dict[str, Any]:
     species_data = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
 
     # Load BirdEdge species with multi-language support
-    base_paths = ["/home/pi/pybirdedge/birdedge/etc/", "/opt/pybirdedge/etc/"]
+    base_paths = [str(OPERATOR_HOME / "pybirdedge/birdedge/etc") + "/", "/opt/pybirdedge/etc/"]
 
     for base_path in base_paths:
         if os.path.exists(base_path):

@@ -28,6 +28,7 @@ from app.bluetooth.protocol import (
     ATT_HEADER_SIZE,
     ATT_MAX_VALUE_LEN,
 )
+from app.identity import OPERATOR_USER, STAFF_USER
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -649,20 +650,21 @@ class AuthenticateCharacteristic(WriteOnlyCharacteristic):
 
         async def login_handler(data: Dict[str, Any]):
             if "hash" in data:
-                token, username = data["hash"], data.get("username", "pi")
+                token, username = data["hash"], data.get("username", OPERATOR_USER)
                 if "password" in data:
                     raise BleRequestError("Send either password or hash, not both", 400)
-                if username != "pi":
-                    raise BleRequestError("Hash login is only available for pi", 400)
+                if username != OPERATOR_USER:
+                    raise BleRequestError(f"Hash login is only available for {OPERATOR_USER}", 400)
                 if not isinstance(token, str) or not token:
                     raise BleRequestError("hash must be a non-empty string", 400)
                 return outcome(await authenticator.login_with_hash(self.current_device, token))
 
             password = data.get("password")
-            username = data.get("username", "pi")
+            username = data.get("username", OPERATOR_USER)
             if not isinstance(password, str) or not password or not isinstance(username, str):
                 raise ValueError(
-                    "Invalid login request. Required: password (or hash, for pi); optional: username (pi or root)"
+                    f"Invalid login request. Required: password (or hash, for {OPERATOR_USER}); "
+                    f"optional: username ({OPERATOR_USER} or {STAFF_USER})"
                 )
             return outcome(await authenticator.login(self.current_device, password, username))
 

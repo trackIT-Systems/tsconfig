@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from app.configs import BaseConfig
+from app.identity import OPERATOR_USER
 
 # `pi:` only - deliberately does not accept userconf's rename path (a
 # different username), which unconditionally rewrites /etc/subuid//etc/subgid
 # with no existence check, a known, deliberately-unpatched risk. The hash
 # must look like an `openssl passwd -6` SHA-512 crypt hash - the only format
 # used elsewhere in this repo (e.g. the TSOS_ROOT_PASSWORD build-time path).
-_USERCONF_LINE_PATTERN = re.compile(r"^pi:\$6\$[A-Za-z0-9./]{1,16}\$[A-Za-z0-9./]+$")
+_USERCONF_LINE_PATTERN = re.compile(rf"^{re.escape(OPERATOR_USER)}:\$6\$[A-Za-z0-9./]{{1,16}}\$[A-Za-z0-9./]+$")
 
 
 class UserconfConfig(BaseConfig):
@@ -100,7 +101,7 @@ class UserconfConfig(BaseConfig):
 
         if not _USERCONF_LINE_PATTERN.match(lines[0]):
             errors.append(
-                "userconf.txt must be a single 'pi:$6$...' line (an openssl passwd -6 hash for pi) - "
+                f"userconf.txt must be a single '{OPERATOR_USER}:$6$...' line (an openssl passwd -6 hash for {OPERATOR_USER}) - "
                 "other usernames and hash formats are not accepted"
             )
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
 from app.config_loader import config_loader
+from app.identity import OPERATOR_HOME
 from app.logging_config import setup_logging, get_logger
 from app.utils import privileged as priv
 from app.routers.configs import (
@@ -25,7 +26,7 @@ from app.routers.configs import (
     truncate_mtime_for_fat32,
 )
 
-DEFAULT_CONFIG_ZIP = Path("/home/pi/tsos-default-name_config.zip")
+DEFAULT_CONFIG_ZIP = OPERATOR_HOME / "tsos-default-name_config.zip"
 
 # Logger will be initialized in main() after logging setup
 logger = None

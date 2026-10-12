@@ -33,16 +33,14 @@ import threading
 import time
 from ctypes import CFUNCTYPE, POINTER, Structure, c_char_p, c_int, c_void_p, cast, pointer, sizeof
 
+from app.identity import OPERATOR_USER, STAFF_USER
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# The operator account: the one tsconfig runs as, checked directly through PAM.
-OPERATOR_USER = "pi"
-# The staff account: checked through `su` (see the module docstring). Logging in
-# as it grants no more than logging in as the operator - the session, the API
-# and the web shell stay `pi`-level.
-STAFF_USER = "root"
+# OPERATOR_USER is checked directly through PAM. STAFF_USER is checked through
+# `su` (see the module docstring); logging in as it grants no more than logging
+# in as the operator - the session, the API and the web shell stay `pi`-level.
 LOGIN_USERS = (OPERATOR_USER, STAFF_USER)
 PAM_SERVICE = "tsconfig"
 
