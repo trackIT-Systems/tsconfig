@@ -29,6 +29,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Changed
 
+- On a tracker the main `tsconfig.yml` is read from `/etc/tsconfig/tsconfig.yml` (set by `TSCONFIG_CONFIG_FILE`) instead of `/boot/firmware/`; `file_locations.config_dir` inside it is unchanged.
 - The default `configs/mqttutil.conf` no longer has a `[solarlife]` task: SolarLife controllers are read by the `solarlifed` daemon (tsOS-base `solarlife.service`), and `solarlife.client.read_device()` no longer exists
 - `test_ble_client.py` no longer overwrites the device's config files by default: the config upload is sent with an old `mtime` and expects the refusal, the zip upload and real uploads need `--write-destructive`; the service action test restarts `mqttutil` instead of `chrony`
 - The web shell now starts in the home directory of the user the service runs as (was the tsconfig source directory)

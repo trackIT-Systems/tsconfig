@@ -43,11 +43,10 @@ class ConfigLoader:
     def load_config(self) -> Dict[str, Any]:
         """Load the main configuration file.
 
-        In tracker mode this file (/boot/firmware/tsconfig.yml) is installed
-        by the image build and lives on the now root-owned boot partition,
-        so there's no seed-it-if-missing fallback here anymore - this
-        process (running as pi) couldn't write it there even if it wanted
-        to. A missing file just means an empty config, same as any other
+        In tracker mode this file (/etc/tsconfig/tsconfig.yml) is installed
+        by the image build and is root-owned, so there's no
+        seed-it-if-missing fallback here anymore - this process (running
+        as pi) couldn't write it there even if it wanted to. A missing file just means an empty config, same as any other
         read error below.
         """
         if self._config_cache is None:
