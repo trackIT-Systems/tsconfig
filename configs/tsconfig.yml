@@ -30,6 +30,10 @@ services:
     expert: true 
   - name: mosquitto
     expert: true
+  - name: solarlife
+    expert: true
+  - name: smartsolar
+    expert: true
   - name: tsupdate
     expert: true
   - name: tsconfig
