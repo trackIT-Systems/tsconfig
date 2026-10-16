@@ -1,7 +1,7 @@
 """OIDC configuration management."""
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -15,14 +15,14 @@ class OIDCConfig:
     """OIDC configuration manager."""
 
     def __init__(self):
-        self._discovery_cache: Optional[Dict[str, Any]] = None
-        self.issuer_url: Optional[str] = None
-        self.client_id: Optional[str] = None
-        self.client_secret: Optional[str] = None
-        self.redirect_uri: Optional[str] = None
-        self.domain: Optional[str] = None
+        self._discovery_cache: dict[str, Any] | None = None
+        self.issuer_url: str | None = None
+        self.client_id: str | None = None
+        self.client_secret: str | None = None
+        self.redirect_uri: str | None = None
+        self.domain: str | None = None
         self.scopes: str = "openid profile email offline_access"
-        
+
         # Only load OIDC configuration in server mode
         if config_loader.is_server_mode():
             self._load_from_env()
@@ -30,7 +30,6 @@ class OIDCConfig:
             # In tracker mode, leave all attributes as None/empty
             # This ensures is_configured() returns False
             pass
-
 
     def _load_from_env(self):
         """Load OIDC settings from environment variables."""
@@ -45,7 +44,7 @@ class OIDCConfig:
         """Check if OIDC is properly configured."""
         return bool(self.issuer_url and self.client_id and self.redirect_uri)
 
-    def validate(self) -> tuple[bool, Optional[str]]:
+    def validate(self) -> tuple[bool, str | None]:
         """
         Validate OIDC configuration.
 
@@ -65,7 +64,7 @@ class OIDCConfig:
 
         return True, None
 
-    async def get_discovery_document(self) -> Dict[str, Any]:
+    async def get_discovery_document(self) -> dict[str, Any]:
         """
         Fetch OIDC discovery document from the issuer.
 
@@ -112,7 +111,7 @@ class OIDCConfig:
         discovery = await self.get_discovery_document()
         return discovery["userinfo_endpoint"]
 
-    async def get_end_session_endpoint(self) -> Optional[str]:
+    async def get_end_session_endpoint(self) -> str | None:
         """Get the end session (logout) endpoint URL from the discovery document."""
         discovery = await self.get_discovery_document()
         return discovery.get("end_session_endpoint")
@@ -125,18 +124,18 @@ class OIDCConfig:
     def get_frontchannel_logout_uri(self) -> str:
         """
         Get the front-channel logout URI for this application.
-        
+
         This URI should be registered with the OIDC provider to enable
         front-channel logout. When a user logs out from another service,
         the OIDC provider will embed an iframe to this URI to clear the
         local session.
-        
+
         Returns:
             str: The full front-channel logout URI
         """
         if not self.redirect_uri:
             raise ValueError("redirect_uri is not configured")
-        
+
         # Extract base URL from redirect_uri
         redirect_base = self.redirect_uri.rsplit("/auth/callback", 1)[0]
         return f"{redirect_base}/auth/frontchannel-logout"

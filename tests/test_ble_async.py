@@ -80,7 +80,7 @@ class TestAsyncWrites:
         assert [job[2] for job in queued.jobs] == [DEVICE, DEVICE, OTHER]
 
     def test_response_is_dropped_when_the_connection_closed_meanwhile(self, chars, queued):
-        char, handler, sent = make_write_char(chars, None)
+        char, _handler, sent = make_write_char(chars, None)
         write(char, b'{"service": "x"}')
         char.on_disconnect(DEVICE)
         queued.run_all()

@@ -5,19 +5,18 @@ import socket
 import zipfile
 from ast import literal_eval
 from configparser import ConfigParser
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.utils import formatdate
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import yaml
-from fastapi import APIRouter, File, Form, HTTPException, Path as PathParam, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import Path as PathParam
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config_loader import config_loader
-from app.logging_config import get_logger
-from app.utils import privileged as priv
 from app.configs import registry
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.cmdline import CmdlineConfig
@@ -30,6 +29,8 @@ from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.configs.tsupdate import TsupdateConfig
 from app.configs.wireguard import WireguardConfig
+from app.logging_config import get_logger
+from app.utils import privileged as priv
 
 router = APIRouter(prefix="/api/configs", tags=["configs"])
 logger = get_logger(__name__)
@@ -37,19 +38,19 @@ logger = get_logger(__name__)
 
 def truncate_mtime_for_fat32(dt: datetime) -> datetime:
     """Truncate datetime down to previous even second for FAT32 compatibility.
-    
+
     FAT32 has 2-second resolution for modification times. To match native ZIP/FAT32
     behavior, we truncate DOWN to the previous even second (round down).
-    
+
     Args:
         dt: Input datetime
-        
+
     Returns:
         Datetime truncated down to previous even second
     """
     # Remove microseconds first
     dt = dt.replace(microsecond=0)
-    
+
     if dt.second % 2 == 1:
         # Odd second - subtract 1 second to truncate down to previous even second
         # This automatically handles minute/hour/day rollover
@@ -73,7 +74,7 @@ def truncate_mtime_for_fat32(dt: datetime) -> datetime:
 # rather than sudo.
 
 
-def parse_mqttutil_ini(content: str) -> Dict[str, Any]:
+def parse_mqttutil_ini(content: str) -> dict[str, Any]:
     """Parse mqttutil.conf INI content with Python literal values.
 
     Args:
@@ -92,7 +93,7 @@ def parse_mqttutil_ini(content: str) -> Dict[str, Any]:
         if not parser.defaults() and not parser.sections():
             raise ValueError("mqttutil.conf is empty or has no sections")
 
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         defaults = dict(parser.defaults())
         if defaults:
             data["DEFAULT"] = {key: literal_eval(value) for key, value in defaults.items()}
@@ -102,10 +103,10 @@ def parse_mqttutil_ini(content: str) -> Dict[str, Any]:
 
         return data
     except Exception as e:
-        raise ValueError(f"Failed to parse mqttutil.conf: {str(e)}")
+        raise ValueError(f"Failed to parse mqttutil.conf: {e!s}")
 
 
-def parse_ini_file(content: str) -> Dict[str, Any]:
+def parse_ini_file(content: str) -> dict[str, Any]:
     """Parse INI file content and return as dictionary.
 
     Args:
@@ -132,19 +133,19 @@ def parse_ini_file(content: str) -> Dict[str, Any]:
 
         return data
     except Exception as e:
-        raise ValueError(f"Failed to parse INI file: {str(e)}")
+        raise ValueError(f"Failed to parse INI file: {e!s}")
 
 
 def parse_mtime_and_validate(mtime: str, force: bool) -> datetime:
     """Parse and validate mtime parameter.
-    
+
     Args:
         mtime: ISO timestamp string (interpreted as UTC if no timezone specified)
         force: Whether force flag is set
-        
+
     Returns:
         Parsed datetime (naive, in UTC)
-        
+
     Raises:
         HTTPException: If validation fails
     """
@@ -156,27 +157,27 @@ def parse_mtime_and_validate(mtime: str, force: bool) -> datetime:
             return dt
         else:
             # Convert to UTC and make naive
-            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt.astimezone(UTC).replace(tzinfo=None)
     except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid mtime format '{mtime}'. Expected ISO format like '2025-10-17T08:59:50' or '2025-10-17T08:59:50+00:00'",
-            )
-    
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mtime format '{mtime}'. Expected ISO format like '2025-10-17T08:59:50' or '2025-10-17T08:59:50+00:00'",
+        )
+
     return None
 
 
 def create_config_instance(filename: str, config_type: str, content_str: str):
     """Create appropriate config instance and parse content.
-    
+
     Args:
         filename: Name of config file
         config_type: Type of config
         content_str: File content as string
-        
+
     Returns:
         Tuple of (config_instance, parsed_config)
-        
+
     Raises:
         HTTPException: If parsing fails
     """
@@ -193,7 +194,7 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
         elif config_type == "authorized_keys":
             # Use config upload mode to write to /boot/firmware/authorized_keys
             config_instance = AuthorizedKeysConfig(is_config_upload=True)
-            
+
             # Parse keys from uploaded content (no merging with existing)
             new_keys = []
             for line in content_str.strip().split("\n"):
@@ -202,7 +203,7 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
                     # Mark as server key
                     parsed["source"] = "server"
                     new_keys.append(parsed)
-            
+
             parsed_config = {"keys": new_keys}
         elif config_type in ["cmdline", "wireguard", "mosquitto_cert", "mosquitto_conf"]:
             parsed_config = {"content": content_str}
@@ -234,7 +235,7 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
             except (ValueError, IndexError) as e:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid geolocation file format: {str(e)}",
+                    detail=f"Invalid geolocation file format: {e!s}",
                 )
             config_instance = GeolocationConfig()
         elif config_type == "tsupdate":
@@ -250,25 +251,25 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
                 "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
                 "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml, mqttutil.conf",
             )
-        
+
         return config_instance, parsed_config
-    
+
     except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to parse configuration file: {str(e)}",
+            detail=f"Failed to parse configuration file: {e!s}",
         )
 
 
-def build_standard_response(success: bool, config_type: str, filename: str, **kwargs) -> Dict[str, Any]:
+def build_standard_response(success: bool, config_type: str, filename: str, **kwargs) -> dict[str, Any]:
     """Build standardized response structure.
-    
+
     Args:
         success: Whether operation was successful
         config_type: Type of configuration
         filename: Name of uploaded file
         **kwargs: Additional response fields
-        
+
     Returns:
         Standardized response dictionary
     """
@@ -282,13 +283,13 @@ def build_standard_response(success: bool, config_type: str, filename: str, **kw
     return response
 
 
-async def handle_service_restart(config_type: str, restart_service: bool) -> Dict[str, Any]:
+async def handle_service_restart(config_type: str, restart_service: bool) -> dict[str, Any]:
     """Handle service restart logic.
-    
+
     Args:
         config_type: Type of configuration
         restart_service: Whether to restart service
-        
+
     Returns:
         Dictionary with restart results
     """
@@ -296,10 +297,10 @@ async def handle_service_restart(config_type: str, restart_service: bool) -> Dic
         "service_restarted": False,
         "service_restart_error": None,
     }
-    
+
     if not restart_service:
         return result
-    
+
     if config_loader.is_server_mode():
         result["service_restart_error"] = "Service restart is not available in server mode"
         return result
@@ -320,7 +321,7 @@ async def handle_service_restart(config_type: str, restart_service: bool) -> Dic
     return result
 
 
-def parse_yaml_file(content: str) -> Dict[str, Any]:
+def parse_yaml_file(content: str) -> dict[str, Any]:
     """Parse YAML file content and return as dictionary.
 
     Args:
@@ -340,9 +341,9 @@ def parse_yaml_file(content: str) -> Dict[str, Any]:
             raise ValueError("YAML file must contain a mapping/dictionary at root level")
         return data
     except yaml.YAMLError as e:
-        raise ValueError(f"Failed to parse YAML file: {str(e)}")
+        raise ValueError(f"Failed to parse YAML file: {e!s}")
     except Exception as e:
-        raise ValueError(f"Failed to parse YAML file: {str(e)}")
+        raise ValueError(f"Failed to parse YAML file: {e!s}")
 
 
 @router.get("/")
@@ -373,16 +374,18 @@ async def list_configs():
     for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
         try:
             config_instance = get_config_instance(config_type)
-            
+
             if config_instance.config_file.exists():
                 file_stat = config_instance.config_file.stat()
                 mtime = datetime.utcfromtimestamp(file_stat.st_mtime)
-                
-                files_metadata.append({
-                    "filename": filename,
-                    "mtime": mtime.isoformat() + "Z",  # Add Z to indicate UTC
-                })
-                
+
+                files_metadata.append(
+                    {
+                        "filename": filename,
+                        "mtime": mtime.isoformat() + "Z",  # Add Z to indicate UTC
+                    }
+                )
+
                 # Track most recent mtime
                 if most_recent_mtime_timestamp is None or file_stat.st_mtime > most_recent_mtime_timestamp:
                     most_recent_mtime_timestamp = file_stat.st_mtime
@@ -431,14 +434,14 @@ async def upload_config(
     - geolocation - Geolocation file (geoclue format)
 
     The file will be validated and if valid, will replace the existing configuration.
-    
+
     mtime parameter:
     - When force=False: File is only overwritten if uploaded mtime is newer than existing file
     - When force=True: File is always overwritten regardless of timestamps
     - The uploaded file's mtime is preserved and set on the target file
-    
+
     Special Handling:
-    - If cmdline.txt is uploaded with restart_service=True, the system will reboot instead of 
+    - If cmdline.txt is uploaded with restart_service=True, the system will reboot instead of
       attempting a service restart (since cmdline.txt changes require a reboot to take effect)
     - For other config files, the respective systemd service can be restarted after upload
 
@@ -446,7 +449,7 @@ async def upload_config(
 
     Args:
         file: The configuration file to upload
-        restart_service: Whether to restart the respective service after successful upload (default: False). 
+        restart_service: Whether to restart the respective service after successful upload (default: False).
                         For cmdline.txt, this triggers a system reboot instead.
         mtime: File modification time in ISO format (e.g., 2025-10-17T08:59:50)
         force: Force overwrite regardless of file modification time (default: False)
@@ -468,13 +471,13 @@ async def upload_config(
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="File must be UTF-8 encoded text")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {e!s}")
 
     # Determine config type from filename
     filename_lower = file.filename.lower() if file.filename else ""
     filename_to_type = {
         "radiotracking.ini": "radiotracking",
-        "schedule.yml": "schedule", 
+        "schedule.yml": "schedule",
         "soundscapepipe.yml": "soundscapepipe",
         "authorized_keys": "authorized_keys",
         "cmdline.txt": "cmdline",
@@ -485,7 +488,7 @@ async def upload_config(
         "tsupdate.yml": "tsupdate",
         "mqttutil.conf": "mqttutil",
     }
-    
+
     config_type = filename_to_type.get(filename_lower)
     if not config_type:
         raise HTTPException(
@@ -496,10 +499,10 @@ async def upload_config(
 
     # Validate mtime and parse if needed
     upload_mtime = parse_mtime_and_validate(mtime, force)
-    
+
     # Create config instance and parse content
     config_instance, parsed_config = create_config_instance(file.filename, config_type, content_str)
-    
+
     # Validate the configuration
     validation_errors = config_instance.validate(parsed_config)
     if validation_errors:
@@ -516,11 +519,11 @@ async def upload_config(
     existing_mtime = None
     if not force:
         upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
-        
+
         if config_instance.config_file.exists():
             # Read file mtime as UTC (naive datetime)
             existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
-            
+
             if upload_mtime_truncated <= existing_mtime:
                 return build_standard_response(
                     success=False,
@@ -529,7 +532,7 @@ async def upload_config(
                     valid=True,
                     skipped=True,
                     message=f"File is not newer. Upload: {upload_mtime.isoformat()} "
-                           f"(truncated: {upload_mtime_truncated.isoformat()}), Existing: {existing_mtime.isoformat()}",
+                    f"(truncated: {upload_mtime_truncated.isoformat()}), Existing: {existing_mtime.isoformat()}",
                     upload_mtime=upload_mtime.isoformat(),
                     upload_mtime_truncated=upload_mtime_truncated.isoformat(),
                     existing_mtime=existing_mtime.isoformat(),
@@ -554,7 +557,7 @@ async def upload_config(
     except priv.PrivilegedCallError as e:
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e!s}")
 
     # Build success response
     message = f"Configuration file '{file.filename}' uploaded successfully"
@@ -562,7 +565,7 @@ async def upload_config(
         message += " (forced - mtime preserved)"
     else:
         message += " (mtime preserved)"
-    
+
     response_data = {
         "valid": True,
         "message": message,
@@ -570,20 +573,22 @@ async def upload_config(
         "mtime_set": True,
         "force_used": force,
     }
-    
+
     # Add save metadata (e.g., hostname_changed for cmdline.txt)
     if save_metadata:
         response_data.update(save_metadata)
-    
+
     # Add mtime info
     upload_mtime_truncated = truncate_mtime_for_fat32(upload_mtime)
-    response_data.update({
-        "upload_mtime": upload_mtime.isoformat(),
-        "upload_mtime_truncated": upload_mtime_truncated.isoformat(),
-    })
+    response_data.update(
+        {
+            "upload_mtime": upload_mtime.isoformat(),
+            "upload_mtime_truncated": upload_mtime_truncated.isoformat(),
+        }
+    )
     if existing_mtime:
         response_data["existing_mtime"] = existing_mtime.isoformat()
-    
+
     # Handle service restart or reboot
     # Special case: cmdline.txt requires reboot, not service restart
     if config_type == "cmdline" and restart_service:
@@ -596,16 +601,16 @@ async def upload_config(
             response_data["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt requires reboot)"
             response_data["reboot_initiated"] = True
         except Exception as e:
-            response_data["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
+            response_data["message"] += f" (Warning: Failed to schedule reboot: {e!s})"
             response_data["reboot_initiated"] = False
     else:
         # Normal service restart for other config types
         restart_result = await handle_service_restart(config_type, restart_service)
         response_data.update(restart_result)
-        
+
         # Update message with restart info
         if restart_result["service_restarted"]:
-            response_data["message"] += f" and service restarted"
+            response_data["message"] += " and service restarted"
         elif restart_result["service_restart_error"]:
             response_data["message"] += f" (Service restart failed: {restart_result['service_restart_error']})"
 
@@ -640,33 +645,33 @@ def get_config_instance(config_type: str, is_config_upload: bool = False):
     return registry.get_privileged_config_instance(config_type)
 
 
-def extract_zip_file_timestamps(zip_buffer: BytesIO) -> Dict[str, datetime]:
+def extract_zip_file_timestamps(zip_buffer: BytesIO) -> dict[str, datetime]:
     """Extract file timestamps from zip archive.
-    
+
     Args:
         zip_buffer: BytesIO buffer containing zip data
-        
+
     Returns:
         Dictionary mapping filename to datetime object (naive, interpreted as UTC)
     """
     timestamps = {}
-    
+
     with zipfile.ZipFile(zip_buffer, "r") as zip_file:
         for zip_info in zip_file.infolist():
             # Skip directories
             if zip_info.filename.endswith("/"):
                 continue
-                
+
             # Get just the basename (ignore any directory structure in zip)
             basename = zip_info.filename.split("/")[-1]
-            
+
             # Convert zip timestamp to datetime (interpreted as UTC)
             # zip_info.date_time is (year, month, day, hour, minute, second)
             # Zip timestamps don't have timezone info, so we treat them as UTC
             if len(zip_info.date_time) >= 6:
                 zip_datetime = datetime(*zip_info.date_time[:6])
                 timestamps[basename] = zip_datetime
-    
+
     return timestamps
 
 
@@ -686,14 +691,14 @@ def _exists_or_unreadable(path: Path) -> bool:
         return True
 
 
-async def collect_privileged_stats(config_instances: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+async def collect_privileged_stats(config_instances: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Existence/mtime, fetched as root, for config files `pi` cannot stat.
 
     Pass the result to compare_file_timestamps(). Files pi can stat itself
     are not included. A failed lookup is left out, in which case the
     comparison falls back to treating the file as updatable.
     """
-    stats: Dict[str, Dict[str, Any]] = {}
+    stats: dict[str, dict[str, Any]] = {}
     for filename, config_instance in config_instances.items():
         if _is_stat_able(config_instance.config_file):
             continue
@@ -708,10 +713,10 @@ async def collect_privileged_stats(config_instances: Dict[str, Any]) -> Dict[str
 
 
 def compare_file_timestamps(
-    config_instances: Dict[str, Any],
-    zip_timestamps: Dict[str, datetime],
-    privileged_stats: Optional[Dict[str, Dict[str, Any]]] = None,
-) -> Dict[str, Dict[str, Any]]:
+    config_instances: dict[str, Any],
+    zip_timestamps: dict[str, datetime],
+    privileged_stats: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Compare zip file timestamps with existing files on disk.
 
     Args:
@@ -775,7 +780,7 @@ def compare_file_timestamps(
     return comparison_results
 
 
-def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
+def parse_config_file(filename: str, content: str) -> dict[str, Any]:
     """Parse configuration file content based on filename.
 
     Args:
@@ -792,7 +797,7 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
         return parse_ini_file(content)
     elif filename == "mqttutil.conf":
         return parse_mqttutil_ini(content)
-    elif filename.endswith(".yml") or filename.endswith(".yaml"):
+    elif filename.endswith((".yml", ".yaml")):
         return parse_yaml_file(content)
     elif filename == "authorized_keys":
         # For authorized_keys, parse each line
@@ -825,7 +830,7 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
                 "accuracy": float(data_lines[3]),
             }
         except (ValueError, IndexError) as e:
-            raise ValueError(f"Invalid geolocation file format: {str(e)}")
+            raise ValueError(f"Invalid geolocation file format: {e!s}")
     else:
         raise ValueError(f"Unsupported file type: {filename}")
 
@@ -833,7 +838,7 @@ def parse_config_file(filename: str, content: str) -> Dict[str, Any]:
 async def _apply_config_zip_from_path(
     zip_path: Path,
     force: bool = True,
-) -> Tuple[List[str], bool]:
+) -> tuple[list[str], bool]:
     """Apply configuration files from a local zip file.
 
     Used by system reset to reset config from tsos-default-name_config.zip.
@@ -911,7 +916,7 @@ async def _apply_config_zip_from_path(
     files_to_save = (
         list(recognized_files.keys())
         if force
-        else [f for f in recognized_files.keys() if timestamp_comparisons.get(f, {}).get("should_update", True)]
+        else [f for f in recognized_files if timestamp_comparisons.get(f, {}).get("should_update", True)]
     )
 
     saved_files = []
@@ -936,9 +941,14 @@ async def _apply_config_zip_from_path(
 async def upload_config_zip(
     file: UploadFile = File(..., description="Zip file containing configuration files"),
     restart_services: bool = Form(False, description="Restart affected services after upload"),
-    pedantic: bool = Form(False, description="Reject upload if unknown files are present or if any existing file is newer"),
+    pedantic: bool = Form(
+        False, description="Reject upload if unknown files are present or if any existing file is newer"
+    ),
     force: bool = Form(False, description="Force overwrite regardless of file modification time"),
-    reboot: str = Form("allow", description="Reboot policy: 'forbid' (no reboot), 'allow' (default, reboot if requested), 'force' (always reboot)"),
+    reboot: str = Form(
+        "allow",
+        description="Reboot policy: 'forbid' (no reboot), 'allow' (default, reboot if requested), 'force' (always reboot)",
+    ),
 ):
     """Upload and validate multiple configuration files from a zip archive.
 
@@ -960,7 +970,7 @@ async def upload_config_zip(
     - Force mode (force=True): Overwrites all files regardless of timestamps
     - Default mode (force=False, pedantic=False): Only overwrites files newer than existing
     - Pedantic mode (force=False, pedantic=True): Rejects upload if any existing file is newer OR unknown files present
-    
+
     Note: Zip file timestamps are always preserved and set on the target files (regardless of mode)
 
     Reboot Modes:
@@ -987,7 +997,7 @@ async def upload_config_zip(
             status_code=400,
             detail=f"Invalid reboot parameter: '{reboot}'. Must be 'forbid', 'allow', or 'force'",
         )
-    
+
     # Check if server mode is enabled - disable endpoint if so
     if config_loader.is_server_mode():
         raise HTTPException(
@@ -1002,7 +1012,7 @@ async def upload_config_zip(
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to read file: {str(e)}",
+            detail=f"Failed to read file: {e!s}",
         )
 
     # Verify it's a valid zip file
@@ -1019,12 +1029,11 @@ async def upload_config_zip(
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to read zip file: {str(e)}",
+            detail=f"Failed to read zip file: {e!s}",
         )
 
     # Extract file timestamps from zip
     zip_timestamps = extract_zip_file_timestamps(zip_buffer)
-
 
     # Identify recognized and unknown files
     recognized_files = {}
@@ -1105,13 +1114,13 @@ async def upload_config_zip(
         except ValueError as e:
             validation_results[filename] = {
                 "valid": False,
-                "errors": [f"Parse error: {str(e)}"],
+                "errors": [f"Parse error: {e!s}"],
             }
             all_valid = False
         except Exception as e:
             validation_results[filename] = {
                 "valid": False,
-                "errors": [f"Validation error: {str(e)}"],
+                "errors": [f"Validation error: {e!s}"],
             }
             all_valid = False
 
@@ -1134,24 +1143,26 @@ async def upload_config_zip(
     timestamp_comparisons = compare_file_timestamps(
         config_instances, zip_timestamps, await collect_privileged_stats(config_instances)
     )
-    
+
     # Handle pedantic mode timestamp checking (only if not in force mode)
     if pedantic and not force:
         # Check if any existing file is newer than its zip counterpart
         newer_files_on_disk = []
         for filename, comparison in timestamp_comparisons.items():
-            if (comparison["exists_on_disk"] and 
-                comparison["existing_timestamp"] and 
-                not comparison["is_newer"]):
-                newer_files_on_disk.append({
-                    "filename": filename,
-                    "existing_timestamp": comparison["existing_timestamp"],
-                    "zip_timestamp": comparison["zip_timestamp"],
-                })
-        
+            if comparison["exists_on_disk"] and comparison["existing_timestamp"] and not comparison["is_newer"]:
+                newer_files_on_disk.append(
+                    {
+                        "filename": filename,
+                        "existing_timestamp": comparison["existing_timestamp"],
+                        "zip_timestamp": comparison["zip_timestamp"],
+                    }
+                )
+
         if newer_files_on_disk:
             response["success"] = False
-            response["message"] = f"Pedantic mode: {len(newer_files_on_disk)} file(s) on disk are newer than zip versions. No changes were made."
+            response["message"] = (
+                f"Pedantic mode: {len(newer_files_on_disk)} file(s) on disk are newer than zip versions. No changes were made."
+            )
             response["newer_files_on_disk"] = newer_files_on_disk
             response["timestamp_comparisons"] = timestamp_comparisons
             return response
@@ -1159,10 +1170,10 @@ async def upload_config_zip(
     # Determine which files to save based on mode
     files_to_save = []
     files_skipped = []
-    
-    for filename in recognized_files.keys():
+
+    for filename in recognized_files:
         comparison = timestamp_comparisons.get(filename, {})
-        
+
         if force:
             # Force mode: save all files
             files_to_save.append(filename)
@@ -1171,12 +1182,14 @@ async def upload_config_zip(
             if comparison.get("should_update", True):
                 files_to_save.append(filename)
             else:
-                files_skipped.append({
-                    "filename": filename,
-                    "reason": "File is not newer than existing version",
-                    "existing_timestamp": comparison.get("existing_timestamp"),
-                    "zip_timestamp": comparison.get("zip_timestamp"),
-                })
+                files_skipped.append(
+                    {
+                        "filename": filename,
+                        "reason": "File is not newer than existing version",
+                        "existing_timestamp": comparison.get("existing_timestamp"),
+                        "zip_timestamp": comparison.get("zip_timestamp"),
+                    }
+                )
 
     # Save the selected files
     saved_files = []
@@ -1220,26 +1233,30 @@ async def upload_config_zip(
         mode_desc = "pedantic mode"
     else:
         mode_desc = "default mode"
-    
+
     message_parts = []
     if saved_files:
-        message_parts.append(f"Successfully uploaded and validated {len(saved_files)} configuration file(s) in {mode_desc}")
-    
+        message_parts.append(
+            f"Successfully uploaded and validated {len(saved_files)} configuration file(s) in {mode_desc}"
+        )
+
     if files_skipped:
         message_parts.append(f"Skipped {len(files_skipped)} file(s) (not newer than existing)")
-    
+
     response["message"] = ". ".join(message_parts) if message_parts else "No files were processed"
-    
+
     # Add timestamp and mode information to response
-    response.update({
-        "mode": mode_desc,
-        "force_used": force,
-        "pedantic_used": pedantic,
-        "timestamp_comparisons": timestamp_comparisons,
-        "files_skipped": files_skipped,
-        "saved_files": saved_files,
-    })
-    
+    response.update(
+        {
+            "mode": mode_desc,
+            "force_used": force,
+            "pedantic_used": pedantic,
+            "timestamp_comparisons": timestamp_comparisons,
+            "files_skipped": files_skipped,
+            "saved_files": saved_files,
+        }
+    )
+
     # Add save metadata if any (e.g., hostname changes for cmdline.txt)
     if save_metadata:
         response["save_metadata"] = save_metadata
@@ -1274,13 +1291,15 @@ async def upload_config_zip(
     # Handle reboot based on policy
     # Check if cmdline.txt was updated (requires reboot to take effect)
     cmdline_updated = "cmdline.txt" in saved_files
-    
+
     if reboot_lower == "forbid":
         # Never reboot, even if cmdline.txt was updated
         response["reboot_initiated"] = False
         response["reboot_policy"] = "forbid"
         if cmdline_updated:
-            response["message"] += " (Note: cmdline.txt updated but reboot forbidden - changes will not take effect until manual reboot)"
+            response["message"] += (
+                " (Note: cmdline.txt updated but reboot forbidden - changes will not take effect until manual reboot)"
+            )
     elif reboot_lower == "force":
         # Always reboot after successful upload
         response["reboot_policy"] = "force"
@@ -1295,7 +1314,7 @@ async def upload_config_zip(
                 response["message"] += ". System reboot scheduled in 10 seconds (forced)"
                 response["reboot_initiated"] = True
             except Exception as e:
-                response["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
+                response["message"] += f" (Warning: Failed to schedule reboot: {e!s})"
                 response["reboot_initiated"] = False
     elif reboot_lower == "allow" and cmdline_updated:
         # "allow" mode with cmdline.txt updated - automatically reboot
@@ -1311,7 +1330,7 @@ async def upload_config_zip(
                 response["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt updated)"
                 response["reboot_initiated"] = True
             except Exception as e:
-                response["message"] += f" (Warning: Failed to schedule reboot: {str(e)})"
+                response["message"] += f" (Warning: Failed to schedule reboot: {e!s})"
                 response["reboot_initiated"] = False
     else:
         # "allow" mode but cmdline.txt was not updated - no reboot
@@ -1323,13 +1342,13 @@ async def upload_config_zip(
 
 def _validate_config_filename_and_get_instance(filename: str):
     """Validate filename and return config instance.
-    
+
     Args:
         filename: Configuration filename
-        
+
     Returns:
         Tuple of (config_instance, response_headers)
-        
+
     Raises:
         HTTPException: If validation fails
     """
@@ -1417,7 +1436,7 @@ async def download_config(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to read configuration file: {str(e)}",
+            detail=f"Failed to read configuration file: {e!s}",
         )
 
     # Return file content
@@ -1457,7 +1476,7 @@ async def head_config(
         Headers only (no body) with Last-Modified header
     """
     config_instance, response_headers = _validate_config_filename_and_get_instance(filename)
-    
+
     # Get file size for Content-Length header
     try:
         file_stat = config_instance.config_file.stat()
@@ -1474,10 +1493,10 @@ async def head_config(
 
 def _check_existing_config_files():
     """Check which config files exist and get metadata.
-    
+
     Returns:
         Tuple of (file_count, most_recent_mtime, total_size)
-        
+
     Raises:
         HTTPException: If server mode is enabled or no files found
     """
@@ -1492,15 +1511,15 @@ def _check_existing_config_files():
     most_recent_mtime = None
     total_size = 0
 
-    for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
+    for config_type in RECOGNIZED_CONFIG_FILES.values():
         try:
             config_instance = get_config_instance(config_type)
-            
+
             if config_instance.config_file.exists():
                 file_stat = config_instance.config_file.stat()
                 file_count += 1
                 total_size += file_stat.st_size
-                
+
                 # Track most recent mtime
                 if most_recent_mtime is None or file_stat.st_mtime > most_recent_mtime:
                     most_recent_mtime = file_stat.st_mtime
@@ -1544,21 +1563,21 @@ async def download_config_zip():
     for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
         try:
             config_instance = get_config_instance(config_type)
-            
+
             if config_instance.config_file.exists():
                 # Read file content
                 with open(config_instance.config_file, "r") as f:
                     content = f.read()
-                
+
                 # Get file mtime
                 file_stat = config_instance.config_file.stat()
                 mtime = datetime.utcfromtimestamp(file_stat.st_mtime)
-                
+
                 existing_files[filename] = {
                     "content": content,
                     "mtime": mtime,
                 }
-                
+
                 # Track most recent mtime for Last-Modified header
                 if most_recent_mtime is None or file_stat.st_mtime > most_recent_mtime:
                     most_recent_mtime = file_stat.st_mtime
@@ -1595,7 +1614,7 @@ async def download_config_zip():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create zip file: {str(e)}",
+            detail=f"Failed to create zip file: {e!s}",
         )
 
     # Get hostname for filename
@@ -1604,7 +1623,7 @@ async def download_config_zip():
 
     # Prepare response headers
     response_headers = {"Content-Disposition": f'attachment; filename="{zip_filename}"'}
-    
+
     # Add Last-Modified header to most recent file's mtime
     if most_recent_mtime is not None:
         http_date = formatdate(most_recent_mtime, usegmt=True)
@@ -1631,7 +1650,7 @@ async def head_config_zip():
     Returns:
         Headers only (no body) with Last-Modified header for zip archive
     """
-    file_count, most_recent_mtime, total_size = _check_existing_config_files()
+    file_count, most_recent_mtime, _total_size = _check_existing_config_files()
 
     # Get hostname for filename
     hostname = socket.gethostname()
@@ -1639,12 +1658,12 @@ async def head_config_zip():
 
     # Prepare response headers
     response_headers = {"Content-Disposition": f'attachment; filename="{zip_filename}"'}
-    
+
     # Add Last-Modified header
     if most_recent_mtime is not None:
         http_date = formatdate(most_recent_mtime, usegmt=True)
         response_headers["Last-Modified"] = http_date
-    
+
     # Add approximate Content-Length (actual zip will be smaller due to compression)
     # This is an estimate, real size would require creating the zip
     response_headers["X-File-Count"] = str(file_count)

@@ -2,16 +2,15 @@
 
 import asyncio
 import subprocess
-from typing import List, Optional
 
 
 async def run_subprocess_async(
-    cmd: List[str],
+    cmd: list[str],
     capture_output: bool = True,
     text: bool = True,
-    timeout: Optional[float] = None,
+    timeout: float | None = None,
     check: bool = False,
-    input_data: Optional[bytes] = None,
+    input_data: bytes | None = None,
 ) -> subprocess.CompletedProcess:
     """Run a subprocess asynchronously without blocking the event loop.
 
@@ -57,28 +56,27 @@ async def run_subprocess_async(
         if timeout is not None:
             try:
                 stdout_data, stderr_data = await asyncio.wait_for(
-                    process.communicate(input=input_data),
-                    timeout=timeout
+                    process.communicate(input=input_data), timeout=timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Kill the process if timeout exceeded
                 process.kill()
                 await process.wait()
                 raise subprocess.TimeoutExpired(cmd, timeout)
         else:
             stdout_data, stderr_data = await process.communicate(input=input_data)
-        
+
         # Get return code
         returncode = await process.wait()
-        
+
         # Decode output if text mode requested
         if text:
-            stdout_str = stdout_data.decode('utf-8', errors='replace') if stdout_data else ''
-            stderr_str = stderr_data.decode('utf-8', errors='replace') if stderr_data else ''
+            stdout_str = stdout_data.decode("utf-8", errors="replace") if stdout_data else ""
+            stderr_str = stderr_data.decode("utf-8", errors="replace") if stderr_data else ""
         else:
             stdout_str = stdout_data
             stderr_str = stderr_data
-        
+
         # Create CompletedProcess with same interface as subprocess.run()
         result = subprocess.CompletedProcess(
             args=cmd,
@@ -86,7 +84,7 @@ async def run_subprocess_async(
             stdout=stdout_str,
             stderr=stderr_str,
         )
-        
+
         # Raise exception if check=True and returncode is non-zero
         if check and returncode != 0:
             raise subprocess.CalledProcessError(
@@ -95,9 +93,9 @@ async def run_subprocess_async(
                 output=stdout_str,
                 stderr=stderr_str,
             )
-        
+
         return result
-        
+
     except FileNotFoundError:
         # Re-raise FileNotFoundError as-is
         raise

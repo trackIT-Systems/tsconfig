@@ -1,7 +1,5 @@
 """System reset endpoints."""
 
-from pathlib import Path
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -58,7 +56,7 @@ async def system_reset(request: SystemResetRequest) -> SystemResetResponse:
                 detail=f"Default config zip not found: {DEFAULT_CONFIG_ZIP}",
             )
         try:
-            saved_files, cmdline_updated = await _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
+            _saved_files, cmdline_updated = await _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
             reset_config_done = True
             if cmdline_updated:
                 reboot_needed = True

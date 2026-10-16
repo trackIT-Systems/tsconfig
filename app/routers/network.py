@@ -3,7 +3,7 @@
 import asyncio
 import json
 import subprocess
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -110,7 +110,7 @@ class ModemInfo(BaseModel):
     # Connection info
     state: str | None = Field(None, description="Modem state")
     operator_name: str | None = Field(None, description="Network operator name")
-    ip_addresses: List[str] | None = Field(None, description="IP addresses")
+    ip_addresses: list[str] | None = Field(None, description="IP addresses")
 
     # SIM info
     sim_iccid: str | None = Field(None, description="SIM ICCID")
@@ -122,14 +122,14 @@ class WiFiBandChannels(BaseModel):
     """WiFi band with available channels."""
 
     band: str = Field(..., description="Band name (2.4GHz, 5GHz, 6GHz)")
-    channels: List[int] = Field(..., description="Available channels in this band")
+    channels: list[int] = Field(..., description="Available channels in this band")
 
 
 class WiFiCapabilities(BaseModel):
     """WiFi device capabilities model."""
 
-    bands: List[WiFiBandChannels] = Field(..., description="Supported bands and their channels")
-    channel_widths: List[str] = Field(..., description="Supported channel widths (20, 40, 80, 160)")
+    bands: list[WiFiBandChannels] = Field(..., description="Supported bands and their channels")
+    channel_widths: list[str] = Field(..., description="Supported channel widths (20, 40, 80, 160)")
 
 
 class WiFiScanAP(BaseModel):
@@ -143,10 +143,10 @@ class WiFiScanAP(BaseModel):
     bssid: str | None = Field(None, description="BSSID if known")
 
 
-def _split_nmcli_terse_line(line: str) -> List[str]:
+def _split_nmcli_terse_line(line: str) -> list[str]:
     """Split an nmcli -t line on ':' with '\\:' as a literal colon in values."""
-    parts: List[str] = []
-    current: List[str] = []
+    parts: list[str] = []
+    current: list[str] = []
     i = 0
     while i < len(line):
         c = line[i]
@@ -206,11 +206,11 @@ async def _get_wifi_interface_for_scan() -> str:
     )
 
 
-def _parse_wifi_scan_lines(stdout: str) -> List[WiFiScanAP]:
+def _parse_wifi_scan_lines(stdout: str) -> list[WiFiScanAP]:
     """Parse `nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE,CHAN,BSSID device wifi list` output."""
     fields = ("SSID", "SIGNAL", "SECURITY", "ACTIVE", "CHAN", "BSSID")
     n = len(fields)
-    networks: List[WiFiScanAP] = []
+    networks: list[WiFiScanAP] = []
     for line in stdout.strip().split("\n"):
         if not line:
             continue
@@ -249,9 +249,9 @@ def _parse_wifi_scan_lines(stdout: str) -> List[WiFiScanAP]:
     return networks
 
 
-def _merge_scan_by_ssid(networks: List[WiFiScanAP]) -> List[WiFiScanAP]:
+def _merge_scan_by_ssid(networks: list[WiFiScanAP]) -> list[WiFiScanAP]:
     """Keep one row per SSID (strongest signal, active OR across BSSIDs)."""
-    merged: Dict[str, WiFiScanAP] = {}
+    merged: dict[str, WiFiScanAP] = {}
     for ap in networks:
         key = ap.ssid
         if key not in merged:
@@ -266,9 +266,7 @@ def _merge_scan_by_ssid(networks: List[WiFiScanAP]) -> List[WiFiScanAP]:
     return sorted(merged.values(), key=lambda x: (-x.signal, x.ssid.lower()))
 
 
-async def run_nmcli_command(
-    args: List[str], check: bool = True, timeout: float = 10
-) -> subprocess.CompletedProcess:
+async def run_nmcli_command(args: list[str], check: bool = True, timeout: float = 10) -> subprocess.CompletedProcess:
     """Run nmcli command with proper error handling.
 
     Args:
@@ -290,14 +288,14 @@ async def run_nmcli_command(
         raise HTTPException(
             status_code=500, detail=f"NetworkManager command failed: {e.stderr.strip() or e.stdout.strip() or str(e)}"
         )
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+    except (TimeoutError, subprocess.TimeoutExpired):
         raise HTTPException(status_code=504, detail="NetworkManager command timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="NetworkManager (nmcli) not available")
 
 
 async def nmcli_connection_modify(
-    connection: str, set_props: Dict[str, str], unset_props: List[str] | None = None
+    connection: str, set_props: dict[str, str], unset_props: list[str] | None = None
 ) -> subprocess.CompletedProcess:
     """`nmcli connection modify <connection> (<prop> <value>)... [-- (-<prop>)...]`
 
@@ -318,7 +316,7 @@ async def nmcli_connection_modify(
     return await run_nmcli_command(args, check=False)
 
 
-async def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+async def run_mmcli_command(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
     """Run mmcli command with proper error handling.
 
     Args:
@@ -338,7 +336,7 @@ async def run_mmcli_command(args: List[str], check: bool = True) -> subprocess.C
         raise HTTPException(
             status_code=500, detail=f"ModemManager command failed: {e.stderr.strip() or e.stdout.strip() or str(e)}"
         )
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+    except (TimeoutError, subprocess.TimeoutExpired):
         raise HTTPException(status_code=504, detail="ModemManager command timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="ModemManager (mmcli) not available")
@@ -356,9 +354,7 @@ async def _get_hotspot_interface_phy() -> int | None:
         if not interface:
             return None
 
-        result = await run_subprocess_async(
-            ["iw", "dev", interface, "info"], capture_output=True, text=True, timeout=5
-        )
+        result = await run_subprocess_async(["iw", "dev", interface, "info"], capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
             return None
 
@@ -422,7 +418,7 @@ def _parse_iw_phy_output(output: str) -> WiFiCapabilities:
 
     if not channel_widths:
         channel_widths.add("20")
-    sorted_widths = sorted(list(channel_widths), key=lambda x: int(x))
+    sorted_widths = sorted(channel_widths, key=lambda x: int(x))
 
     return WiFiCapabilities(bands=bands_data, channel_widths=sorted_widths)
 
@@ -459,18 +455,18 @@ async def parse_wifi_capabilities() -> WiFiCapabilities:
             raise HTTPException(status_code=503, detail="No WiFi bands detected")
 
         return capabilities
-        
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+
+    except (TimeoutError, subprocess.TimeoutExpired):
         raise HTTPException(status_code=504, detail="WiFi capability detection timed out")
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="iw command not available")
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse WiFi capabilities: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse WiFi capabilities: {e!s}")
 
 
-async def get_nmcli_connection_properties(connection_name: str, show_secrets: bool = False) -> Dict[str, str]:
+async def get_nmcli_connection_properties(connection_name: str, show_secrets: bool = False) -> dict[str, str]:
     """Get all properties from a NetworkManager connection.
 
     Args:
@@ -492,10 +488,7 @@ async def get_nmcli_connection_properties(connection_name: str, show_secrets: bo
         result = await run_nmcli_command(args, check=False)
 
         if result.returncode != 0:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Connection '{connection_name}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Connection '{connection_name}' not found")
 
         # Parse output - each line is "property:value"
         properties = {}
@@ -517,8 +510,7 @@ async def get_nmcli_connection_properties(connection_name: str, show_secrets: bo
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get properties from connection {connection_name}: {str(e)}"
+            status_code=500, detail=f"Failed to get properties from connection {connection_name}: {e!s}"
         )
 
 
@@ -578,11 +570,13 @@ async def get_wifi_capabilities() -> WiFiCapabilities:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get WiFi capabilities: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get WiFi capabilities: {e!s}")
 
 
-@router.get("/wifi/scan", summary="Scan for WiFi networks", response_model=List[WiFiScanAP])
-async def wifi_scan(rescan: bool = Query(True, description="Request a fresh scan before listing (slower but current)")) -> List[WiFiScanAP]:
+@router.get("/wifi/scan", summary="Scan for WiFi networks", response_model=list[WiFiScanAP])
+async def wifi_scan(
+    rescan: bool = Query(True, description="Request a fresh scan before listing (slower but current)"),
+) -> list[WiFiScanAP]:
     """List visible WiFi networks (same source as `nmcli device wifi list`) for station setup guidance."""
     try:
         iface = await _get_wifi_interface_for_scan()
@@ -615,11 +609,11 @@ async def wifi_scan(rescan: bool = Query(True, description="Request a fresh scan
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"WiFi scan failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"WiFi scan failed: {e!s}")
 
 
-@router.get("/connections", summary="List all network connections", response_model=List[ConnectionInfo])
-async def get_connections() -> List[ConnectionInfo]:
+@router.get("/connections", summary="List all network connections", response_model=list[ConnectionInfo])
+async def get_connections() -> list[ConnectionInfo]:
     """Get list of all NetworkManager connections with their status and IPv4 addresses.
 
     Returns:
@@ -651,7 +645,7 @@ async def get_connections() -> List[ConnectionInfo]:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list network connections: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list network connections: {e!s}")
 
 
 @router.get("/connections/station", summary="Get WiFi station configuration", response_model=WiFiStationConfig)
@@ -667,11 +661,11 @@ async def get_wifi_station_config() -> WiFiStationConfig:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get WiFi station configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get WiFi station configuration: {e!s}")
 
 
 @router.patch("/connections/station", summary="Update WiFi station configuration")
-async def update_wifi_station_config(update: WiFiStationUpdate) -> Dict[str, Any]:
+async def update_wifi_station_config(update: WiFiStationUpdate) -> dict[str, Any]:
     """Update WiFi client SSID and/or WPA2 password on the NetworkManager station connection."""
     try:
         _ensure_tracker_mode()
@@ -693,7 +687,7 @@ async def update_wifi_station_config(update: WiFiStationUpdate) -> Dict[str, Any
             if len(ssid_value) > 32:
                 raise HTTPException(status_code=400, detail="SSID must be 32 characters or less")
 
-        set_props: Dict[str, str] = {}
+        set_props: dict[str, str] = {}
         if ssid_value is not None:
             set_props["802-11-wireless.ssid"] = ssid_value
         if update.password is not None:
@@ -717,7 +711,7 @@ async def update_wifi_station_config(update: WiFiStationUpdate) -> Dict[str, Any
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update WiFi station configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update WiFi station configuration: {e!s}")
 
 
 @router.get("/connections/hotspot", summary="Get hotspot configuration", response_model=HotspotConfig)
@@ -730,15 +724,15 @@ async def get_hotspot_config() -> HotspotConfig:
     try:
         # Get all properties in a single call (with secrets revealed)
         props = await get_nmcli_connection_properties("hotspot", show_secrets=True)
-        
+
         # Get SSID
         ssid = props.get("802-11-wireless.ssid")
         if not ssid:
             raise HTTPException(status_code=404, detail="Hotspot SSID not found in connection")
-        
+
         # Get password
         password = props.get("802-11-wireless-security.psk", "")
-        
+
         # Get band (returns "a", "bg", or None)
         band_value = props.get("802-11-wireless.band")
         band = None
@@ -747,38 +741,33 @@ async def get_hotspot_config() -> HotspotConfig:
         elif band_value == "bg":
             band = "2.4GHz"
         # If band_value is None or unrecognized, band stays None (auto)
-        
+
         # Get channel
         channel_str = props.get("802-11-wireless.channel")
         channel = int(channel_str) if channel_str and channel_str.isdigit() else None
-        
+
         # Get hidden SSID setting
         hidden_str = props.get("802-11-wireless.hidden")
         hidden = hidden_str == "yes" if hidden_str else None
-        
+
         # Get channel width (0 means auto/unset)
         channel_width_str = props.get("802-11-wireless.channel-width")
         channel_width = None
         if channel_width_str and channel_width_str != "0":
             channel_width = channel_width_str
-        
+
         return HotspotConfig(
-            ssid=ssid,
-            password=password,
-            band=band,
-            channel=channel,
-            channel_width=channel_width,
-            hidden=hidden
+            ssid=ssid, password=password, band=band, channel=channel, channel_width=channel_width, hidden=hidden
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get hotspot configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get hotspot configuration: {e!s}")
 
 
 @router.patch("/connections/hotspot", summary="Update hotspot configuration")
-async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
+async def update_hotspot_config(update: HotspotUpdate) -> dict[str, Any]:
     """Update hotspot password and expert settings.
 
     The SSID is configured from the hostname on boot and cannot be changed here.
@@ -794,36 +783,38 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         _ensure_tracker_mode()
 
         # Check that at least one field is provided
-        if not any([
-            update.password is not None,
-            update.band is not None,
-            update.channel is not None,
-            update.channel_width is not None,
-            update.hidden is not None
-        ]):
+        if not any(
+            [
+                update.password is not None,
+                update.band is not None,
+                update.channel is not None,
+                update.channel_width is not None,
+                update.hidden is not None,
+            ]
+        ):
             raise HTTPException(status_code=400, detail="At least one field must be provided")
-        
+
         # Validate password if provided
         if update.password is not None:
             if len(update.password) < 8:
                 raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
             if len(update.password) > 63:
                 raise HTTPException(status_code=400, detail="Password must be 63 characters or less")
-        
+
         # Validate band and channel if provided
         if update.band is not None or update.channel is not None:
             try:
                 capabilities = await parse_wifi_capabilities()
-                
+
                 # Validate band
                 if update.band is not None:
                     valid_bands = [b.band for b in capabilities.bands]
                     if update.band not in valid_bands:
                         raise HTTPException(
-                            status_code=400, 
-                            detail=f"Invalid band '{update.band}'. Valid options: {', '.join(valid_bands)}"
+                            status_code=400,
+                            detail=f"Invalid band '{update.band}'. Valid options: {', '.join(valid_bands)}",
                         )
-                
+
                 # Validate channel against band
                 if update.channel is not None:
                     # Need to know which band to validate against
@@ -833,37 +824,37 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
                         # Use current band from config
                         current_config = await get_hotspot_config()
                         target_band = current_config.band or "2.4GHz"  # Default to 2.4GHz
-                    
+
                     # Find the band and its valid channels
                     band_channels = None
                     for b in capabilities.bands:
                         if b.band == target_band:
                             band_channels = b.channels
                             break
-                    
+
                     if band_channels and update.channel not in band_channels:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"Invalid channel {update.channel} for band {target_band}. Valid channels: {', '.join(map(str, band_channels))}"
+                            detail=f"Invalid channel {update.channel} for band {target_band}. Valid channels: {', '.join(map(str, band_channels))}",
                         )
             except HTTPException:
                 raise
             except Exception as e:
                 # If capabilities check fails, log but don't block the update
                 logger.warning(f"Could not validate WiFi capabilities: {e}")
-        
+
         # Validate channel width if provided
         if update.channel_width is not None:
             valid_widths = ["20", "40", "80", "160"]
             if update.channel_width not in valid_widths:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid channel width '{update.channel_width}'. Valid options: {', '.join(valid_widths)}"
+                    detail=f"Invalid channel width '{update.channel_width}'. Valid options: {', '.join(valid_widths)}",
                 )
 
         # Build the set of properties to set/unset for a single nm-modify call
-        set_props: Dict[str, str] = {}
-        unset_props: List[str] = []
+        set_props: dict[str, str] = {}
+        unset_props: list[str] = []
 
         # Update password if provided
         if update.password is not None:
@@ -910,12 +901,15 @@ async def update_hotspot_config(update: HotspotUpdate) -> Dict[str, Any]:
         # Get updated configuration
         updated_config = await get_hotspot_config()
 
-        return {"message": "Hotspot configuration updated successfully (changes saved, restart connection to apply)", "config": updated_config}
+        return {
+            "message": "Hotspot configuration updated successfully (changes saved, restart connection to apply)",
+            "config": updated_config,
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update hotspot configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update hotspot configuration: {e!s}")
 
 
 @router.get("/connections/cellular", summary="Get cellular configuration", response_model=CellularConfig)
@@ -928,7 +922,7 @@ async def get_cellular_config() -> CellularConfig:
     try:
         # Get all properties in a single call (with secrets revealed)
         props = await get_nmcli_connection_properties("cellular", show_secrets=True)
-        
+
         # Extract GSM properties
         apn = props.get("gsm.apn")
         username = props.get("gsm.username")
@@ -940,11 +934,11 @@ async def get_cellular_config() -> CellularConfig:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get cellular configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get cellular configuration: {e!s}")
 
 
 @router.patch("/connections/cellular", summary="Update cellular configuration")
-async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
+async def update_cellular_config(update: CellularUpdate) -> dict[str, Any]:
     """Update cellular/GSM configuration.
 
     Allows updating APN, username, password, and/or PIN for the cellular connection.
@@ -969,13 +963,13 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
 
         # Frontend always sends all 4 fields (either with values or null)
         # Treat None/null as empty string to clear the field for APN and username
-        set_props: Dict[str, str] = {
+        set_props: dict[str, str] = {
             "gsm.apn": update.apn or "",
             "gsm.username": update.username or "",
         }
 
         # Track fields that need to be removed from netplan (nmcli can't unset them)
-        fields_to_remove_from_netplan: List[str] = []
+        fields_to_remove_from_netplan: list[str] = []
 
         # Handle password field
         if update.password:
@@ -1013,16 +1007,19 @@ async def update_cellular_config(update: CellularUpdate) -> Dict[str, Any]:
         # Get updated configuration
         updated_config = await get_cellular_config()
 
-        return {"message": "Cellular configuration updated successfully (changes saved, restart connection to apply)", "config": updated_config}
+        return {
+            "message": "Cellular configuration updated successfully (changes saved, restart connection to apply)",
+            "config": updated_config,
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update cellular configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update cellular configuration: {e!s}")
 
 
 @router.post("/connections/{connection_name}/up", summary="Bring a connection up")
-async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
+async def bring_connection_up(connection_name: str) -> dict[str, Any]:
     """Bring a network connection up using nmcli connection up.
 
     Args:
@@ -1044,7 +1041,10 @@ async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
         result = await run_nmcli_command(["connection", "up", connection_name], check=False, timeout=30)
 
         if result.returncode == 0:
-            return {"message": f"Connection '{connection_name}' activated successfully", "connection_name": connection_name}
+            return {
+                "message": f"Connection '{connection_name}' activated successfully",
+                "connection_name": connection_name,
+            }
         else:
             # Parse error message from nmcli
             error_msg = (result.stderr or "").strip() or (result.stdout or "").strip() or "Unknown error"
@@ -1062,7 +1062,7 @@ async def bring_connection_up(connection_name: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to bring connection up: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to bring connection up: {e!s}")
 
 
 @router.get("/modem", summary="Get modem information", response_model=ModemInfo | None)
@@ -1114,7 +1114,6 @@ async def get_modem_info() -> ModemInfo | None:
         generic = modem.get("generic", {})
         signal = modem.get("signal", {})
         three_gpp = modem.get("3gpp", {})
-        sim = modem.get("sim", {})
         bearer_paths = modem.get("bearers", [])
 
         # Extract basic info
@@ -1208,5 +1207,5 @@ async def get_modem_info() -> ModemInfo | None:
         raise
     except Exception as e:
         # Log the error but don't raise - return None for graceful degradation
-        logger.error(f"Error getting modem information: {str(e)}")
+        logger.error(f"Error getting modem information: {e!s}")
         return None

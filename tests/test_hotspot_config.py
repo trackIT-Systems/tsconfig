@@ -2,13 +2,11 @@
 merged with the on-disk profile ([connection] and ssid always come from disk),
 validated, applied through NetworkManager and rolled back if NM rejects it."""
 
-import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
-from app.configs import hotspot as hs
 from app.configs import registry
 from app.configs.hotspot import HotspotConfig, merge_with_existing, normalise
 from app.privileged import ops
@@ -81,6 +79,7 @@ def nmcli_ok(calls=None, active="hotspot\n"):
         if "--active" in args:
             return SimpleNamespace(returncode=0, stdout=active, stderr="")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
+
     return run
 
 

@@ -1,7 +1,7 @@
 """OIDC authentication handler."""
 
 import secrets
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -20,15 +20,13 @@ class OIDCHandler:
         try:
             from itsdangerous import URLSafeTimedSerializer
         except ImportError:
-            raise ImportError(
-                "Auth dependencies are not installed. Install them with: pdm install -G auth"
-            )
-        
+            raise ImportError("Auth dependencies are not installed. Install them with: pdm install -G auth")
+
         # Secret for signing state parameters (CSRF protection)
         # In production, this should be loaded from an environment variable
         self.state_secret = secrets.token_urlsafe(32)
         self.state_serializer = URLSafeTimedSerializer(self.state_secret)
-        self._jwks_cache: Optional[Dict[str, Any]] = None
+        self._jwks_cache: dict[str, Any] | None = None
 
     def generate_state(self) -> str:
         """Generate a secure state parameter for CSRF protection."""
@@ -69,7 +67,7 @@ class OIDCHandler:
 
         return code_verifier, code_challenge
 
-    async def initiate_login(self, return_to: Optional[str] = None) -> tuple[str, str, str]:
+    async def initiate_login(self, return_to: str | None = None) -> tuple[str, str, str]:
         """
         Initiate OIDC authorization code flow.
 
@@ -104,7 +102,7 @@ class OIDCHandler:
         logger.debug("Generated authorization URL for OIDC login")
         return authorization_url, state, code_verifier
 
-    async def handle_callback(self, code: str, state: str, code_verifier: str) -> Dict[str, Any]:
+    async def handle_callback(self, code: str, state: str, code_verifier: str) -> dict[str, Any]:
         """
         Handle OIDC callback and exchange code for tokens.
 
@@ -157,7 +155,7 @@ class OIDCHandler:
         logger.debug("Successfully exchanged authorization code for tokens")
         return token_response
 
-    async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
+    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
         """
         Exchange refresh token for new access/ID tokens.
 
@@ -204,7 +202,7 @@ class OIDCHandler:
         logger.debug("Successfully refreshed access token")
         return token_response
 
-    async def _get_jwks(self) -> Dict[str, Any]:
+    async def _get_jwks(self) -> dict[str, Any]:
         """Fetch JWKS (JSON Web Key Set) from the issuer."""
         if self._jwks_cache is not None:
             return self._jwks_cache
@@ -223,7 +221,7 @@ class OIDCHandler:
         """Clear the cached JWKS."""
         self._jwks_cache = None
 
-    async def validate_token(self, token: str) -> Dict[str, Any]:
+    async def validate_token(self, token: str) -> dict[str, Any]:
         """
         Validate JWT token.
 
@@ -241,10 +239,8 @@ class OIDCHandler:
             from authlib.jose import JsonWebKey, jwt
             from authlib.jose.errors import JoseError
         except ImportError:
-            raise ValueError(
-                "Auth dependencies are not installed. Install them with: pdm install -G auth"
-            )
-        
+            raise ValueError("Auth dependencies are not installed. Install them with: pdm install -G auth")
+
         try:
             # Get JWKS for signature validation
             jwks_data = await self._get_jwks()
@@ -278,7 +274,7 @@ class OIDCHandler:
             logger.warning(f"Token validation failed: {e}")
             raise ValueError(f"Token validation failed: {e}")
 
-    def extract_user_claims(self, token_claims: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_user_claims(self, token_claims: dict[str, Any]) -> dict[str, Any]:
         """
         Extract user information from token claims.
 
@@ -298,7 +294,7 @@ class OIDCHandler:
             "groups": token_claims.get("groups", []),
         }
 
-    def validate_user_groups(self, user_info: Dict[str, Any], required_groups: list[str]) -> tuple[bool, Optional[str]]:
+    def validate_user_groups(self, user_info: dict[str, Any], required_groups: list[str]) -> tuple[bool, str | None]:
         """
         Validate that user belongs to at least one of the required groups.
 
@@ -324,25 +320,26 @@ class OIDCHandler:
 
 
 # Global instance - only created in server mode
-_oidc_handler_instance: Optional[OIDCHandler] = None
+_oidc_handler_instance: OIDCHandler | None = None
 
 
-def get_oidc_handler() -> Optional[OIDCHandler]:
+def get_oidc_handler() -> OIDCHandler | None:
     """
     Get the OIDC handler instance.
-    
+
     Returns None in tracker mode, or the handler instance in server mode.
     """
     global _oidc_handler_instance
-    
+
     if _oidc_handler_instance is None:
         from app.config_loader import config_loader
+
         if config_loader.is_server_mode():
             _oidc_handler_instance = OIDCHandler()
-    
+
     return _oidc_handler_instance
 
 
 # For backward compatibility, provide oidc_handler that can be None
 # This allows existing code to check `if oidc_handler:` before using it
-oidc_handler: Optional[OIDCHandler] = None
+oidc_handler: OIDCHandler | None = None

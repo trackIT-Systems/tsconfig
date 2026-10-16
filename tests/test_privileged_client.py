@@ -103,9 +103,11 @@ class TestRunPrivilegedOpAlreadyRootBypass:
     async def test_skips_pkexec_and_calls_ops_directly(self):
         from app.privileged import ops as privileged_ops
 
-        with patch("os.geteuid", return_value=0), patch.object(
-            privileged_ops, "wipe_overlay", return_value={"wiped": True, "removed": []}
-        ) as mock_wipe, patch("asyncio.create_subprocess_exec") as mock_exec:
+        with (
+            patch("os.geteuid", return_value=0),
+            patch.object(privileged_ops, "wipe_overlay", return_value={"wiped": True, "removed": []}) as mock_wipe,
+            patch("asyncio.create_subprocess_exec") as mock_exec,
+        ):
             result = await run_privileged_op("wipe-overlay")
         assert result == {"wiped": True, "removed": []}
         mock_wipe.assert_called_once()
@@ -114,9 +116,10 @@ class TestRunPrivilegedOpAlreadyRootBypass:
     async def test_passes_stdin_json_and_argv_through(self):
         from app.privileged import ops as privileged_ops
 
-        with patch("os.geteuid", return_value=0), patch.object(
-            privileged_ops, "write_config", return_value={"config_type": "wireguard"}
-        ) as mock_write:
+        with (
+            patch("os.geteuid", return_value=0),
+            patch.object(privileged_ops, "write_config", return_value={"config_type": "wireguard"}) as mock_write,
+        ):
             result = await run_privileged_op(
                 "write-config", ["wireguard", "--mtime", "1000000000"], stdin_json={"config": {"content": "x"}}
             )
@@ -126,11 +129,14 @@ class TestRunPrivilegedOpAlreadyRootBypass:
     async def test_op_error_translated_to_privileged_call_error(self):
         from app.privileged import ops as privileged_ops
 
-        with patch("os.geteuid", return_value=0), patch.object(
-            privileged_ops, "wipe_overlay", side_effect=privileged_ops.PrivilegedOpError("overlay missing")
+        with (
+            patch("os.geteuid", return_value=0),
+            patch.object(
+                privileged_ops, "wipe_overlay", side_effect=privileged_ops.PrivilegedOpError("overlay missing")
+            ),
+            pytest.raises(PrivilegedCallError, match="overlay missing"),
         ):
-            with pytest.raises(PrivilegedCallError, match="overlay missing"):
-                await run_privileged_op("wipe-overlay")
+            await run_privileged_op("wipe-overlay")
 
 
 @pytest.mark.asyncio

@@ -21,7 +21,7 @@ import argparse
 import sys
 
 from app.bluetooth.gatt_server import BleGattServer
-from app.logging_config import setup_logging, get_logger
+from app.logging_config import get_logger, setup_logging
 
 
 def parse_arguments():
@@ -139,6 +139,7 @@ def main():
                 logger.debug(f"✗ Cannot reach API (attempt {attempt + 1}/{max_retries}): {e}")
                 logger.debug(f"Retrying in {retry_interval} seconds...")
                 import time
+
                 time.sleep(retry_interval)
             else:
                 logger.warning(f"✗ Cannot reach API after {max_retries} attempts: {e}")

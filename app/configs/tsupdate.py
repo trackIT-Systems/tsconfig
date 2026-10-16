@@ -1,7 +1,7 @@
 """Tsupdate daemon configuration management."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import yaml
@@ -28,9 +28,9 @@ class TsupdateConfig(BaseConfig):
     def config_file(self) -> Path:
         return self.config_dir / "tsupdate.yml"
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the tsupdate configuration from disk.
-        
+
         Returns default values if the file doesn't exist.
         """
         try:
@@ -41,7 +41,7 @@ class TsupdateConfig(BaseConfig):
         except FileNotFoundError:
             # Return default values if file doesn't exist
             data = {}
-        
+
         # Apply defaults for missing values
         defaults = {
             "check_interval": 3600,
@@ -51,19 +51,19 @@ class TsupdateConfig(BaseConfig):
             "update_countdown": 60,
             "do": "nothing",
         }
-        
+
         # Merge defaults with loaded data
         result = defaults.copy()
         result.update(data)
-        
+
         return result
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the tsupdate configuration to disk."""
         with open(self.config_file, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the tsupdate configuration."""
         errors = []
 
@@ -151,4 +151,3 @@ class TsupdateConfig(BaseConfig):
                 errors.append(f"maintenance_do must be one of: {', '.join(valid_values)}")
 
         return errors
-

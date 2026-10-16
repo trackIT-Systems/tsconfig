@@ -14,17 +14,17 @@ unit-tested anywhere.
 """
 
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Dict, Optional
 
 from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
-from app.auth.shadow import hash_matches
 from app.auth.session import (
     SESSION_TTL_SECONDS,
     login_retry_after,
     record_login_failure,
     record_login_success,
 )
+from app.auth.shadow import hash_matches
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -83,13 +83,13 @@ class BleAuthenticator:
         self._ttl = ttl_seconds
         self._clock = clock
         # device path -> time of login
-        self._authenticated: Dict[str, float] = {}
+        self._authenticated: dict[str, float] = {}
 
     @staticmethod
     def _source(device: str) -> str:
         return f"ble:{device}"
 
-    def is_authenticated(self, device: Optional[str]) -> bool:
+    def is_authenticated(self, device: str | None) -> bool:
         if not device:
             return False
         logged_in = self._authenticated.get(str(device))
@@ -100,7 +100,7 @@ class BleAuthenticator:
             return False
         return True
 
-    async def login(self, device: Optional[str], password: str, username: str = OPERATOR_USER) -> LoginResult:
+    async def login(self, device: str | None, password: str, username: str = OPERATOR_USER) -> LoginResult:
         """Attempt a login for `device` as the operator (`pi`) or staff (`root`)
         account. Failed attempts back off per device and device-wide, with
         stricter buckets for root (see app.auth.session); attempts made while
@@ -111,7 +111,7 @@ class BleAuthenticator:
 
         return await self._login(device, username, "password", check)
 
-    async def login_with_hash(self, device: Optional[str], token: str) -> LoginResult:
+    async def login_with_hash(self, device: str | None, token: str) -> LoginResult:
         """Attempt a login for `device` as the operator (`pi`) with `pi`'s password
         hash (the `$6$...` string from a config bundle's userconf.txt). Only `pi`
         can log in this way. Throttled exactly like a password login, in the same
@@ -123,7 +123,7 @@ class BleAuthenticator:
         return await self._login(device, OPERATOR_USER, "hash", check)
 
     async def _login(
-        self, device: Optional[str], username: str, method: str, check: Callable[[], Awaitable[bool]]
+        self, device: str | None, username: str, method: str, check: Callable[[], Awaitable[bool]]
     ) -> LoginResult:
         if not device:
             return LoginResult(False, CODE_UNAUTHENTICATED, "Unknown connection")

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.auth import session
-from app.bluetooth.auth import BleAuthenticator, BleRequestError, secure_flags
+from app.bluetooth.auth import BleAuthenticator, secure_flags
 from app.bluetooth.protocol import ResponseFormatter
 
 DEVICE = "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF"
@@ -256,7 +256,7 @@ class TestCharacteristicGating:
     def test_write_after_login_reaches_the_handler(self, chars):
         auth = BleAuthenticator(verify=AsyncMock(return_value=True))
         asyncio.run(auth.login(DEVICE, "natur"))
-        char, handler, sent = make_write_char(chars, auth)
+        char, handler, _sent = make_write_char(chars, auth)
         char.WriteValue(list(b'{"service": "x"}'), {"device": DEVICE})
         handler.assert_awaited_once_with({"service": "x"})
 
@@ -271,7 +271,7 @@ class TestCharacteristicGating:
     def test_write_without_device_info_is_refused(self, chars):
         auth = BleAuthenticator(verify=AsyncMock(return_value=True))
         asyncio.run(auth.login(DEVICE, "natur"))
-        char, handler, sent = make_write_char(chars, auth)
+        char, handler, _sent = make_write_char(chars, auth)
         char.WriteValue(list(b"{}"), {})
         handler.assert_not_called()
 
@@ -316,14 +316,14 @@ class TestAuthenticateCharacteristic:
         assert not auth.is_authenticated(DEVICE)
 
     def test_backoff_is_reported_with_retry_after(self, chars):
-        auth, char, sent = self.make(chars, AsyncMock(return_value=False))
+        _auth, char, sent = self.make(chars, AsyncMock(return_value=False))
         for _ in range(8):
             char.WriteValue(list(b'{"password": "nope"}'), {"device": DEVICE})
         assert sent[-1]["code"] == 429 and sent[-1]["retry_after"] >= 1
 
     def test_username_root_is_passed_through(self, chars):
         verify = AsyncMock(return_value=True)
-        auth, char, sent = self.make(chars, verify)
+        _auth, char, sent = self.make(chars, verify)
         char.WriteValue(list(b'{"username": "root", "password": "rootpw"}'), {"device": DEVICE})
         assert sent == [{"authenticated": True}]
         verify.assert_awaited_once_with("root", "rootpw")
@@ -357,7 +357,7 @@ class TestHashLogin:
     PI_HASH = "$6$salt$digest"
 
     def make(self, chars, verify=None):
-        verify_hash = lambda user, token: user == "pi" and token == self.PI_HASH  # noqa: E731
+        verify_hash = lambda user, token: user == "pi" and token == self.PI_HASH
         auth = BleAuthenticator(verify=verify or AsyncMock(return_value=True), verify_hash=verify_hash)
         char = chars.AuthenticateCharacteristic(None, 0, FakeService(), types.SimpleNamespace(client=None), auth)
         char.notifying = True
@@ -375,7 +375,7 @@ class TestHashLogin:
         assert auth.is_authenticated(DEVICE)
 
     def test_explicit_pi_username_is_accepted(self, chars):
-        auth, char, sent = self.make(chars)
+        _auth, char, sent = self.make(chars)
         self.write(char, {"username": "pi", "hash": self.PI_HASH})
         assert sent == [{"authenticated": True}]
 
@@ -387,7 +387,7 @@ class TestHashLogin:
 
     def test_failed_hash_logins_back_off_the_password_login_too(self, chars):
         verify = AsyncMock(return_value=True)
-        auth, char, sent = self.make(chars, verify)
+        _auth, char, sent = self.make(chars, verify)
         for _ in range(8):
             self.write(char, {"hash": "$6$salt$other"})
         self.write(char, {"password": "natur"})
@@ -414,7 +414,7 @@ class TestHashLogin:
 
     def test_password_login_is_unchanged(self, chars):
         verify = AsyncMock(return_value=True)
-        auth, char, sent = self.make(chars, verify)
+        _auth, char, sent = self.make(chars, verify)
         self.write(char, {"username": "root", "password": "rootpw"})
         assert sent == [{"authenticated": True}]
         verify.assert_awaited_once_with("root", "rootpw")

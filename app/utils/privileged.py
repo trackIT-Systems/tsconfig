@@ -53,7 +53,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 PRIVILEGED_WRAPPER = "/usr/local/sbin/tsconfig-privileged"
 
@@ -84,7 +84,7 @@ class PrivilegedCallError(Exception):
     """
 
 
-async def _run_subprocess(argv: List[str], stdin_bytes: Optional[bytes], timeout: float) -> Tuple[int, bytes, bytes]:
+async def _run_subprocess(argv: list[str], stdin_bytes: bytes | None, timeout: float) -> tuple[int, bytes, bytes]:
     """Run `argv` directly (no elevation prefix), optionally writing
     stdin_bytes, and return (returncode, stdout, stderr). Raises
     PrivilegedCallError on timeout or if the executable can't be found/run
@@ -102,7 +102,7 @@ async def _run_subprocess(argv: List[str], stdin_bytes: Optional[bytes], timeout
 
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(input=stdin_bytes), timeout=timeout)
-    except asyncio.TimeoutError as e:
+    except TimeoutError as e:
         process.kill()
         await process.wait()
         raise PrivilegedCallError("privileged operation timed out") from e
@@ -112,10 +112,10 @@ async def _run_subprocess(argv: List[str], stdin_bytes: Optional[bytes], timeout
 
 async def run_privileged_op(
     op: str,
-    args: Optional[List[str]] = None,
-    stdin_json: Optional[Dict[str, Any]] = None,
+    args: list[str] | None = None,
+    stdin_json: dict[str, Any] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run one `tsconfig-privileged <op>` call and return its result dict.
 
     Args:
@@ -155,7 +155,7 @@ async def run_privileged_op(
     argv = ["pkexec", PRIVILEGED_WRAPPER, op, *(args or [])]
     stdin_bytes = json.dumps(stdin_json).encode("utf-8") if stdin_json is not None else None
 
-    returncode, stdout, stderr = await _run_subprocess(argv, stdin_bytes, timeout)
+    _returncode, stdout, stderr = await _run_subprocess(argv, stdin_bytes, timeout)
 
     stdout_text = stdout.decode("utf-8", errors="replace").strip()
     if not stdout_text:
@@ -177,7 +177,7 @@ async def run_privileged_op(
     return payload
 
 
-async def systemctl_action(unit: str, verb: str, timeout: float = DEFAULT_TIMEOUT) -> Tuple[bool, Optional[str]]:
+async def systemctl_action(unit: str, verb: str, timeout: float = DEFAULT_TIMEOUT) -> tuple[bool, str | None]:
     """`systemctl <verb> <unit>` directly - no elevation at all. Authorized
     by etc/polkit-1/rules.d/20-tsos-systemctl.rules, which grants `pi` every
     non-persistent org.freedesktop.systemd1.manage-units verb for a fixed
@@ -201,7 +201,7 @@ async def systemctl_action(unit: str, verb: str, timeout: float = DEFAULT_TIMEOU
     return True, None
 
 
-async def schedule_reboot(delay: int = 10, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+async def schedule_reboot(delay: int = 10, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
     """Verify `pi` is authorized to reboot, then schedule `systemctl reboot`
     `delay` seconds from now as an in-process asyncio task.
 
@@ -239,10 +239,10 @@ async def schedule_reboot(delay: int = 10, timeout: float = DEFAULT_TIMEOUT) -> 
 
 async def write_config(
     config_type: str,
-    config: Dict[str, Any],
-    mtime: Optional[float] = None,
+    config: dict[str, Any],
+    mtime: float | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate and write one boot-partition config file as root.
 
     Note this does NOT validate `config` itself first - the caller (a
@@ -256,18 +256,18 @@ async def write_config(
     return await run_privileged_op("write-config", args, stdin_json={"config": config}, timeout=timeout)
 
 
-async def stat_config(config_type: str, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+async def stat_config(config_type: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
     """Existence and mtime of one config file as root (for files in root-only
     directories that pi cannot stat itself). Returns {"exists", "mtime", ...}."""
     return await run_privileged_op("stat-config", [config_type], timeout=timeout)
 
 
-async def delete_config(config_type: str, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+async def delete_config(config_type: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
     """Delete one boot-partition config file, if present, as root."""
     return await run_privileged_op("delete-config", [config_type], timeout=timeout)
 
 
-async def wipe_overlay(timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+async def wipe_overlay(timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
     """Wipe the persistent overlay directory as root."""
     return await run_privileged_op("wipe-overlay", timeout=timeout)
 
@@ -283,7 +283,7 @@ async def wipe_overlay(timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
 # section), so there's no root boundary left to cross for those.
 
 
-async def unset_gsm_fields(connection: str, fields: List[str], timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+async def unset_gsm_fields(connection: str, fields: list[str], timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
     """Remove GSM fields (password/pin) nmcli can't unset itself from a
     cellular connection's netplan file, as root.
     """

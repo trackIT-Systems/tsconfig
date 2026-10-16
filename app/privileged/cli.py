@@ -40,12 +40,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.privileged import ops
 
 
-def _read_json_stdin() -> Dict[str, Any]:
+def _read_json_stdin() -> dict[str, Any]:
     raw = sys.stdin.read()
     try:
         data = json.loads(raw)
@@ -56,7 +56,7 @@ def _read_json_stdin() -> Dict[str, Any]:
     return data
 
 
-def _print_ok(result: Dict[str, Any]) -> None:
+def _print_ok(result: dict[str, Any]) -> None:
     print(json.dumps({"success": True, **result}))
 
 
@@ -97,7 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def dispatch_op(args: argparse.Namespace, stdin_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def dispatch_op(args: argparse.Namespace, stdin_data: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run one already-parsed op and return its result dict, raising
     ops.PrivilegedOpError on rejection.
 
@@ -135,7 +135,7 @@ def dispatch_op(args: argparse.Namespace, stdin_data: Optional[Dict[str, Any]] =
 _STDIN_JSON_OPS = frozenset({"write-config", "unset-gsm-fields"})
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 

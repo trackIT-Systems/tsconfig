@@ -1,6 +1,6 @@
 """Base router for configuration endpoints to eliminate duplication."""
 
-from typing import Any, Dict, Optional, Type
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,7 +12,7 @@ from app.utils.privileged import PrivilegedCallError, write_config
 class BaseConfigRouter:
     """Generic base router for configuration endpoints."""
 
-    def __init__(self, config_class: Type[BaseConfig], prefix: str, tag: str):
+    def __init__(self, config_class: type[BaseConfig], prefix: str, tag: str):
         # update_config_helper's tracker-mode save uses `prefix` directly as
         # the config_type passed to the privileged write op, which requires
         # it to be a real entry in app.configs.registry.CONFIG_TYPES - fail
@@ -38,7 +38,7 @@ class BaseConfigRouter:
         # Note: update_config and validate_config need to be overridden
         # in individual routers to handle specific Pydantic models
 
-    def get_config_instance(self, config_group: Optional[str] = None):
+    def get_config_instance(self, config_group: str | None = None):
         """Get the current configuration instance for a given config group."""
         if config_group:
             # In server mode with config group specified
@@ -48,7 +48,7 @@ class BaseConfigRouter:
             return self.config_class(config_dir)
         return self.config_instance
 
-    async def get_config(self, config_group: Optional[str] = None) -> Dict[str, Any]:
+    async def get_config(self, config_group: str | None = None) -> dict[str, Any]:
         """Get the current configuration."""
         try:
             config = self.get_config_instance(config_group)
@@ -57,8 +57,8 @@ class BaseConfigRouter:
             raise HTTPException(status_code=404, detail=f"{self.prefix.title()} configuration not found")
 
     async def update_config_helper(
-        self, config_dict: Dict[str, Any], config_group: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, config_dict: dict[str, Any], config_group: str | None = None
+    ) -> dict[str, Any]:
         """Helper method to update configuration with a dictionary."""
         import traceback
 
@@ -181,14 +181,14 @@ class BaseConfigRouter:
             # Handle other errors
             logger.error(f"Unexpected error in update_config_helper: {e}")
             logger.error(traceback.format_exc())
-            error_detail: Dict[str, Any] = {
+            error_detail: dict[str, Any] = {
                 "message": f"Failed to update {self.prefix} configuration",
                 "error": str(e),
                 "type": type(e).__name__,
             }
             raise HTTPException(status_code=500, detail=error_detail)
 
-    def validate_config_helper(self, config_dict: Dict[str, Any], config_group: Optional[str] = None) -> Dict[str, Any]:
+    def validate_config_helper(self, config_dict: dict[str, Any], config_group: str | None = None) -> dict[str, Any]:
         """Helper method to validate a configuration without saving it."""
         cfg_instance = self.get_config_instance(config_group)
         errors = cfg_instance.validate(config_dict)

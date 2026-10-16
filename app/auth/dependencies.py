@@ -1,7 +1,5 @@
 """FastAPI authentication dependencies."""
 
-from typing import Optional
-
 from fastapi import Cookie, Header, HTTPException, Request
 
 from app.auth.oidc_config import oidc_config
@@ -13,9 +11,9 @@ logger = get_logger(__name__)
 
 async def get_current_user(
     request: Request,
-    authorization: Optional[str] = Header(None),
-    auth_token: Optional[str] = Cookie(None),
-) -> Optional[dict]:
+    authorization: str | None = Header(None),
+    auth_token: str | None = Cookie(None),
+) -> dict | None:
     """
     FastAPI dependency to get the current authenticated user.
 
@@ -67,7 +65,7 @@ async def get_current_user(
     try:
         # Lazy import to avoid loading auth modules in tracker mode
         from app.auth.oidc_handler import get_oidc_handler
-        
+
         oidc_handler = get_oidc_handler()
         if oidc_handler is None:
             logger.error("OIDC handler is not available")
@@ -75,7 +73,7 @@ async def get_current_user(
                 status_code=503,
                 detail="Authentication service unavailable",
             )
-        
+
         token_claims = await oidc_handler.validate_token(token)
         user_info = oidc_handler.extract_user_claims(token_claims)
 
@@ -102,9 +100,9 @@ async def get_current_user(
 
 async def get_optional_user(
     request: Request,
-    authorization: Optional[str] = Header(None),
-    auth_token: Optional[str] = Cookie(None),
-) -> Optional[dict]:
+    authorization: str | None = Header(None),
+    auth_token: str | None = Cookie(None),
+) -> dict | None:
     """
     FastAPI dependency to get the current user if authenticated, but don't require it.
 

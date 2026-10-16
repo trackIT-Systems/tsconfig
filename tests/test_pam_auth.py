@@ -26,9 +26,10 @@ async def test_rejects_when_pam_says_no():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("user", ["admin", "nobody", "PI", "Root", "pi ", "root ", "", "pi\x00root"])
 async def test_only_the_operator_and_staff_accounts_are_ever_checked(user):
-    with patch.object(pam_auth, "_authenticate_blocking", return_value=True) as pam, patch.object(
-        pam_auth.subprocess, "Popen"
-    ) as su:
+    with (
+        patch.object(pam_auth, "_authenticate_blocking", return_value=True) as pam,
+        patch.object(pam_auth.subprocess, "Popen") as su,
+    ):
         assert await pam_auth.authenticate_operator(user, "natur") is False
     pam.assert_not_called()
     su.assert_not_called()

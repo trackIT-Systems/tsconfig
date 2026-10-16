@@ -1,7 +1,5 @@
 """Radio tracking configuration endpoints."""
 
-from typing import Optional
-
 from fastapi import Query
 from pydantic import BaseModel
 
@@ -36,7 +34,7 @@ router = radiotracking_router.router
 # Override get method to support config_group
 @router.get("")
 async def get_radiotracking(
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     return await radiotracking_router.get_config(config_group)
 
@@ -45,7 +43,7 @@ async def get_radiotracking(
 @router.put("")
 async def update_radiotracking(
     config: RadioTrackingConfigUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     # Convert to the special format expected by radiotracking
     config_dict = {
@@ -68,7 +66,7 @@ async def update_radiotracking(
 @router.post("/validate")
 async def validate_radiotracking(
     config: RadioTrackingConfigUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     # Convert to the special format expected by radiotracking
     config_dict = {

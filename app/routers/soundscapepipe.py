@@ -1,11 +1,10 @@
 """Soundscapepipe configuration endpoints."""
 
-import asyncio
 import json
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.utils.subprocess_async import run_subprocess_async
 
@@ -60,11 +59,7 @@ def is_system_default_device(device_name: str) -> bool:
 
     # Check for exact matches (device name exactly matches or starts with system name)
     for sys_device in exact_matches:
-        if (
-            name_lower == sys_device
-            or name_lower.startswith(sys_device + " ")
-            or name_lower.startswith(sys_device + ":")
-        ):
+        if name_lower == sys_device or name_lower.startswith((sys_device + " ", sys_device + ":")):
             return True
 
     # Special case for HDMI devices - check if it's a generic HDMI output
@@ -79,10 +74,10 @@ def is_system_default_device(device_name: str) -> bool:
 class SpeciesGroup(BaseModel):
     """Species group configuration model."""
 
-    ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
-    maximize_confidence: Optional[bool] = None
-    length_s: Optional[int] = Field(None, gt=0)
-    species: List[str] = Field(default_factory=list)
+    ratio: float | None = Field(None, ge=0.0, le=1.0)
+    maximize_confidence: bool | None = None
+    length_s: int | None = Field(None, gt=0)
+    species: list[str] = Field(default_factory=list)
 
 
 class SoundscapepipeConfigUpdate(BaseModel):
@@ -90,39 +85,39 @@ class SoundscapepipeConfigUpdate(BaseModel):
 
     # Input device section
     stream_port: int = Field(..., ge=1, le=65535)
-    input_device_match: Optional[str] = None
-    sample_rate: Optional[int] = Field(None, gt=0)
-    input_length_s: Optional[float] = Field(None, gt=0)
-    channels: Optional[int] = Field(None, gt=0)
+    input_device_match: str | None = None
+    sample_rate: int | None = Field(None, gt=0)
+    input_length_s: float | None = Field(None, gt=0)
+    channels: int | None = Field(None, gt=0)
 
     # Detectors section
-    detectors: Dict[str, Any] = Field(default_factory=dict)
+    detectors: dict[str, Any] = Field(default_factory=dict)
 
     # Output device section
-    output_device_match: Optional[str] = None
-    speaker_enable_pin: Optional[int] = Field(None, ge=0)
-    highpass_freq: Optional[float] = Field(None, ge=0)
+    output_device_match: str | None = None
+    speaker_enable_pin: int | None = Field(None, ge=0)
+    highpass_freq: float | None = Field(None, ge=0)
 
     # Lure section
-    lure: Optional[Dict[str, Any]] = None
+    lure: dict[str, Any] | None = None
 
     # Recording section
-    ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
-    length_s: Optional[int] = Field(None, gt=0)
-    soundfile_limit: Optional[int] = Field(None, gt=0)
-    soundfile_format: Optional[str] = None
-    maximize_confidence: Optional[bool] = None
+    ratio: float | None = Field(None, ge=0.0, le=1.0)
+    length_s: int | None = Field(None, gt=0)
+    soundfile_limit: int | None = Field(None, gt=0)
+    soundfile_format: str | None = None
+    maximize_confidence: bool | None = None
 
     # Groups section - now properly typed
-    groups: Optional[Dict[str, SpeciesGroup]] = None
+    groups: dict[str, SpeciesGroup] | None = None
 
     # Optional arguments section
-    disk_reserve_mb: Optional[int] = Field(None, ge=512)
+    disk_reserve_mb: int | None = Field(None, ge=512)
 
     # Analog frontend section
-    frontend_gain: Optional[str] = None          # min, low, mid, high
-    frontend_gain_pin_a: Optional[int] = Field(None, ge=0)
-    frontend_gain_pin_b: Optional[int] = Field(None, ge=0)
+    frontend_gain: str | None = None  # min, low, mid, high
+    frontend_gain_pin_a: int | None = Field(None, ge=0)
+    frontend_gain_pin_b: int | None = Field(None, ge=0)
 
 
 # Create the router using the base class
@@ -133,7 +128,7 @@ router = soundscapepipe_router.router
 # Override get method to support config_group
 @router.get("")
 async def get_soundscapepipe(
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     return await soundscapepipe_router.get_config(config_group)
 
@@ -142,7 +137,7 @@ async def get_soundscapepipe(
 @router.put("")
 async def update_soundscapepipe(
     config: SoundscapepipeConfigUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump(exclude_none=True)
     if config_dict.get("output_device_match") == "none":
@@ -153,7 +148,7 @@ async def update_soundscapepipe(
 @router.post("/validate")
 async def validate_soundscapepipe(
     config: SoundscapepipeConfigUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump(exclude_none=True)
     if config_dict.get("output_device_match") == "none":
@@ -162,7 +157,7 @@ async def validate_soundscapepipe(
 
 
 # Keep the special endpoints that are unique to soundscapepipe
-def _load_audio_devices_config() -> Dict[str, Any]:
+def _load_audio_devices_config() -> dict[str, Any]:
     """Load audio devices configuration from YAML file."""
     config_file = Path(__file__).parent.parent / "configs" / "audio_devices.yml"
     try:
@@ -171,10 +166,10 @@ def _load_audio_devices_config() -> Dict[str, Any]:
     except FileNotFoundError:
         return {"input": [], "output": []}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load audio devices config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load audio devices config: {e!s}")
 
 
-def _load_model_files_config() -> Dict[str, Any]:
+def _load_model_files_config() -> dict[str, Any]:
     """Load model files configuration from YAML file."""
     config_file = Path(__file__).parent.parent / "configs" / "model_files.yml"
     try:
@@ -183,10 +178,10 @@ def _load_model_files_config() -> Dict[str, Any]:
     except FileNotFoundError:
         return {"birdedge": [], "yolobat": [], "audioprotopnet": []}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load model files config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load model files config: {e!s}")
 
 
-def _parse_alsa_cards() -> List[Dict[str, Any]]:
+def _parse_alsa_cards() -> list[dict[str, Any]]:
     """Parse /proc/asound/cards to get card information.
 
     Returns list of cards with card_id, short_name, and full_name.
@@ -223,7 +218,7 @@ def _parse_alsa_cards() -> List[Dict[str, Any]]:
     return cards
 
 
-def _match_device_name(config_name: str, device_info: Dict[str, Any]) -> bool:
+def _match_device_name(config_name: str, device_info: dict[str, Any]) -> bool:
     """Check if a configured device name matches a device.
 
     Config names are like 'trackIT Analog Frontend' or '384kHz AudioMoth USB Microphone'
@@ -242,19 +237,14 @@ def _match_device_name(config_name: str, device_info: Dict[str, Any]) -> bool:
     card_short_name = device_info.get("card_short_name", "").lower()
 
     # Priority 1: Check if config matches the full card name
-    if card_full_name:
-        if config_lower == card_full_name or config_lower in card_full_name:
-            return True
+    if card_full_name and (config_lower == card_full_name or config_lower in card_full_name):
+        return True
 
     # Priority 2: Check if the card short name appears as a word in the config name
-    if card_short_name:
-        if re.search(r"\b" + re.escape(card_short_name) + r"\b", config_lower):
-            return True
-
-    return False
+    return bool(card_short_name and re.search(r"\b" + re.escape(card_short_name) + r"\b", config_lower))
 
 
-def _query_alsa_devices() -> Dict[str, Any]:
+def _query_alsa_devices() -> dict[str, Any]:
     """Query ALSA devices by parsing /proc/asound/cards and generating device names.
 
     Returns a dictionary with 'input', 'output', and 'cards' keys.
@@ -325,7 +315,7 @@ def _query_alsa_devices() -> Dict[str, Any]:
 
 
 @router.get("/audio-devices")
-async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
+async def get_audio_devices(refresh: bool = True) -> dict[str, Any]:
     """Get available audio input and output devices.
 
     Args:
@@ -380,7 +370,7 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
         if refresh:
             try:
                 await run_subprocess_async(["alsactl", "scan"], capture_output=True, timeout=2, check=False)
-            except (subprocess.TimeoutExpired, asyncio.TimeoutError, FileNotFoundError, OSError):
+            except (TimeoutError, subprocess.TimeoutExpired, FileNotFoundError, OSError):
                 pass
 
         # Query all available devices from hardware
@@ -461,11 +451,11 @@ async def get_audio_devices(refresh: bool = True) -> Dict[str, Any]:
             "config_validated": True,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to query audio devices: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to query audio devices: {e!s}")
 
 
 @router.get("/model-files")
-async def get_model_files() -> Dict[str, List[str]]:
+async def get_model_files() -> dict[str, list[str]]:
     """Get available model files for BirdEdge and YoloBat."""
 
     # In server mode, return pre-populated list from config file
@@ -514,7 +504,7 @@ async def get_model_files() -> Dict[str, List[str]]:
 
 
 @router.get("/lure-files")
-async def get_lure_files() -> Dict[str, Any]:
+async def get_lure_files() -> dict[str, Any]:
     """Get available lure files and directories."""
     lure_base_paths = [
         "/data/lure",
@@ -545,7 +535,7 @@ async def get_lure_files() -> Dict[str, Any]:
 
 
 @router.get("/species")
-async def get_species() -> Dict[str, Any]:
+async def get_species() -> dict[str, Any]:
     """Get available species information from detection models."""
     species_data = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
 
@@ -615,7 +605,7 @@ async def get_species() -> Dict[str, Any]:
                 species_data["birdedge"] = species_list
                 break  # Use the first path that works
 
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 # Continue to next path if this one fails
                 continue
 
@@ -629,7 +619,7 @@ async def get_species() -> Dict[str, Any]:
 
                 # Create species list with display information
                 birdedge_species_list = []
-                for birdedge_id, data in birdedge_species_mapping.items():
+                for data in birdedge_species_mapping.values():
                     scientific = data.get("scientific", "")
                     english = data.get("english", "")
                     german = data.get("german", "")
@@ -646,7 +636,7 @@ async def get_species() -> Dict[str, Any]:
                     birdedge_species_list.append(species_entry)
 
                 species_data["birdedge"] = sorted(birdedge_species_list, key=lambda x: x["scientific"])
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             # If loading fails, keep birdedge empty
             species_data["birdedge"] = []
 
@@ -677,7 +667,7 @@ async def get_species() -> Dict[str, Any]:
                 yolobat_species_list.append(species_entry)
 
             species_data["yolobat"] = sorted(yolobat_species_list, key=lambda x: x["scientific"])
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         # If loading fails, keep yolobat empty
         species_data["yolobat"] = []
 
@@ -691,7 +681,7 @@ async def get_species() -> Dict[str, Any]:
                 audioprotopnet_species_mapping = json.load(f)
 
             audioprotopnet_species_list = []
-            for audioprotopnet_id, data in audioprotopnet_species_mapping.items():
+            for data in audioprotopnet_species_mapping.values():
                 scientific = data.get("scientific", "")
                 english = data.get("english", "")
                 german = data.get("german", "")
@@ -707,17 +697,15 @@ async def get_species() -> Dict[str, Any]:
                 }
                 audioprotopnet_species_list.append(species_entry)
 
-            species_data["audioprotopnet"] = sorted(
-                audioprotopnet_species_list, key=lambda x: x["scientific"]
-            )
-    except (json.JSONDecodeError, IOError):
+            species_data["audioprotopnet"] = sorted(audioprotopnet_species_list, key=lambda x: x["scientific"])
+    except (OSError, json.JSONDecodeError):
         species_data["audioprotopnet"] = []
 
     return species_data
 
 
 @router.get("/yolobat-labels")
-async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
+async def get_yolobat_labels(model_path: str) -> dict[str, Any]:
     """Get available labels for a specific YoloBat model from its metadata.yaml file."""
     try:
         if not model_path:
@@ -740,9 +728,9 @@ async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
             with open(metadata_path, "r", encoding="utf-8") as f:
                 metadata = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            raise HTTPException(status_code=500, detail=f"Failed to parse metadata.yaml: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to parse metadata.yaml: {e!s}")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to read metadata.yaml: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to read metadata.yaml: {e!s}")
 
         # Extract labels from metadata
         labels = []
@@ -770,7 +758,7 @@ async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
                 # If labels is a dict, try to extract values or keys
                 if all(isinstance(v, str) for v in labels.values()):
                     labels = list(labels.values())
-                elif all(isinstance(k, (str, int)) for k in labels.keys()):
+                elif all(isinstance(k, (str, int)) for k in labels):
                     labels = list(labels.keys())
                 else:
                     labels = []
@@ -795,7 +783,7 @@ async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
             if os.path.exists(yolobat_species_path):
                 with open(yolobat_species_path, "r", encoding="utf-8") as f:
                     yolobat_species_mapping = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             # If loading fails, continue with empty mapping
             pass
 
@@ -843,4 +831,4 @@ async def get_yolobat_labels(model_path: str) -> Dict[str, Any]:
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load YoloBat labels: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load YoloBat labels: {e!s}")

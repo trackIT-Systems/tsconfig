@@ -1,7 +1,7 @@
 """Authentication middleware for FastAPI."""
 
 import os
-from typing import Callable
+from collections.abc import Callable
 from urllib.parse import quote
 
 from fastapi import Request, Response
@@ -259,7 +259,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         try:
             # Lazy import to avoid loading auth modules in tracker mode
             from app.auth.oidc_handler import get_oidc_handler
-            
+
             oidc_handler = get_oidc_handler()
             if oidc_handler is None:
                 logger.error("OIDC handler is not available")
@@ -268,7 +268,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     status_code=503,
                     media_type="application/json",
                 )
-            
+
             token_claims = await oidc_handler.validate_token(token)
             user_info = oidc_handler.extract_user_claims(token_claims)
 
@@ -315,37 +315,37 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
             # Check if we have a refresh token to attempt refresh
             refresh_token = request.cookies.get("refresh_token")
-            
+
             if refresh_token:
                 try:
                     # Attempt to refresh the token
                     from app.auth.oidc_handler import get_oidc_handler
-                    
+
                     oidc_handler = get_oidc_handler()
                     if oidc_handler:
                         token_response = await oidc_handler.refresh_access_token(refresh_token)
-                        
+
                         # Get new token
                         id_token = token_response.get("id_token")
                         access_token = token_response.get("access_token")
                         new_token = id_token or access_token
-                        
+
                         if new_token:
                             # Validate the new token
                             token_claims = await oidc_handler.validate_token(new_token)
                             user_info = oidc_handler.extract_user_claims(token_claims)
-                            
+
                             # Validate user groups
                             required_groups = [f"tenant_{oidc_config.domain}", "ts_admin", "ts_staff"]
                             is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
-                            
+
                             if is_authorized:
                                 # Success! Attach user info to request state
                                 request.state.user = user_info
-                                
+
                                 # Continue with the request
                                 response = await call_next(request)
-                                
+
                                 # Update cookies in the response
                                 response.set_cookie(
                                     key="auth_token",
@@ -355,7 +355,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                                     samesite="lax",
                                     max_age=token_response.get("expires_in", 3600),
                                 )
-                                
+
                                 # Update refresh token if rotated
                                 new_refresh_token = token_response.get("refresh_token", refresh_token)
                                 response.set_cookie(
@@ -366,7 +366,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                                     samesite="lax",
                                     max_age=30 * 24 * 60 * 60,
                                 )
-                                
+
                                 logger.debug(f"Successfully refreshed token for user: {user_info.get('email')}")
                                 return response
                             else:
@@ -374,7 +374,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 except Exception as refresh_error:
                     logger.warning(f"Token refresh failed in middleware: {refresh_error}")
                     # Fall through to normal error handling
-            
+
             # Refresh failed or no refresh token available - redirect/return error
             if self._is_browser_request(request):
                 # Redirect to login page

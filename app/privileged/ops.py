@@ -19,7 +19,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any
 
 import yaml
 
@@ -38,11 +38,11 @@ OVERLAY_PATH = Path("/media/root-rw")
 # config-driven source for this the way app.configs.registry is for config
 # types, since these names are baked into how the device's networking is
 # provisioned at image build time, not something an operator configures.
-ALLOWED_CONNECTIONS: FrozenSet[str] = frozenset({"station", "hotspot", "cellular"})
+ALLOWED_CONNECTIONS: frozenset[str] = frozenset({"station", "hotspot", "cellular"})
 
 # The only GSM fields nmcli cannot unset itself, and therefore the only ones
 # unset_gsm_fields is allowed to touch in the netplan YAML.
-_ALLOWED_GSM_FIELDS: FrozenSet[str] = frozenset({"password", "pin"})
+_ALLOWED_GSM_FIELDS: frozenset[str] = frozenset({"password", "pin"})
 
 # Where netplan keeps NetworkManager-generated connection files. A module
 # constant (rather than inlined in unset_gsm_fields) so tests can point it at
@@ -80,7 +80,7 @@ def _set_and_sync_mtime(path: Path, mtime: float) -> bool:
     return abs(actual - mtime) <= 2
 
 
-def write_config(config_type: str, config: Dict[str, Any], mtime: Optional[float]) -> Dict[str, Any]:
+def write_config(config_type: str, config: dict[str, Any], mtime: float | None) -> dict[str, Any]:
     """Validate and write a single config type to its (root-owned) location.
 
     `config_type` must be one of app.configs.registry.CONFIG_TYPES - the
@@ -105,7 +105,7 @@ def write_config(config_type: str, config: Dict[str, Any], mtime: Optional[float
     except Exception as e:
         raise PrivilegedOpError(f"failed to save {config_type}: {e}") from e
 
-    mtime_set: Optional[bool] = None
+    mtime_set: bool | None = None
     if mtime is not None:
         try:
             mtime_set = _set_and_sync_mtime(instance.config_file, mtime)
@@ -120,7 +120,7 @@ def write_config(config_type: str, config: Dict[str, Any], mtime: Optional[float
     }
 
 
-def stat_config(config_type: str) -> Dict[str, Any]:
+def stat_config(config_type: str) -> dict[str, Any]:
     """Report whether a config type's file exists and its mtime.
 
     Exists for config files `pi` cannot stat itself because they live in a
@@ -143,7 +143,7 @@ def stat_config(config_type: str) -> Dict[str, Any]:
     return {"config_type": config_type, "exists": True, "mtime": mtime}
 
 
-def delete_config(config_type: str) -> Dict[str, Any]:
+def delete_config(config_type: str) -> dict[str, Any]:
     """Delete a single config type's file, if it exists.
 
     Used for e.g. removing wireguard.conf on system reset. Same fixed
@@ -167,7 +167,7 @@ def delete_config(config_type: str) -> Dict[str, Any]:
     return {"config_type": config_type, "config_file": str(path), "deleted": existed}
 
 
-def wipe_overlay() -> Dict[str, Any]:
+def wipe_overlay() -> dict[str, Any]:
     """Remove every entry under the persistent overlay directory.
 
     Mirrors the existing logic in app.cli.process_system_reset - the overlay
@@ -178,8 +178,8 @@ def wipe_overlay() -> Dict[str, Any]:
     if not OVERLAY_PATH.exists() or not OVERLAY_PATH.is_dir():
         raise PrivilegedOpError(f"overlay path does not exist or is not a directory: {OVERLAY_PATH}")
 
-    removed: List[str] = []
-    errors: List[str] = []
+    removed: list[str] = []
+    errors: list[str] = []
     for item in OVERLAY_PATH.iterdir():
         try:
             if item.is_dir() and not item.is_symlink():
@@ -196,7 +196,7 @@ def wipe_overlay() -> Dict[str, Any]:
     return {"wiped": True, "removed": removed}
 
 
-def _run_nmcli(args: List[str], timeout: float = _NMCLI_TIMEOUT) -> Dict[str, Any]:
+def _run_nmcli(args: list[str], timeout: float = _NMCLI_TIMEOUT) -> dict[str, Any]:
     """Run nmcli with an explicit argv list (never a shell) and return its
     result. Does not raise on a non-zero nmcli exit; only a failure to even
     launch nmcli raises PrivilegedOpError. Used internally by
@@ -215,7 +215,7 @@ def _run_nmcli(args: List[str], timeout: float = _NMCLI_TIMEOUT) -> Dict[str, An
     return {"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
 
 
-def unset_gsm_fields(connection: str, fields: List[str]) -> Dict[str, Any]:
+def unset_gsm_fields(connection: str, fields: list[str]) -> dict[str, Any]:
     """Remove GSM fields (password/pin) from a cellular connection's netplan
     YAML - nmcli itself cannot unset these fields, and /etc/netplan is
     root-owned, so this is the one nmcli-adjacent operation that still needs
@@ -248,7 +248,7 @@ def unset_gsm_fields(connection: str, fields: List[str]) -> Dict[str, Any]:
     except (OSError, yaml.YAMLError) as e:
         raise PrivilegedOpError(f"failed to read netplan file: {e}") from e
 
-    removed: List[str] = []
+    removed: list[str] = []
     modem_config = None
     if isinstance(content, dict):
         network = content.get("network")
@@ -279,4 +279,3 @@ def unset_gsm_fields(connection: str, fields: List[str]) -> Dict[str, Any]:
         "netplan_file": str(netplan_file),
         "reload_returncode": reload_result["returncode"],
     }
-

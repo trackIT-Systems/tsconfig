@@ -3,28 +3,27 @@
 import argparse
 import asyncio
 import calendar
-import logging
 import sys
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Any
 
 from app.config_loader import config_loader
 from app.identity import OPERATOR_HOME
-from app.logging_config import setup_logging, get_logger
-from app.utils import privileged as priv
+from app.logging_config import get_logger, setup_logging
 from app.routers.configs import (
     RECOGNIZED_CONFIG_FILES,
     SERVICE_MAPPING,
     _apply_config_zip_from_path,
-    extract_zip_file_timestamps,
     collect_privileged_stats,
     compare_file_timestamps,
-    parse_config_file,
+    extract_zip_file_timestamps,
     get_config_instance,
+    parse_config_file,
     truncate_mtime_for_fat32,
 )
+from app.utils import privileged as priv
 
 DEFAULT_CONFIG_ZIP = OPERATOR_HOME / "tsos-default-name_config.zip"
 
@@ -114,7 +113,7 @@ async def process_zip_upload(
     pedantic: bool = False,
     force: bool = False,
     reboot: str = "allow",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Process a zip file upload.
 
     This function replicates the logic from the upload_config_zip API endpoint
@@ -153,7 +152,7 @@ async def process_zip_upload(
         log.error(f"Zip file not found: {zip_path}")
         sys.exit(1)
     except Exception as e:
-        log.error(f"Failed to read file: {str(e)}")
+        log.error(f"Failed to read file: {e!s}")
         sys.exit(1)
 
     # Verify it's a valid zip file
@@ -166,7 +165,7 @@ async def process_zip_upload(
         log.error("Invalid zip file")
         sys.exit(1)
     except Exception as e:
-        log.error(f"Failed to read zip file: {str(e)}")
+        log.error(f"Failed to read zip file: {e!s}")
         sys.exit(1)
 
     # Extract file timestamps from zip
@@ -250,17 +249,17 @@ async def process_zip_upload(
         except ValueError as e:
             validation_results[filename] = {
                 "valid": False,
-                "errors": [f"Parse error: {str(e)}"],
+                "errors": [f"Parse error: {e!s}"],
             }
             all_valid = False
-            log.error(f"Parse error for {filename}: {str(e)}")
+            log.error(f"Parse error for {filename}: {e!s}")
         except Exception as e:
             validation_results[filename] = {
                 "valid": False,
-                "errors": [f"Validation error: {str(e)}"],
+                "errors": [f"Validation error: {e!s}"],
             }
             all_valid = False
-            log.error(f"Validation error for {filename}: {str(e)}")
+            log.error(f"Validation error for {filename}: {e!s}")
 
     # If not all files are valid, exit without saving
     if not all_valid:
@@ -279,16 +278,14 @@ async def process_zip_upload(
         # Check if any existing file is newer than its zip counterpart
         newer_files_on_disk = []
         for filename, comparison in timestamp_comparisons.items():
-            if (
-                comparison["exists_on_disk"]
-                and comparison["existing_timestamp"]
-                and not comparison["is_newer"]
-            ):
-                newer_files_on_disk.append({
-                    "filename": filename,
-                    "existing_timestamp": comparison["existing_timestamp"],
-                    "zip_timestamp": comparison["zip_timestamp"],
-                })
+            if comparison["exists_on_disk"] and comparison["existing_timestamp"] and not comparison["is_newer"]:
+                newer_files_on_disk.append(
+                    {
+                        "filename": filename,
+                        "existing_timestamp": comparison["existing_timestamp"],
+                        "zip_timestamp": comparison["zip_timestamp"],
+                    }
+                )
 
         if newer_files_on_disk:
             log.error(
@@ -306,7 +303,7 @@ async def process_zip_upload(
     files_to_save = []
     files_skipped = []
 
-    for filename in recognized_files.keys():
+    for filename in recognized_files:
         comparison = timestamp_comparisons.get(filename, {})
 
         if force:
@@ -317,12 +314,14 @@ async def process_zip_upload(
             if comparison.get("should_update", True):
                 files_to_save.append(filename)
             else:
-                files_skipped.append({
-                    "filename": filename,
-                    "reason": "File is not newer than existing version",
-                    "existing_timestamp": comparison.get("existing_timestamp"),
-                    "zip_timestamp": comparison.get("zip_timestamp"),
-                })
+                files_skipped.append(
+                    {
+                        "filename": filename,
+                        "reason": "File is not newer than existing version",
+                        "existing_timestamp": comparison.get("existing_timestamp"),
+                        "zip_timestamp": comparison.get("zip_timestamp"),
+                    }
+                )
 
     if files_skipped:
         log.warning(f"Skipping {len(files_skipped)} file(s) (not newer than existing)")
@@ -359,7 +358,7 @@ async def process_zip_upload(
             log.info(f"Saved {filename}")
         except Exception as e:
             save_errors[filename] = str(e)
-            log.error(f"Failed to save {filename}: {str(e)}")
+            log.error(f"Failed to save {filename}: {e!s}")
 
     if save_errors:
         log.error(f"Failed to save some configuration files: {save_errors}")
@@ -375,7 +374,9 @@ async def process_zip_upload(
 
     message_parts = []
     if saved_files:
-        message_parts.append(f"Successfully uploaded and validated {len(saved_files)} configuration file(s) in {mode_desc}")
+        message_parts.append(
+            f"Successfully uploaded and validated {len(saved_files)} configuration file(s) in {mode_desc}"
+        )
 
     if files_skipped:
         message_parts.append(f"Skipped {len(files_skipped)} file(s) (not newer than existing)")
@@ -423,9 +424,7 @@ async def process_zip_upload(
     if reboot_lower == "forbid":
         # Never reboot, even if cmdline.txt was updated
         if cmdline_updated:
-            log.warning(
-                "cmdline.txt updated but reboot forbidden - changes will not take effect until manual reboot"
-            )
+            log.warning("cmdline.txt updated but reboot forbidden - changes will not take effect until manual reboot")
     elif reboot_lower == "force":
         # Always reboot after successful upload
         log.info("Scheduling system reboot in 10 seconds (forced)...")
@@ -600,7 +599,7 @@ def main():
             logger.warning("Upload interrupted by user")
             sys.exit(130)
         except Exception as e:
-            logger.exception(f"Unexpected error: {str(e)}")
+            logger.exception(f"Unexpected error: {e!s}")
             sys.exit(1)
     elif args.command == "system-reset":
         try:
@@ -615,7 +614,7 @@ def main():
             logger.warning("Reset interrupted by user")
             sys.exit(130)
         except Exception as e:
-            logger.exception(f"Unexpected error: {str(e)}")
+            logger.exception(f"Unexpected error: {e!s}")
             sys.exit(1)
     else:
         parser.print_help()

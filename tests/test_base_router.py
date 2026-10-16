@@ -33,9 +33,10 @@ class TestUpdateConfigHelper:
     async def test_tracker_mode_save_goes_through_privileged_write(self, monkeypatch):
         router = BaseConfigRouter(WireguardConfig, "wireguard", "tag")
         monkeypatch.setattr(router.config_instance, "validate", lambda config: [])
-        with patch("app.routers.base.config_loader.is_server_mode", return_value=False), patch(
-            "app.routers.base.write_config", new=AsyncMock(return_value={"ok": True})
-        ) as mock_write:
+        with (
+            patch("app.routers.base.config_loader.is_server_mode", return_value=False),
+            patch("app.routers.base.write_config", new=AsyncMock(return_value={"ok": True})) as mock_write,
+        ):
             result = await router.update_config_helper({"content": "x"})
         mock_write.assert_called_once_with("wireguard", {"content": "x"})
         assert "updated successfully" in result["message"]
@@ -52,8 +53,9 @@ class TestUpdateConfigHelper:
     async def test_privileged_write_failure_surfaces_as_500(self, monkeypatch):
         router = BaseConfigRouter(WireguardConfig, "wireguard", "tag")
         monkeypatch.setattr(router.config_instance, "validate", lambda config: [])
-        with patch("app.routers.base.config_loader.is_server_mode", return_value=False), patch(
-            "app.routers.base.write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))
+        with (
+            patch("app.routers.base.config_loader.is_server_mode", return_value=False),
+            patch("app.routers.base.write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await router.update_config_helper({"content": "x"})

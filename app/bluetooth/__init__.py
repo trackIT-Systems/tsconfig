@@ -9,7 +9,7 @@ from app.bluetooth.protocol import (
 
 __all__ = [
     "BASE_UUID",
-    "SYSTEM_SERVICE_UUID",
     "SYSTEMD_SERVICE_UUID",
+    "SYSTEM_SERVICE_UUID",
     "UPLOAD_SERVICE_UUID",
 ]

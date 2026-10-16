@@ -5,7 +5,6 @@ import os
 import pty
 import pwd
 import signal
-from typing import Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -59,7 +58,7 @@ def get_user_home() -> str:
 class PtyProcess:
     """Manages a pseudo-terminal process for interactive shell sessions."""
 
-    def __init__(self, command: Optional[str] = None):
+    def __init__(self, command: str | None = None):
         # The web shell always runs as whichever user tsconfig.service runs
         # as (pi, in tracker mode) - there is no separate "shell user" to
         # pick, and there never should be: this used to exec `su -l
@@ -237,7 +236,7 @@ class PtyProcess:
 
 
 # Global dictionary to store active shell sessions
-active_sessions: Dict[str, PtyProcess] = {}
+active_sessions: dict[str, PtyProcess] = {}
 
 
 @router.websocket("/ws/{session_id}")

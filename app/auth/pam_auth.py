@@ -72,9 +72,7 @@ class _PamResponse(Structure):
     _fields_ = [("resp", c_void_p), ("resp_retcode", c_int)]
 
 
-_CONV_FUNC = CFUNCTYPE(
-    c_int, c_int, POINTER(POINTER(_PamMessage)), POINTER(POINTER(_PamResponse)), c_void_p
-)
+_CONV_FUNC = CFUNCTYPE(c_int, c_int, POINTER(POINTER(_PamMessage)), POINTER(POINTER(_PamResponse)), c_void_p)
 
 
 class _PamConv(Structure):
@@ -180,8 +178,10 @@ def _check_staff_via_su_blocking(password: str) -> bool:
         proc = subprocess.Popen(
             [
                 SU_PATH,
-                "-s", "/bin/sh",  # do not run root's own shell (and its startup files) for a no-op
-                "-c", "true",
+                "-s",
+                "/bin/sh",  # do not run root's own shell (and its startup files) for a no-op
+                "-c",
+                "true",
                 STAFF_USER,
             ],
             stdin=slave,

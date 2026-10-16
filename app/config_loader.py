@@ -3,10 +3,9 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
-
 
 # Files copied forward into a new versioned config-group directory (server
 # mode) when any one of them is edited - a deliberate subset of
@@ -15,7 +14,7 @@ import yaml
 # truth for app.routers.base.BaseConfigRouter and app.routers.authorized_keys
 # - keeping one list means a type missing from it can't silently be dropped
 # from a config group whenever some other type in the group is saved.
-VERSIONED_CONFIG_FILES: List[str] = [
+VERSIONED_CONFIG_FILES: list[str] = [
     "radiotracking.ini",
     "schedule.yml",
     "soundscapepipe.yml",
@@ -36,11 +35,11 @@ def _default_main_config_path() -> Path:
 class ConfigLoader:
     """Load and manage the main tsconfig.yml configuration."""
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         self.config_path = config_path or _default_main_config_path()
-        self._config_cache: Optional[Dict[str, Any]] = None
+        self._config_cache: dict[str, Any] | None = None
 
-    def load_config(self) -> Dict[str, Any]:
+    def load_config(self) -> dict[str, Any]:
         """Load the main configuration file.
 
         In tracker mode this file (/etc/tsconfig/tsconfig.yml) is installed
@@ -67,7 +66,7 @@ class ConfigLoader:
         config_dir = file_locations.get("config_dir", "/boot/firmware")
         return Path(config_dir)
 
-    def get_services_config(self) -> Dict[str, Any]:
+    def get_services_config(self) -> dict[str, Any]:
         """Get the services configuration section."""
         config = self.load_config()
         return config.get("services", [])
@@ -95,7 +94,7 @@ class ConfigLoader:
         """
         return os.environ.get("TSCONFIG_SERVER_MODE", "").lower() in ("true", "1", "yes")
 
-    def get_config_root(self) -> Optional[Path]:
+    def get_config_root(self) -> Path | None:
         """Get the config root directory for server mode.
 
         Returns None in tracker mode (default).
@@ -108,7 +107,7 @@ class ConfigLoader:
             return Path(config_root)
         return None
 
-    def list_config_groups(self) -> List[str]:
+    def list_config_groups(self) -> list[str]:
         """List available config groups in server mode.
 
         Returns empty list in tracker mode (default).
@@ -139,7 +138,7 @@ class ConfigLoader:
 
         return sorted(config_groups)
 
-    def get_config_group_dir(self, config_group: str) -> Optional[Path]:
+    def get_config_group_dir(self, config_group: str) -> Path | None:
         """Get the config directory for a specific config group.
 
         Returns the 'latest' subdirectory within the config group.

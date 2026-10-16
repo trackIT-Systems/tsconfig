@@ -1,7 +1,7 @@
 import pwd
 from pathlib import Path
 
-import app.identity as identity
+from app import identity
 
 
 def test_home_comes_from_the_passwd_entry(monkeypatch):

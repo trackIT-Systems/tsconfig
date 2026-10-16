@@ -5,7 +5,7 @@ import re
 from ast import literal_eval
 from configparser import ConfigParser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from app.configs import BaseConfig
 
@@ -40,7 +40,7 @@ _UNIT_TO_SECONDS = {
 ALLOWED_SECTION_KEYS = frozenset({"scheduling_interval", "topic_prefix", "requires", "qos", "func"})
 
 
-def _interval_to_seconds(value: str) -> Optional[float]:
+def _interval_to_seconds(value: str) -> float | None:
     """Parse scheduling interval string to seconds, or None if invalid."""
     if not isinstance(value, str) or not value.strip():
         return None
@@ -91,7 +91,7 @@ class MqttUtilConfig(BaseConfig):
     def config_file(self) -> Path:
         return self.config_dir / "mqttutil.conf"
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load mqttutil configuration from disk."""
         if not self.config_file.exists():
             raise FileNotFoundError(
@@ -101,7 +101,7 @@ class MqttUtilConfig(BaseConfig):
         parser = ConfigParser()
         parser.read(self.config_file)
 
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
 
         defaults = dict(parser.defaults())
         if defaults:
@@ -115,11 +115,11 @@ class MqttUtilConfig(BaseConfig):
 
         return data
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save mqttutil configuration to disk."""
         parser = ConfigParser()
 
-        if "DEFAULT" in config and config["DEFAULT"]:
+        if config.get("DEFAULT"):
             for key, value in config["DEFAULT"].items():
                 parser["DEFAULT"][key] = _encode_ini_value(value)
 
@@ -132,7 +132,7 @@ class MqttUtilConfig(BaseConfig):
             parser.write(f)
 
     def _validate_section_fields(
-        self, section_name: str, fields: Dict[str, Any], errors: List[str], require_func: bool
+        self, section_name: str, fields: dict[str, Any], errors: list[str], require_func: bool
     ) -> None:
         """Validate fields for a DEFAULT or task section."""
         if not isinstance(fields, dict):
@@ -152,8 +152,7 @@ class MqttUtilConfig(BaseConfig):
         if scheduling_interval is not None:
             if not isinstance(scheduling_interval, str) or _interval_to_seconds(scheduling_interval) is None:
                 errors.append(
-                    f"Section '{section_name}' scheduling_interval must be a valid interval "
-                    "(e.g. '5s', '1m', '2h')"
+                    f"Section '{section_name}' scheduling_interval must be a valid interval (e.g. '5s', '1m', '2h')"
                 )
 
         topic_prefix = fields.get("topic_prefix")
@@ -166,19 +165,18 @@ class MqttUtilConfig(BaseConfig):
                 errors.append(f"Section '{section_name}' requires must be a list of module name strings")
 
         qos = fields.get("qos")
-        if qos is not None:
-            if not isinstance(qos, int) or qos not in (0, 1, 2):
-                errors.append(f"Section '{section_name}' qos must be an integer 0, 1, or 2")
+        if qos is not None and (not isinstance(qos, int) or qos not in (0, 1, 2)):
+            errors.append(f"Section '{section_name}' qos must be an integer 0, 1, or 2")
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate mqttutil configuration."""
-        errors: List[str] = []
+        errors: list[str] = []
 
         if not config:
             errors.append("Configuration is empty")
             return errors
 
-        task_sections = [name for name in config.keys() if name != "DEFAULT"]
+        task_sections = [name for name in config if name != "DEFAULT"]
         if not task_sections:
             errors.append("At least one task section is required (besides DEFAULT)")
 

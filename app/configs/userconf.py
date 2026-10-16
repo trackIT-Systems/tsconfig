@@ -3,7 +3,7 @@ usr/lib/userconf-pi/userconf-service - see docs/security.md)."""
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from app.configs import BaseConfig
 from app.identity import OPERATOR_USER
@@ -43,7 +43,7 @@ class UserconfConfig(BaseConfig):
             return Path("/boot/firmware/userconf.txt")
         return self.config_dir / "userconf.txt"
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the userconf.txt content from disk.
 
         Returns:
@@ -55,12 +55,12 @@ class UserconfConfig(BaseConfig):
             try:
                 with open(self.config_file, "r") as f:
                     return {"content": f.read()}
-            except (IOError, OSError):
+            except OSError:
                 pass
 
         return {"content": ""}
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the userconf.txt content to disk.
 
         Args:
@@ -71,7 +71,7 @@ class UserconfConfig(BaseConfig):
         with open(self.config_file, "w") as f:
             f.write(content)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the userconf.txt content.
 
         Args:

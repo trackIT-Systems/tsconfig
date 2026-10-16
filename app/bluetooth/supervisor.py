@@ -11,7 +11,7 @@ still recovering, and stop when recovery keeps failing, so systemd restarts it.
 
 import os
 import socket
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from app.logging_config import get_logger
 
@@ -52,7 +52,7 @@ class Supervisor:
 
     def __init__(
         self,
-        register: Callable[[], Optional[bool]],
+        register: Callable[[], bool | None],
         schedule: Callable[[float, Callable[[], None]], None],
         notify: Callable[[str], object] = sd_notify,
         max_unhealthy: int = MAX_UNHEALTHY_CHECKS,
@@ -125,7 +125,7 @@ class Supervisor:
 
     # --- periodic health check ---------------------------------------------
 
-    def check(self, active_instances: Optional[int]) -> bool:
+    def check(self, active_instances: int | None) -> bool:
         """Periodic self-check; returns whether the gateway looks healthy.
 
         Args:

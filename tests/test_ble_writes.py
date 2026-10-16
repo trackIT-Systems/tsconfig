@@ -19,7 +19,17 @@ class TestClassifyJson:
 
     @pytest.mark.parametrize(
         "body",
-        [b"", b'{"a"', b'{"a": ', b'{"a": "unterminated', b'{"a": [1, 2', b'{"a": tr', b'{"a": -', b'{"a": 1.', b'{"a": 1e+']
+        [
+            b"",
+            b'{"a"',
+            b'{"a": ',
+            b'{"a": "unterminated',
+            b'{"a": [1, 2',
+            b'{"a": tr',
+            b'{"a": -',
+            b'{"a": 1.',
+            b'{"a": 1e+',
+        ]
         + [b'{"a": nul', b'{"a": fals', b'{"a": -Infin'],
     )
     def test_truncated_request_is_incomplete(self, body):
@@ -37,7 +47,7 @@ class TestClassifyJson:
         # Writes are cut at arbitrary byte positions: inside strings, inside \uXXXX
         # escapes (ensure_ascii) and inside multi-byte UTF-8 characters (not ensure_ascii)
         payload = json.dumps(
-            {"filename": "bundle é.zip", "content": "äሴ😀 line\nbreak \\ \" end", "n": [1, 2.5, None, True]},
+            {"filename": "bundle é.zip", "content": 'äሴ😀 line\nbreak \\ " end', "n": [1, 2.5, None, True]},
             ensure_ascii=ensure_ascii,
         ).encode()
         for cut in range(len(payload)):
@@ -51,21 +61,21 @@ def write(char, data, device=DEVICE):
 
 class TestMultiWriteRequests:
     def test_request_split_over_several_writes_reaches_the_handler_once(self, chars):
-        char, handler, sent = make_write_char(chars, None)
+        char, handler, _sent = make_write_char(chars, None)
         body = b'{"service": "chrony", "action": "restart"}'
         for i in range(0, len(body), 7):
             write(char, body[i : i + 7])
         handler.assert_awaited_once_with({"service": "chrony", "action": "restart"})
 
     def test_aborted_request_does_not_block_later_requests_after_a_disconnect(self, chars):
-        char, handler, sent = make_write_char(chars, None)
+        char, handler, _sent = make_write_char(chars, None)
         write(char, b'{"password": "nat')
         char.on_disconnect(DEVICE)
         write(char, b'{"service": "x"}')
         handler.assert_awaited_once_with({"service": "x"})
 
     def test_aborted_request_of_one_connection_does_not_affect_another(self, chars):
-        char, handler, sent = make_write_char(chars, None)
+        char, handler, _sent = make_write_char(chars, None)
         write(char, b'{"password": "nat', OTHER)
         write(char, b'{"service": "x"}', DEVICE)
         handler.assert_awaited_once_with({"service": "x"})
@@ -89,7 +99,7 @@ class TestMultiWriteRequests:
     def test_incomplete_request_is_dropped_after_the_idle_timeout(self, chars, monkeypatch):
         now = [100.0]
         monkeypatch.setattr(chars, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
-        char, handler, sent = make_write_char(chars, None)
+        char, handler, _sent = make_write_char(chars, None)
         write(char, b'{"password": "nat')
         now[0] += chars.WRITE_IDLE_TIMEOUT + 1
         write(char, b'{"service": "x"}')
@@ -98,7 +108,7 @@ class TestMultiWriteRequests:
     def test_continuation_within_the_idle_timeout_is_kept(self, chars, monkeypatch):
         now = [100.0]
         monkeypatch.setattr(chars, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
-        char, handler, sent = make_write_char(chars, None)
+        char, handler, _sent = make_write_char(chars, None)
         write(char, b'{"service": ')
         now[0] += chars.WRITE_IDLE_TIMEOUT - 1
         write(char, b'"x"}')

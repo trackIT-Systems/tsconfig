@@ -1,7 +1,7 @@
 """Mosquitto configuration file management."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from app.configs import BaseConfig
 
@@ -23,7 +23,7 @@ class MosquittoConfConfig(BaseConfig):
         """Return the configuration file path."""
         return Path("/boot/firmware/mosquitto.d/server.conf")
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the configuration from disk.
 
         Returns:
@@ -34,12 +34,12 @@ class MosquittoConfConfig(BaseConfig):
                 with open(self.config_file, "r") as f:
                     content = f.read()
                 return {"content": content}
-            except (IOError, OSError):
+            except OSError:
                 pass
 
         return {"content": ""}
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the configuration to disk.
 
         Args:
@@ -51,7 +51,7 @@ class MosquittoConfConfig(BaseConfig):
         with open(self.config_file, "w") as f:
             f.write(content)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the configuration.
 
         Args:

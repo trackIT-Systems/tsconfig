@@ -1,8 +1,8 @@
 """Authorized keys API endpoints."""
 
-import httpx
-from typing import Any, Dict, Optional
+from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,7 @@ class SSHKeyUpdate(BaseModel):
 
 
 @router.get("", summary="Get authorized SSH keys")
-async def get_authorized_keys(config_group: Optional[str] = Query(None)) -> Dict[str, Any]:
+async def get_authorized_keys(config_group: str | None = Query(None)) -> dict[str, Any]:
     """Get the list of authorized SSH keys.
 
     Args:
@@ -67,7 +67,7 @@ async def get_authorized_keys(config_group: Optional[str] = Query(None)) -> Dict
 
 
 @router.post("", summary="Add an SSH key")
-async def add_authorized_key(key_data: SSHKeyAdd, config_group: Optional[str] = Query(None)) -> Dict[str, Any]:
+async def add_authorized_key(key_data: SSHKeyAdd, config_group: str | None = Query(None)) -> dict[str, Any]:
     """Add a new SSH key to the authorized keys.
 
     Args:
@@ -134,11 +134,11 @@ async def add_authorized_key(key_data: SSHKeyAdd, config_group: Optional[str] = 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add SSH key: {e!s}")
 
 
 @router.delete("/{key_index}", summary="Remove an SSH key")
-async def remove_authorized_key(key_index: int, config_group: Optional[str] = Query(None)) -> Dict[str, Any]:
+async def remove_authorized_key(key_index: int, config_group: str | None = Query(None)) -> dict[str, Any]:
     """Remove an SSH key from the authorized keys by index.
 
     Args:
@@ -200,11 +200,11 @@ async def remove_authorized_key(key_index: int, config_group: Optional[str] = Qu
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to remove SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove SSH key: {e!s}")
 
 
 @router.put("", summary="Update all SSH keys")
-async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: Optional[str] = Query(None)) -> Dict[str, Any]:
+async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: str | None = Query(None)) -> dict[str, Any]:
     """Update the entire list of authorized SSH keys.
 
     In tracker mode, only user keys can be updated. Server keys are read-only
@@ -237,7 +237,7 @@ async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: Optional[
                 if key.get("source") == "server":
                     raise HTTPException(
                         status_code=400,
-                        detail="Cannot modify server-managed SSH keys. Server keys are managed via config upload."
+                        detail="Cannot modify server-managed SSH keys. Server keys are managed via config upload.",
                     )
 
         # Prepare the configuration - merge with existing server keys if in tracker mode
@@ -245,7 +245,7 @@ async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: Optional[
             # Load current config to get server keys
             current_config = config.load()
             server_keys = [k for k in current_config["keys"] if k.get("source") == "server"]
-            
+
             # Combine submitted user keys with existing server keys
             updated_config = {"keys": key_data.keys + server_keys}
         else:
@@ -289,106 +289,99 @@ async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: Optional[
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update SSH keys: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update SSH keys: {e!s}")
 
 
 async def fetch_keys_from_github(username: str) -> list[str]:
     """Fetch SSH keys from GitHub for a given username.
-    
+
     Args:
         username: GitHub username
-        
+
     Returns:
         List of SSH public keys
-        
+
     Raises:
         HTTPException: If the request fails or user not found
     """
     url = f"https://api.github.com/users/{username}/keys"
-    
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             response = await client.get(url)
-            
+
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail=f"GitHub user '{username}' not found")
             elif response.status_code != 200:
                 raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"GitHub API error: {response.status_code}"
+                    status_code=response.status_code, detail=f"GitHub API error: {response.status_code}"
                 )
-            
+
             data = response.json()
-            
+
             if not isinstance(data, list):
                 raise HTTPException(status_code=500, detail="Unexpected response format from GitHub")
-            
+
             # Extract the key field from each object
             keys = [item.get("key", "").strip() for item in data if item.get("key")]
-            
+
             return keys
-            
+
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="GitHub API request timed out")
         except httpx.RequestError as e:
-            raise HTTPException(status_code=503, detail=f"Failed to connect to GitHub: {str(e)}")
+            raise HTTPException(status_code=503, detail=f"Failed to connect to GitHub: {e!s}")
 
 
 async def fetch_keys_from_launchpad(username: str) -> list[str]:
     """Fetch SSH keys from Launchpad for a given username.
-    
+
     Args:
         username: Launchpad username
-        
+
     Returns:
         List of SSH public keys
-        
+
     Raises:
         HTTPException: If the request fails or user not found
     """
     url = f"https://launchpad.net/~{username}/+sshkeys"
-    
+
     async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         try:
             response = await client.get(url)
-            
+
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail=f"Launchpad user '{username}' not found")
             elif response.status_code != 200:
                 raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Launchpad API error: {response.status_code}"
+                    status_code=response.status_code, detail=f"Launchpad API error: {response.status_code}"
                 )
-            
+
             # Launchpad returns plain text with one key per line
             text = response.text
-            
+
             # Filter out empty lines and comments
-            keys = [
-                line.strip() 
-                for line in text.split("\n") 
-                if line.strip() and not line.strip().startswith("#")
-            ]
-            
+            keys = [line.strip() for line in text.split("\n") if line.strip() and not line.strip().startswith("#")]
+
             return keys
-            
+
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Launchpad API request timed out")
         except httpx.RequestError as e:
-            raise HTTPException(status_code=503, detail=f"Failed to connect to Launchpad: {str(e)}")
+            raise HTTPException(status_code=503, detail=f"Failed to connect to Launchpad: {e!s}")
 
 
 @router.post("/import", summary="Import SSH keys from platform")
 async def import_ssh_keys_from_platform(
-    import_data: SSHKeyImport, 
-    config_group: Optional[str] = Query(None)
-) -> Dict[str, Any]:
+    import_data: SSHKeyImport, config_group: str | None = Query(None)
+) -> dict[str, Any]:
     """Import SSH keys from GitHub or Launchpad.
-    
+
     Args:
         import_data: Platform and username information
         config_group: Optional config group name for server mode
-        
+
     Returns:
         Success message with count of imported keys and updated key list
     """
@@ -397,22 +390,20 @@ async def import_ssh_keys_from_platform(
         platform = import_data.platform.lower()
         if platform not in ["github", "launchpad"]:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid platform '{import_data.platform}'. Must be 'github' or 'launchpad'"
+                status_code=400, detail=f"Invalid platform '{import_data.platform}'. Must be 'github' or 'launchpad'"
             )
-        
+
         # Fetch keys from platform
         if platform == "github":
             keys = await fetch_keys_from_github(import_data.username)
         else:  # launchpad
             keys = await fetch_keys_from_launchpad(import_data.username)
-        
+
         if not keys:
             raise HTTPException(
-                status_code=404,
-                detail=f"No SSH keys found for {platform} user '{import_data.username}'"
+                status_code=404, detail=f"No SSH keys found for {platform} user '{import_data.username}'"
             )
-        
+
         # Get config directory for the group (if specified)
         config_dir = None
         if config_group:
@@ -422,15 +413,15 @@ async def import_ssh_keys_from_platform(
                     status_code=404,
                     detail=f"Config group '{config_group}' not found",
                 )
-        
+
         # Create config instance
         config = AuthorizedKeysConfig(config_dir) if config_dir else AuthorizedKeysConfig()
-        
+
         # Try to add each key
         imported_count = 0
         skipped_count = 0
         errors = []
-        
+
         for key in keys:
             try:
                 # Add comment to identify source if key doesn't already have one
@@ -446,27 +437,27 @@ async def import_ssh_keys_from_platform(
                 else:
                     # Malformed key, try to add it as-is and let validation catch it
                     key_with_comment = key
-                
+
                 updated_config = config.add_key(key_with_comment)
-                
+
                 # Validate the configuration
                 validation_errors = config.validate(updated_config)
                 if validation_errors:
                     errors.append(f"Invalid key format: {validation_errors[0]}")
                     continue
-                
+
                 # In server mode, create versioned directory
                 if config_loader.is_server_mode() and config_group:
                     import shutil
-                    
+
                     # Get the previous latest directory
                     old_latest_dir = config_loader.get_config_group_dir(config_group)
                     if old_latest_dir and old_latest_dir.is_symlink():
                         old_latest_dir = old_latest_dir.resolve()
-                    
+
                     # Create new versioned directory
                     versioned_dir = config_loader.create_versioned_config_dir(config_group)
-                    
+
                     # Copy all config files from previous version
                     if old_latest_dir and old_latest_dir.exists():
                         for config_file in VERSIONED_CONFIG_FILES:
@@ -474,14 +465,14 @@ async def import_ssh_keys_from_platform(
                             if old_file.exists():
                                 new_file = versioned_dir / config_file
                                 shutil.copy2(old_file, new_file)
-                    
+
                     # Create new config instance pointing to versioned directory
                     config = AuthorizedKeysConfig(versioned_dir)
-                
+
                 # Save the configuration
                 config.save(updated_config)
                 imported_count += 1
-                
+
             except ValueError as e:
                 # Key already exists or invalid format
                 error_msg = str(e)
@@ -489,10 +480,10 @@ async def import_ssh_keys_from_platform(
                     skipped_count += 1
                 else:
                     errors.append(error_msg)
-        
+
         # Load final configuration
         final_config = config.load()
-        
+
         # Build success message
         message_parts = []
         if imported_count > 0:
@@ -501,24 +492,21 @@ async def import_ssh_keys_from_platform(
             message_parts.append(f"{skipped_count} key(s) already exist")
         if errors:
             message_parts.append(f"{len(errors)} key(s) failed to import")
-        
+
         message = " • ".join(message_parts) if message_parts else "No keys imported"
-        
+
         if imported_count == 0 and not skipped_count:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": message, "errors": errors}
-            )
-        
+            raise HTTPException(status_code=400, detail={"message": message, "errors": errors})
+
         return {
             "message": message,
             "imported": imported_count,
             "skipped": skipped_count,
             "errors": errors,
-            "keys": final_config["keys"]
+            "keys": final_config["keys"],
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to import SSH keys: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to import SSH keys: {e!s}")

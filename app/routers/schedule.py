@@ -1,7 +1,5 @@
 """Schedule configuration endpoints."""
 
-from typing import List, Optional
-
 from fastapi import Query
 from pydantic import BaseModel
 
@@ -14,7 +12,7 @@ class ScheduleConfigUpdate(BaseModel):
     button_delay: str
     recovery_interval: str = "00:00"
     recovery_guard: str = "00:00"
-    schedule: List[ScheduleEntry]
+    schedule: list[ScheduleEntry]
 
 
 # Create the router using the base class
@@ -26,7 +24,7 @@ router = schedule_router.router
 @router.put("")
 async def update_schedule(
     config: ScheduleConfigUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump()
     return await schedule_router.update_config_helper(config_dict, config_group)
@@ -35,7 +33,7 @@ async def update_schedule(
 @router.post("/validate")
 async def validate_schedule(
     config: ScheduleConfigUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump()
     return schedule_router.validate_config_helper(config_dict, config_group)

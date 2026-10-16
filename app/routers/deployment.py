@@ -1,7 +1,7 @@
 """Deployment proxy endpoint for forwarding deployment requests to external API."""
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Path, Request
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/deploy", tags=["deployment"])
 @router.post("/{config_group_id}", summary="Deploy configuration to tracker stations")
 async def deploy_config(
     request: Request, config_group_id: str = Path(..., description="Configuration group ID to deploy")
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Proxy endpoint to trigger deployment of a configuration group to tracker stations.
 
     This endpoint forwards the deployment request to the external deployment API,
@@ -102,10 +102,10 @@ async def deploy_config(
             detail=f"Deployment service unavailable. Please check if the deployment API is running at {deployment_api_url}.",
         )
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Failed to connect to deployment service: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Failed to connect to deployment service: {e!s}")
     except HTTPException:
         # Re-raise HTTPExceptions we created above
         raise
     except Exception as e:
         # Catch any other unexpected errors
-        raise HTTPException(status_code=500, detail=f"Unexpected error during deployment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error during deployment: {e!s}")

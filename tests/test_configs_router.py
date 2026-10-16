@@ -7,7 +7,6 @@ calling config_instance.save()/systemctl/systemd-run directly.
 
 import io
 import zipfile
-from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -35,13 +34,12 @@ class TestUploadConfigSingleFile:
         assert exc_info.value.status_code == 403
 
     async def test_valid_upload_calls_privileged_write_with_epoch_mtime(self):
-        content = (
-            b"[Interface]\nPrivateKey=abc\n[Peer]\nPublicKey=x\nEndpoint=1.2.3.4:1\nAllowedIPs=0.0.0.0/0\n"
-        )
-        with patch.object(configs.config_loader, "is_server_mode", return_value=False), patch.object(
-            configs.priv, "write_config", new=AsyncMock(return_value={"save_result": None})
-        ) as mock_write:
-            result = await configs.upload_config(
+        content = b"[Interface]\nPrivateKey=abc\n[Peer]\nPublicKey=x\nEndpoint=1.2.3.4:1\nAllowedIPs=0.0.0.0/0\n"
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=False),
+            patch.object(configs.priv, "write_config", new=AsyncMock(return_value={"save_result": None})) as mock_write,
+        ):
+            await configs.upload_config(
                 file=_upload_file("wireguard.conf", content),
                 restart_service=False,
                 mtime="2025-01-01T00:00:00",
@@ -55,9 +53,10 @@ class TestUploadConfigSingleFile:
 
     async def test_wireguard_hook_rejected_before_reaching_privileged_write(self):
         content = b"[Interface]\nPostUp=evil\n[Peer]\nPublicKey=x\n"
-        with patch.object(configs.config_loader, "is_server_mode", return_value=False), patch.object(
-            configs.priv, "write_config", new=AsyncMock()
-        ) as mock_write:
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=False),
+            patch.object(configs.priv, "write_config", new=AsyncMock()) as mock_write,
+        ):
             result = await configs.upload_config(
                 file=_upload_file("wireguard.conf", content),
                 restart_service=False,
@@ -69,8 +68,9 @@ class TestUploadConfigSingleFile:
 
     async def test_privileged_write_failure_surfaces_as_500(self):
         content = b"[Interface]\nPrivateKey=abc\n[Peer]\nPublicKey=x\n"
-        with patch.object(configs.config_loader, "is_server_mode", return_value=False), patch.object(
-            configs.priv, "write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=False),
+            patch.object(configs.priv, "write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await configs.upload_config(
@@ -137,9 +137,10 @@ class TestHandleServiceRestart:
     async def test_uses_registry_service_mapping_and_privileged_restart(self):
         # wireguard is in registry.SERVICE_MAPPING but was missing from the
         # old locally-duplicated dict in this function - regression guard.
-        with patch.object(configs.config_loader, "is_server_mode", return_value=False), patch.object(
-            configs.priv, "systemctl_action", new=AsyncMock(return_value=(True, None))
-        ) as mock_restart:
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=False),
+            patch.object(configs.priv, "systemctl_action", new=AsyncMock(return_value=(True, None))) as mock_restart,
+        ):
             result = await configs.handle_service_restart("wireguard", True)
         mock_restart.assert_called_once_with("wg-quick@wireguard", "restart")
         assert result["service_restarted"] is True
@@ -168,9 +169,10 @@ class TestUploadConfigZip:
 
     async def test_valid_zip_saves_via_privileged_write(self):
         zip_bytes = self._zip_bytes({"schedule.yml": "button_delay: '00:01'\nschedule: []\n"})
-        with patch.object(configs.config_loader, "is_server_mode", return_value=False), patch.object(
-            configs.priv, "write_config", new=AsyncMock(return_value={"save_result": None})
-        ) as mock_write:
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=False),
+            patch.object(configs.priv, "write_config", new=AsyncMock(return_value={"save_result": None})) as mock_write,
+        ):
             result = await configs.upload_config_zip(
                 file=_upload_file("config.zip", zip_bytes),
                 restart_services=False,

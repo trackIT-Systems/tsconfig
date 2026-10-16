@@ -4,22 +4,21 @@ import asyncio
 import subprocess
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
 
 import anyio
 import psutil
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.config_loader import config_loader
-from app.utils.subprocess_async import run_subprocess_async
 from app.utils.privileged import (
     ALLOWED_SYSTEMCTL_VERBS,
     PrivilegedCallError,
     schedule_reboot,
     systemctl_action,
 )
+from app.utils.subprocess_async import run_subprocess_async
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
@@ -66,7 +65,7 @@ class ServiceConfig(BaseModel):
 class ServicesConfigFile(BaseModel):
     """Services configuration file model."""
 
-    services: List[ServiceConfig]
+    services: list[ServiceConfig]
 
 
 class ServiceInfo(BaseModel):
@@ -77,7 +76,7 @@ class ServiceInfo(BaseModel):
     active: bool
     enabled: bool
     status: str
-    uptime: Optional[str] = None
+    uptime: str | None = None
     expert: bool = False
     is_target: bool = False  # True if this is a systemd target (cannot be controlled)
     is_kernel: bool = False  # True if this is the kernel logs service
@@ -101,7 +100,7 @@ def get_services_config() -> ServicesConfigFile:
     return ServicesConfigFile(**DEFAULT_SERVICES_CONFIG)
 
 
-def get_configured_services(include_expert: bool = True) -> List[ServiceConfig]:
+def get_configured_services(include_expert: bool = True) -> list[ServiceConfig]:
     """Get list of configured services, optionally filtering by expert mode."""
     config = get_services_config()
     if include_expert:
@@ -134,7 +133,7 @@ def format_uptime_from_seconds(total_seconds: float) -> str:
         return "N/A"
 
 
-def calculate_service_uptime(properties: Dict[str, str], active_state: str) -> Optional[str]:
+def calculate_service_uptime(properties: dict[str, str], active_state: str) -> str | None:
     """Calculate how long the service has been in its current state."""
     try:
         # Determine which timestamp to use based on current state
@@ -202,7 +201,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             uptime_str = format_uptime_from_seconds(uptime_seconds)
         except Exception:
             uptime_str = None
-        
+
         return ServiceInfo(
             name=service_config.name,
             description="Kernel ring buffer logs (dmesg)",
@@ -214,7 +213,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             is_target=False,
             is_kernel=True,
         )
-    
+
     try:
         # Get service status including timestamps and type
         result = await run_subprocess_async(
@@ -228,7 +227,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             capture_output=True,
             text=True,
             timeout=10,
-            )
+        )
 
         if result.returncode != 0:
             # Service doesn't exist or error occurred - mark as expert
@@ -253,7 +252,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
         active_state = properties.get("ActiveState", "unknown")
         unit_file_state = properties.get("UnitFileState", "unknown")
         description = properties.get("Description", "No description available")
-        
+
         # Check if this is a target unit (targets end with .target)
         is_target = service_config.name.endswith(".target")
 
@@ -286,7 +285,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             is_target=is_target,
         )
 
-    except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+    except (TimeoutError, subprocess.TimeoutExpired):
         return ServiceInfo(
             name=service_config.name,
             description="Timeout getting service info",
@@ -300,7 +299,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
     except Exception as e:
         return ServiceInfo(
             name=service_config.name,
-            description=f"Error: {str(e)}",
+            description=f"Error: {e!s}",
             active=False,
             enabled=False,
             status="error",
@@ -310,7 +309,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
         )
 
 
-@router.get("/services", response_model=List[ServiceInfo])
+@router.get("/services", response_model=list[ServiceInfo])
 async def list_services():
     """Get status of all configured systemd services."""
     services = get_configured_services(include_expert=True)
@@ -386,7 +385,7 @@ async def get_system_config():
         refresh_interval = config_loader.get_status_refresh_interval()
         return {"status_refresh_interval": refresh_interval}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get system configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get system configuration: {e!s}")
 
 
 @router.get("/logs/{service_name}")
@@ -410,7 +409,7 @@ async def stream_service_logs(
         if service_name not in service_names:
             raise HTTPException(status_code=400, detail="Service not in configured list")
 
-    def journalctl_command(extra: List[str]) -> List[str]:
+    def journalctl_command(extra: list[str]) -> list[str]:
         cmd = ["journalctl", "--no-pager", "--no-hostname", "--output", "short", "-n", str(lines)] + extra
         if service_name == "all":
             pass  # no extra filter
@@ -427,7 +426,7 @@ async def stream_service_logs(
             )
             try:
                 output, _ = await asyncio.wait_for(process.communicate(), timeout=10)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 raise HTTPException(status_code=504, detail="journalctl timed out")
@@ -442,7 +441,7 @@ async def stream_service_logs(
         journal read access at the file-permission level; no wrapper or
         elevation is involved at all."""
         # Send initial comment to establish the connection (comments don't trigger onmessage)
-        yield f": Stream started\n\n"
+        yield ": Stream started\n\n"
 
         cmd = journalctl_command(["-f"])
 
@@ -462,7 +461,7 @@ async def stream_service_logs(
                 yield f"data: {log_line}\n\n"
 
         except Exception as e:
-            yield f"data: Error streaming logs: {str(e)}\n\n"
+            yield f"data: Error streaming logs: {e!s}\n\n"
         finally:
             # Runs when journalctl ends and when the stream is cancelled
             # because the client went away

@@ -28,7 +28,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from app.configs import BaseConfig
 
@@ -46,17 +46,17 @@ _NMCLI_TIMEOUT = 20.0
 _SECTION_RE = re.compile(r"^\[([A-Za-z0-9_.:-]+)\]\s*$")
 _KEY_RE = re.compile(r"^([A-Za-z0-9_.:-]+)\s*=(.*)$")
 
-Section = Tuple[str, List[str]]  # (name, raw lines including the "[name]" header)
+Section = tuple[str, list[str]]  # (name, raw lines including the "[name]" header)
 
 
-def _parse_sections(content: str) -> Tuple[List[Section], List[str]]:
+def _parse_sections(content: str) -> tuple[list[Section], list[str]]:
     """Split keyfile text into sections, preserving lines verbatim.
 
     Returns (sections, errors). Only a strict, simple subset is accepted:
     comments and blank lines, `[section]` headers, `key=value` lines.
     """
-    errors: List[str] = []
-    sections: List[Section] = []
+    errors: list[str] = []
+    sections: list[Section] = []
     for number, line in enumerate(content.splitlines(), start=1):
         stripped = line.strip()
         if not stripped or stripped.startswith(("#", ";")):
@@ -77,12 +77,12 @@ def _parse_sections(content: str) -> Tuple[List[Section], List[str]]:
     return sections, errors
 
 
-def _key_of(line: str) -> Optional[str]:
+def _key_of(line: str) -> str | None:
     match = _KEY_RE.match(line.strip())
     return match.group(1) if match else None
 
 
-def _get(section_lines: List[str], key: str) -> Optional[str]:
+def _get(section_lines: list[str], key: str) -> str | None:
     for line in section_lines[1:]:
         match = _KEY_RE.match(line.strip())
         if match and match.group(1) == key:
@@ -90,8 +90,8 @@ def _get(section_lines: List[str], key: str) -> Optional[str]:
     return None
 
 
-def _render(sections: List[Section]) -> str:
-    out: List[str] = []
+def _render(sections: list[Section]) -> str:
+    out: list[str] = []
     for _, lines in sections:
         # Exactly one blank line between sections, none trailing inside one.
         body = list(lines)
@@ -121,7 +121,7 @@ def merge_with_existing(supplied: str, existing: str) -> str:
     if not old_ssid:
         raise ValueError("existing hotspot profile has no ssid")
 
-    merged: List[Section] = [("connection", list(old_connection[1]))]
+    merged: list[Section] = [("connection", list(old_connection[1]))]
     wifi_seen = False
     for name, lines in new_sections:
         if name == "connection":
@@ -146,14 +146,14 @@ def normalise(text: str) -> str:
 class HotspotConfig(BaseConfig):
     """The hotspot's NetworkManager keyfile, as text (`content`)."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         super().__init__(config_dir or NM_CONNECTION_DIR)
 
     @property
     def config_file(self) -> Path:
         return self.config_dir / FILE_NAME
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Never exposes the profile: it holds the access point password and
         sits in a root-only directory. Returns an empty config when unreadable."""
         try:
@@ -162,7 +162,7 @@ class HotspotConfig(BaseConfig):
             return {"content": ""}
         return {"content": re.sub(r"(?m)^(psk\s*=).*$", r"\1<hidden>", content)}
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         content = config.get("content")
         if not isinstance(content, str):
             return ["Configuration must contain a 'content' string"]
@@ -191,7 +191,7 @@ class HotspotConfig(BaseConfig):
                 errors.append("[wifi-security] psk must be 8-63 characters")
         return errors
 
-    def save(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def save(self, config: dict[str, Any]) -> dict[str, Any]:
         """Merge with the on-disk profile and apply it (runs as root).
 
         Returns {"changed": bool, "applied": bool}. `applied` is False when
@@ -238,7 +238,7 @@ class HotspotConfig(BaseConfig):
                 tmp.unlink()
 
     @staticmethod
-    def _nmcli(args: List[str]) -> subprocess.CompletedProcess:
+    def _nmcli(args: list[str]) -> subprocess.CompletedProcess:
         return subprocess.run(["nmcli"] + args, capture_output=True, text=True, timeout=_NMCLI_TIMEOUT)
 
     def _reload_into_networkmanager(self, path: Path, ignore_errors: bool = False) -> bool:
@@ -257,7 +257,9 @@ class HotspotConfig(BaseConfig):
         if loaded.returncode != 0:
             if ignore_errors:
                 return False
-            raise RuntimeError(f"NetworkManager rejected the hotspot profile: {loaded.stderr.strip() or loaded.stdout.strip()}")
+            raise RuntimeError(
+                f"NetworkManager rejected the hotspot profile: {loaded.stderr.strip() or loaded.stdout.strip()}"
+            )
 
         try:
             active = self._nmcli(["-t", "-f", "NAME", "connection", "show", "--active"])

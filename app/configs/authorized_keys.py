@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.configs import BaseConfig
 from app.identity import OPERATOR_HOME
@@ -46,12 +46,12 @@ class AuthorizedKeysConfig(BaseConfig):
         else:
             # In server mode, use the config directory
             return self.config_dir / "authorized_keys"
-    
+
     @property
     def user_keys_file(self) -> Path:
         """Return the user keys file path (tracker mode only)."""
         return OPERATOR_HOME / ".ssh" / "authorized_keys"
-    
+
     @property
     def server_keys_file(self) -> Path:
         """Return the server keys file path (tracker mode only)."""
@@ -75,14 +75,14 @@ class AuthorizedKeysConfig(BaseConfig):
                     pass
             except (OSError, PermissionError) as e:
                 # If we can't create the directory, that's a real error
-                raise OSError(f"Cannot create directory {parent_dir}: {str(e)}")
+                raise OSError(f"Cannot create directory {parent_dir}: {e!s}")
 
     def _set_file_permissions(self, file_path: Path) -> None:
         """Set proper SSH permissions on the file."""
         if file_path.exists():
             os.chmod(file_path, 0o600)
 
-    def _parse_key_line(self, line: str, index: int) -> Optional[Dict[str, Any]]:
+    def _parse_key_line(self, line: str, index: int) -> dict[str, Any] | None:
         """Parse a single authorized_keys line into a structured format.
 
         Args:
@@ -144,7 +144,7 @@ class AuthorizedKeysConfig(BaseConfig):
             "is_complex": False,
         }
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the authorized keys configuration from disk.
 
         In tracker mode (non-config-upload), loads from both:
@@ -168,10 +168,10 @@ class AuthorizedKeysConfig(BaseConfig):
                             if parsed:
                                 parsed["source"] = "user"
                                 keys.append(parsed)
-                except (IOError, OSError):
+                except OSError:
                     # File might not be readable, that's okay
                     pass
-            
+
             # Load server keys
             if self.server_keys_file.exists():
                 try:
@@ -181,7 +181,7 @@ class AuthorizedKeysConfig(BaseConfig):
                             if parsed:
                                 parsed["source"] = "server"
                                 keys.append(parsed)
-                except (IOError, OSError):
+                except OSError:
                     # File might not be readable, that's okay
                     pass
         else:
@@ -200,13 +200,13 @@ class AuthorizedKeysConfig(BaseConfig):
                                     # In server mode, all keys are server-managed
                                     parsed["source"] = "server"
                                 keys.append(parsed)
-                except (IOError, OSError):
+                except OSError:
                     # File might not be readable, that's okay
                     pass
 
         return {"keys": keys}
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the authorized keys configuration to disk.
 
         In tracker mode:
@@ -228,7 +228,7 @@ class AuthorizedKeysConfig(BaseConfig):
         if self._is_tracker_mode and not self._is_config_upload:
             # Regular mode: save only user keys to authorized_keys
             user_keys = [k for k in keys if k.get("source") != "server"]
-            
+
             # Generate the file content for user keys
             lines = []
             for key_info in user_keys:
@@ -279,7 +279,7 @@ class AuthorizedKeysConfig(BaseConfig):
                     # Ignore permission errors (e.g., FAT filesystem, file owned by another user)
                     pass
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the authorized keys configuration.
 
         Args:
@@ -340,7 +340,7 @@ class AuthorizedKeysConfig(BaseConfig):
 
         return errors
 
-    def add_key(self, key_line: str) -> Dict[str, Any]:
+    def add_key(self, key_line: str) -> dict[str, Any]:
         """Add a new key to the user keys configuration.
 
         In tracker mode, only adds to user keys and checks for duplicates
@@ -361,7 +361,7 @@ class AuthorizedKeysConfig(BaseConfig):
 
         # Count user keys for proper indexing
         user_keys = [k for k in keys if k.get("source") != "server"]
-        
+
         # Parse the new key with proper index
         new_key = self._parse_key_line(key_line, len(user_keys))
 
@@ -371,7 +371,7 @@ class AuthorizedKeysConfig(BaseConfig):
         # Check if the key already exists in either user or server keys
         # Compare by key_data (the base64 part) to detect duplicates
         new_key_data = new_key.get("key_data", "")
-        
+
         for existing_key in keys:
             existing_key_data = existing_key.get("key_data", "")
             # For complex keys (with options), compare the full line
@@ -395,7 +395,7 @@ class AuthorizedKeysConfig(BaseConfig):
 
         return config
 
-    def remove_key(self, key_index: int) -> Dict[str, Any]:
+    def remove_key(self, key_index: int) -> dict[str, Any]:
         """Remove a key from the user keys configuration by index.
 
         In tracker mode, only allows removing user keys. Server keys cannot be removed.
@@ -406,7 +406,7 @@ class AuthorizedKeysConfig(BaseConfig):
 
         Returns:
             Updated configuration dictionary
-        
+
         Raises:
             ValueError: If the index is invalid, if trying to remove a server key in tracker mode,
                        or if trying to remove the first key in server mode
@@ -422,10 +422,12 @@ class AuthorizedKeysConfig(BaseConfig):
         key_to_remove = keys[key_index]
         if self._is_tracker_mode and key_to_remove.get("source") == "server":
             raise ValueError("Cannot remove server-managed SSH keys. These keys are managed via config upload.")
-        
+
         # In server mode, prevent removal of the first key to avoid lockout
         if not self._is_tracker_mode and key_index == 0:
-            raise ValueError("Cannot remove the first SSH key in server mode to prevent lockout. You must have at least one SSH key configured.")
+            raise ValueError(
+                "Cannot remove the first SSH key in server mode to prevent lockout. You must have at least one SSH key configured."
+            )
 
         # Remove the key
         keys.pop(key_index)

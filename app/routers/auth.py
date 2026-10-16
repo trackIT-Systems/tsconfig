@@ -2,7 +2,6 @@
 
 import os
 import socket
-from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Query, Request, Response
@@ -11,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import __version__
 from app.auth.dependencies import get_current_user, get_optional_user
+from app.auth.oidc_config import oidc_config
 from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
 from app.auth.session import (
     client_source,
@@ -23,7 +23,6 @@ from app.auth.session import (
     sanitize_next,
     set_session_cookie,
 )
-from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
 from app.logging_config import get_logger
 
@@ -34,7 +33,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 # Store PKCE verifiers and return_to URLs temporarily (in production, use Redis or similar)
 # Key: state, Value: dict with code_verifier and return_to (both can be None)
-_pkce_store: dict[str, dict[str, Optional[str]]] = {}
+_pkce_store: dict[str, dict[str, str | None]] = {}
 
 
 def _base_url() -> str:
@@ -44,7 +43,7 @@ def _base_url() -> str:
 def _render_login(
     request: Request,
     next_path: str,
-    error: Optional[str] = None,
+    error: str | None = None,
     status_code: int = 200,
     retry_after: float = 0,
     username: str = OPERATOR_USER,
@@ -75,8 +74,8 @@ def _render_login(
 )
 async def login(
     request: Request,
-    return_to: Optional[str] = Query(None, description="URL to return to after successful login"),
-    next: Optional[str] = Query(None, description="Path to return to after a successful operator login"),
+    return_to: str | None = Query(None, description="URL to return to after successful login"),
+    next: str | None = Query(None, description="Path to return to after a successful operator login"),
 ):
     """Operator login form (tracker mode) or OIDC authorization code flow (server mode)."""
     if not config_loader.is_server_mode():
@@ -94,22 +93,19 @@ async def login(
     try:
         # Lazy import to avoid loading auth modules in tracker mode
         from app.auth.oidc_handler import get_oidc_handler
-        
+
         oidc_handler = get_oidc_handler()
         if oidc_handler is None:
             raise HTTPException(
                 status_code=503,
                 detail="OIDC handler is not available",
             )
-        
+
         # Initiate login flow
         authorization_url, state, code_verifier = await oidc_handler.initiate_login(return_to)
 
         # Store code verifier and return_to for later use in callback
-        _pkce_store[state] = {
-            "code_verifier": code_verifier,
-            "return_to": return_to
-        }
+        _pkce_store[state] = {"code_verifier": code_verifier, "return_to": return_to}
 
         logger.info("Redirecting to OIDC provider for authentication")
         return RedirectResponse(url=authorization_url, status_code=302)
@@ -118,7 +114,7 @@ async def login(
         logger.error(f"Error initiating OIDC login: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to initiate login: {str(e)}",
+            detail=f"Failed to initiate login: {e!s}",
         )
 
 
@@ -132,7 +128,7 @@ async def operator_login(
     request: Request,
     password: str = Form(...),
     username: str = Form(OPERATOR_USER),
-    next: Optional[str] = Form(None),
+    next: str | None = Form(None),
 ):
     if config_loader.is_server_mode():
         raise HTTPException(status_code=404, detail="Operator login is only available in tracker mode")
@@ -185,7 +181,7 @@ async def callback(
     request: Request,
     code: str = Query(..., description="Authorization code from OIDC provider"),
     state: str = Query(..., description="State parameter for CSRF protection"),
-    return_to: Optional[str] = Query(None, description="URL to return to after login"),
+    return_to: str | None = Query(None, description="URL to return to after login"),
 ):
     """Handle OIDC callback and exchange code for tokens."""
     # Only available in server mode
@@ -217,14 +213,14 @@ async def callback(
     try:
         # Lazy import to avoid loading auth modules in tracker mode
         from app.auth.oidc_handler import get_oidc_handler
-        
+
         oidc_handler = get_oidc_handler()
         if oidc_handler is None:
             raise HTTPException(
                 status_code=503,
                 detail="OIDC handler is not available",
             )
-        
+
         # Exchange code for tokens
         token_response = await oidc_handler.handle_callback(code, state, code_verifier)
 
@@ -303,7 +299,7 @@ async def callback(
         logger.error(f"Authentication failed: {e}")
         raise HTTPException(
             status_code=400,
-            detail=f"Authentication failed: {str(e)}",
+            detail=f"Authentication failed: {e!s}",
         )
     except HTTPException:
         # Re-raise HTTPExceptions (including our 403 from above)
@@ -322,7 +318,7 @@ async def callback(
     description="Exchange refresh token for new access and ID tokens.",
 )
 async def refresh_token(
-    refresh_token: Optional[str] = Cookie(None),
+    refresh_token: str | None = Cookie(None),
 ):
     """Refresh access token using refresh token."""
     # Only available in server mode
@@ -342,14 +338,14 @@ async def refresh_token(
     try:
         # Lazy import to avoid loading auth modules in tracker mode
         from app.auth.oidc_handler import get_oidc_handler
-        
+
         oidc_handler = get_oidc_handler()
         if oidc_handler is None:
             raise HTTPException(
                 status_code=503,
                 detail="OIDC handler is not available",
             )
-        
+
         # Refresh the token
         token_response = await oidc_handler.refresh_access_token(refresh_token)
 
@@ -380,7 +376,7 @@ async def refresh_token(
 
         # Prepare response with updated cookies
         response = JSONResponse(content={"success": True, "user": user_info})
-        
+
         # Update auth_token cookie
         response.set_cookie(
             key="auth_token",
@@ -425,7 +421,7 @@ async def refresh_token(
 )
 async def logout(
     request: Request,
-    auth_token: Optional[str] = Cookie(None),
+    auth_token: str | None = Cookie(None),
 ):
     """Logout and clear authentication cookie, ending OIDC SSO session."""
     # Tracker mode: just drop the operator session
@@ -482,8 +478,8 @@ async def logout(
 )
 async def frontchannel_logout(
     request: Request,
-    iss: Optional[str] = Query(None, description="Issuer identifier"),
-    sid: Optional[str] = Query(None, description="Session ID"),
+    iss: str | None = Query(None, description="Issuer identifier"),
+    sid: str | None = Query(None, description="Session ID"),
 ):
     """
     Handle OIDC front-channel logout.
@@ -546,7 +542,7 @@ async def frontchannel_logout(
     summary="Get current user information",
     description="Returns information about the currently authenticated user.",
 )
-async def userinfo(user: Optional[dict] = Depends(get_current_user)):
+async def userinfo(user: dict | None = Depends(get_current_user)):
     """Get current user information."""
     # Only available in server mode
     if not config_loader.is_server_mode():
@@ -569,7 +565,7 @@ async def userinfo(user: Optional[dict] = Depends(get_current_user)):
     summary="Get authentication status",
     description="Returns authentication configuration and status.",
 )
-async def auth_status(request: Request, user: Optional[dict] = Depends(get_optional_user)):
+async def auth_status(request: Request, user: dict | None = Depends(get_optional_user)):
     """Get authentication status."""
     is_server_mode = config_loader.is_server_mode()
     is_configured = oidc_config.is_configured()

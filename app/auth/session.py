@@ -15,7 +15,6 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Dict, Optional, Tuple
 from urllib.parse import unquote
 
 from starlette.requests import HTTPConnection
@@ -46,13 +45,13 @@ def _sign(payload: str) -> str:
     return hmac.new(_signing_key, payload.encode(), sha256).hexdigest()
 
 
-def create_session_token(now: Optional[float] = None) -> str:
+def create_session_token(now: float | None = None) -> str:
     issued = int(now if now is not None else time.time())
     payload = f"{issued}.{secrets.token_hex(8)}"
     return f"{payload}.{_sign(payload)}"
 
 
-def verify_session_token(token: Optional[str], now: Optional[float] = None) -> Optional[int]:
+def verify_session_token(token: str | None, now: float | None = None) -> int | None:
     """Return the token's issue time if it is valid and unexpired, else None."""
     if not token or len(token) > 256:
         return None
@@ -71,7 +70,7 @@ def verify_session_token(token: Optional[str], now: Optional[float] = None) -> O
     return issued
 
 
-def session_needs_refresh(issued: int, now: Optional[float] = None) -> bool:
+def session_needs_refresh(issued: int, now: float | None = None) -> bool:
     current = now if now is not None else time.time()
     return current - issued > SESSION_REFRESH_AFTER_SECONDS
 
@@ -93,7 +92,7 @@ def is_trusted_local(conn: HTTPConnection) -> bool:
     return not any(h in conn.headers for h in _PROXY_HEADERS)
 
 
-def has_valid_session(conn: HTTPConnection) -> Optional[int]:
+def has_valid_session(conn: HTTPConnection) -> int | None:
     for name in (SECURE_SESSION_COOKIE, SESSION_COOKIE):
         issued = verify_session_token(conn.cookies.get(name))
         if issued is not None:
@@ -142,7 +141,7 @@ def client_source(conn: HTTPConnection) -> str:
 _SAFE_NEXT = re.compile(r"^/(?!/)[^\\\r\n]*$")
 
 
-def sanitize_next(value: Optional[str], default: str = "/") -> str:
+def sanitize_next(value: str | None, default: str = "/") -> str:
     """Only allow same-site relative paths as post-login redirect targets."""
     if not value:
         return default
@@ -157,7 +156,7 @@ def sanitize_next(value: Optional[str], default: str = "/") -> str:
 MAX_BASIC_LENGTH = 1024
 
 
-def parse_basic_auth(header: Optional[str]) -> Optional[Tuple[str, str]]:
+def parse_basic_auth(header: str | None) -> tuple[str, str] | None:
     """Return (username, password) from an `Authorization: Basic ...` header,
     or None if it is absent or malformed."""
     if not header or len(header) > MAX_BASIC_LENGTH:
@@ -188,18 +187,18 @@ class CredentialCache:
     def __init__(self, ttl_seconds: float = 60.0, max_entries: int = 64):
         self._ttl = ttl_seconds
         self._max = max_entries
-        self._verified: Dict[str, float] = {}
+        self._verified: dict[str, float] = {}
 
     @staticmethod
     def _digest(username: str, password: str) -> str:
         return hmac.new(_signing_key, f"{username}\0{password}".encode(), sha256).hexdigest()
 
-    def is_verified(self, username: str, password: str, now: Optional[float] = None) -> bool:
+    def is_verified(self, username: str, password: str, now: float | None = None) -> bool:
         current = now if now is not None else time.monotonic()
         expires = self._verified.get(self._digest(username, password))
         return expires is not None and expires > current
 
-    def remember(self, username: str, password: str, now: Optional[float] = None) -> None:
+    def remember(self, username: str, password: str, now: float | None = None) -> None:
         current = now if now is not None else time.monotonic()
         if len(self._verified) >= self._max:
             self._verified = {k: v for k, v in self._verified.items() if v > current}
@@ -234,16 +233,16 @@ class BackoffLimiter:
     free_attempts: int = 3
     cap_seconds: float = 30.0
     max_entries: int = 1024
-    _entries: Dict[str, _Entry] = field(default_factory=dict)
+    _entries: dict[str, _Entry] = field(default_factory=dict)
 
-    def retry_after(self, key: str, now: Optional[float] = None) -> float:
+    def retry_after(self, key: str, now: float | None = None) -> float:
         current = now if now is not None else time.monotonic()
         entry = self._entries.get(key)
         if entry is None:
             return 0.0
         return max(0.0, entry.next_allowed - current)
 
-    def register_failure(self, key: str, now: Optional[float] = None) -> None:
+    def register_failure(self, key: str, now: float | None = None) -> None:
         current = now if now is not None else time.monotonic()
         self._prune(current)
         entry = self._entries.setdefault(key, _Entry())
@@ -282,7 +281,7 @@ staff_source_limiter = BackoffLimiter(free_attempts=2, cap_seconds=120.0)
 staff_global_limiter = BackoffLimiter(free_attempts=5, cap_seconds=60.0)
 
 
-def _limiters(username: str) -> Tuple[BackoffLimiter, BackoffLimiter]:
+def _limiters(username: str) -> tuple[BackoffLimiter, BackoffLimiter]:
     if username == STAFF_USER:
         return staff_source_limiter, staff_global_limiter
     return source_limiter, global_limiter

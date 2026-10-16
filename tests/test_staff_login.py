@@ -45,7 +45,9 @@ def fake_su(tmp_path, monkeypatch):
 
     def install(mode="normal", delay=0.1):
         script = tmp_path / "su"
-        script.write_text(FAKE_SU.format(python=sys.executable, dump=str(dump), mode=mode, delay=delay, expected=ROOT_PASSWORD))
+        script.write_text(
+            FAKE_SU.format(python=sys.executable, dump=str(dump), mode=mode, delay=delay, expected=ROOT_PASSWORD)
+        )
         script.chmod(0o755)
         monkeypatch.setattr(pam_auth, "SU_PATH", str(script))
         return dump
@@ -113,7 +115,9 @@ class TestStaffCheck:
 
 
 class TestStaffGuards:
-    @pytest.mark.parametrize("password", ["abc\x03def", "abc\x04", "abc\x15", "back\x7fspace", "tab\there", "line\nbreak", "cr\r"])
+    @pytest.mark.parametrize(
+        "password", ["abc\x03def", "abc\x04", "abc\x15", "back\x7fspace", "tab\there", "line\nbreak", "cr\r"]
+    )
     def test_control_characters_are_refused_without_starting_su(self, password):
         with patch.object(pam_auth.subprocess, "Popen") as su:
             assert check(password) is False
@@ -126,9 +130,10 @@ class TestStaffGuards:
         su.assert_not_called()
 
     def test_operator_goes_through_pam_and_never_su(self):
-        with patch.object(pam_auth, "_authenticate_blocking", return_value=True) as pam, patch.object(
-            pam_auth.subprocess, "Popen"
-        ) as su:
+        with (
+            patch.object(pam_auth, "_authenticate_blocking", return_value=True) as pam,
+            patch.object(pam_auth.subprocess, "Popen") as su,
+        ):
             assert asyncio.run(pam_auth.authenticate_operator("pi", "natur")) is True
         pam.assert_called_once_with("pi", "natur")
         su.assert_not_called()

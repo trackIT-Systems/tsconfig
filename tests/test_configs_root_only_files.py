@@ -2,7 +2,7 @@
 traverse, so `Path.exists()` raises PermissionError instead of returning False.
 The shared bundle/download helpers must cope with that rather than 500."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -41,7 +41,7 @@ def test_timestamp_comparison_treats_unreadable_file_as_updatable():
 def test_timestamp_comparison_uses_the_mtime_reported_by_the_privileged_op():
     instance = root_only_instance()
     zip_time = datetime(2026, 6, 1, 12, 0, 0)
-    epoch = lambda dt: dt.replace(tzinfo=timezone.utc).timestamp()
+    epoch = lambda dt: dt.replace(tzinfo=UTC).timestamp()
 
     def compare(disk_time):
         stats = {"hotspot.nmconnection": {"exists": True, "mtime": epoch(disk_time)}}

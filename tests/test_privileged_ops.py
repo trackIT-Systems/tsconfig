@@ -7,7 +7,6 @@ compromised or buggy version of it) cannot be trusted.
 """
 
 import subprocess
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -43,8 +42,7 @@ class TestWriteConfig:
                 "wireguard",
                 {
                     "content": (
-                        "[Interface]\nPrivateKey=abc\n[Peer]\nPublicKey=x\n"
-                        "Endpoint=1.2.3.4:1\nAllowedIPs=0.0.0.0/0\n"
+                        "[Interface]\nPrivateKey=abc\n[Peer]\nPublicKey=x\nEndpoint=1.2.3.4:1\nAllowedIPs=0.0.0.0/0\n"
                     )
                 },
                 1_000_000_000.0,
@@ -162,18 +160,14 @@ class TestUnsetGsmFields:
     def test_removes_fields_and_reloads(self, tmp_path):
         netplan_file = tmp_path / "90-NM-abc-123.yaml"
         netplan_file.write_text(
-            "network:\n"
-            "  modems:\n"
-            "    cellular:\n"
-            "      apn: internet\n"
-            "      password: hunter2\n"
-            "      pin: '1234'\n"
+            "network:\n  modems:\n    cellular:\n      apn: internet\n      password: hunter2\n      pin: '1234'\n"
         )
         uuid_result = _completed(0, stdout="connection.uuid:abc-123\n")
         reload_result = _completed(0)
-        with patch.object(ops, "NETPLAN_DIR", tmp_path), patch(
-            "subprocess.run", side_effect=[uuid_result, reload_result]
-        ) as mock_run:
+        with (
+            patch.object(ops, "NETPLAN_DIR", tmp_path),
+            patch("subprocess.run", side_effect=[uuid_result, reload_result]) as mock_run,
+        ):
             result = ops.unset_gsm_fields("cellular", ["password", "pin"])
 
         assert result["modified"] is True

@@ -52,10 +52,11 @@ class TestPtyProcessStart:
         before the shell is exec'd."""
         calls = []
         process = PtyProcess(command="/bin/zsh")
-        with patch("app.routers.shell.get_user_home", return_value="/home/pi"), patch(
-            "pty.fork", return_value=(0, 5)
-        ), patch("os.chdir", side_effect=lambda path: calls.append(("chdir", path))), patch(
-            "os.execv", side_effect=lambda *a: calls.append(("execv", a))
+        with (
+            patch("app.routers.shell.get_user_home", return_value="/home/pi"),
+            patch("pty.fork", return_value=(0, 5)),
+            patch("os.chdir", side_effect=lambda path: calls.append(("chdir", path))),
+            patch("os.execv", side_effect=lambda *a: calls.append(("execv", a))),
         ):
             process.start()
         assert calls == [("chdir", "/home/pi"), ("execv", ("/bin/zsh", ["-zsh"]))]
@@ -63,17 +64,21 @@ class TestPtyProcessStart:
     def test_home_directory_is_resolved_in_the_parent_before_forking(self):
         order = []
         process = PtyProcess(command="/bin/zsh")
-        with patch("app.routers.shell.get_user_home", side_effect=lambda: order.append("home") or "/home/pi"), patch(
-            "pty.fork", side_effect=lambda: order.append("fork") or (1234, 5)
+        with (
+            patch("app.routers.shell.get_user_home", side_effect=lambda: order.append("home") or "/home/pi"),
+            patch("pty.fork", side_effect=lambda: order.append("fork") or (1234, 5)),
         ):
             process.start()
         assert order == ["home", "fork"]
 
     def test_unusable_home_does_not_prevent_the_shell_from_starting(self):
         process = PtyProcess(command="/bin/zsh")
-        with patch("app.routers.shell.get_user_home", return_value="/nonexistent"), patch(
-            "pty.fork", return_value=(0, 5)
-        ), patch("os.chdir", side_effect=OSError("gone")), patch("os.execv") as mock_execv:
+        with (
+            patch("app.routers.shell.get_user_home", return_value="/nonexistent"),
+            patch("pty.fork", return_value=(0, 5)),
+            patch("os.chdir", side_effect=OSError("gone")),
+            patch("os.execv") as mock_execv,
+        ):
             process.start()
         mock_execv.assert_called_once_with("/bin/zsh", ["-zsh"])
 
@@ -93,8 +98,10 @@ class TestGetUserShell:
 
     def test_falls_back_to_passwd_entry(self):
         fake_pwent = type("P", (), {"pw_shell": "/bin/bash"})()
-        with patch.dict("os.environ", {}, clear=True), patch("pwd.getpwuid", return_value=fake_pwent), patch(
-            "os.path.isfile", return_value=True
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("pwd.getpwuid", return_value=fake_pwent),
+            patch("os.path.isfile", return_value=True),
         ):
             assert get_user_shell() == "/bin/bash"
 

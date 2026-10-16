@@ -6,8 +6,8 @@ to the tsconfig HTTP API endpoints.
 
 import asyncio
 import base64
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -44,8 +44,8 @@ class TsConfigApiClient:
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self.client: Optional[httpx.AsyncClient] = None
-        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
+        self.client: httpx.AsyncClient | None = None
+        self._client_loop: asyncio.AbstractEventLoop | None = None
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -70,7 +70,7 @@ class TsConfigApiClient:
             self.client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
             self._client_loop = loop
 
-    async def _get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Perform a GET request.
 
         Args:
@@ -92,7 +92,7 @@ class TsConfigApiClient:
             logger.error(f"HTTP GET error for {endpoint}: {e}")
             raise
 
-    async def _post(self, endpoint: str, json_data: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
+    async def _post(self, endpoint: str, json_data: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
         """Perform a POST request.
 
         Args:
@@ -115,7 +115,7 @@ class TsConfigApiClient:
             logger.error(f"HTTP POST error for {endpoint}: {e}")
             raise _request_error(e) from e
 
-    async def _put(self, endpoint: str, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _put(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Perform a PUT request.
 
         Args:
@@ -139,7 +139,7 @@ class TsConfigApiClient:
 
     # System Service endpoints
 
-    async def get_system_status(self) -> Dict[str, Any]:
+    async def get_system_status(self) -> dict[str, Any]:
         """Get system status information.
 
         Returns:
@@ -147,7 +147,7 @@ class TsConfigApiClient:
         """
         return await self._get("/api/system-status")
 
-    async def get_server_mode(self) -> Dict[str, Any]:
+    async def get_server_mode(self) -> dict[str, Any]:
         """Get server mode configuration.
 
         Returns:
@@ -155,7 +155,7 @@ class TsConfigApiClient:
         """
         return await self._get("/api/server-mode")
 
-    async def get_timedatectl_status(self) -> Dict[str, Any]:
+    async def get_timedatectl_status(self) -> dict[str, Any]:
         """Get timedatectl status.
 
         Returns:
@@ -163,7 +163,7 @@ class TsConfigApiClient:
         """
         return await self._get("/api/timedatectl-status")
 
-    async def get_available_services(self, config_group: Optional[str] = None) -> Dict[str, Any]:
+    async def get_available_services(self, config_group: str | None = None) -> dict[str, Any]:
         """Get list of available configuration services.
 
         Args:
@@ -177,7 +177,7 @@ class TsConfigApiClient:
 
     # Systemd Service endpoints
 
-    async def get_systemd_services(self) -> Dict[str, Any]:
+    async def get_systemd_services(self) -> dict[str, Any]:
         """Get status of all systemd services.
 
         Returns:
@@ -185,7 +185,7 @@ class TsConfigApiClient:
         """
         return await self._get("/api/systemd/services")
 
-    async def systemd_service_action(self, service: str, action: str) -> Dict[str, Any]:
+    async def systemd_service_action(self, service: str, action: str) -> dict[str, Any]:
         """Perform an action on a systemd service.
 
         Args:
@@ -198,7 +198,7 @@ class TsConfigApiClient:
         data = {"service": service, "action": action}
         return await self._post("/api/systemd/action", json_data=data)
 
-    async def systemd_reboot(self) -> Dict[str, Any]:
+    async def systemd_reboot(self) -> dict[str, Any]:
         """Reboot the system.
 
         Returns:
@@ -233,10 +233,10 @@ class TsConfigApiClient:
         filename: str,
         content: str,
         restart_service: bool = False,
-        mtime: Optional[str] = None,
+        mtime: str | None = None,
         force: bool = False,
-        encoding: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        encoding: str | None = None,
+    ) -> dict[str, Any]:
         """Upload a configuration file.
 
         Args:
@@ -265,7 +265,7 @@ class TsConfigApiClient:
                 except Exception:
                     file_content = content.encode("utf-8")
             if mtime is None:
-                mtime = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+                mtime = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
             # Create multipart form data
             files = {"file": (filename, file_content)}
@@ -290,7 +290,7 @@ class TsConfigApiClient:
         pedantic: bool = False,
         force: bool = False,
         reboot: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Upload a zip file containing multiple configuration files.
 
         Args:
@@ -326,7 +326,7 @@ class TsConfigApiClient:
             logger.error(f"HTTP POST error for upload/zip: {e}")
             raise _request_error(e) from e
 
-    async def download_config(self, filename: str) -> Dict[str, Any]:
+    async def download_config(self, filename: str) -> dict[str, Any]:
         """Download a configuration file.
 
         Args:
@@ -354,7 +354,7 @@ class TsConfigApiClient:
             logger.error(f"HTTP GET error for download config: {e}")
             raise
 
-    async def download_zip(self) -> Dict[str, Any]:
+    async def download_zip(self) -> dict[str, Any]:
         """Download a zip file containing all existing configuration files.
 
         Returns:

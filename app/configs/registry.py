@@ -16,7 +16,7 @@ never needs privilege elevation - only the config-upload variant (writing to
 `is_config_upload=True`.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from app.configs import BaseConfig
 from app.configs.authorized_keys import AuthorizedKeysConfig
@@ -37,11 +37,15 @@ from app.configs.wireguard import WireguardConfig
 # The basename is what identifies the type on the wire (CLI argv, zip file
 # member names) and is checked against the class's actual `config_file` name
 # as a sanity check in get_privileged_config_instance().
-CONFIG_TYPES: Dict[str, Dict[str, Any]] = {
+CONFIG_TYPES: dict[str, dict[str, Any]] = {
     "radiotracking": {"basename": "radiotracking.ini", "cls": RadioTrackingConfig, "kwargs": {}},
     "schedule": {"basename": "schedule.yml", "cls": ScheduleConfig, "kwargs": {}},
     "soundscapepipe": {"basename": "soundscapepipe.yml", "cls": SoundscapepipeConfig, "kwargs": {}},
-    "authorized_keys": {"basename": "authorized_keys", "cls": AuthorizedKeysConfig, "kwargs": {"is_config_upload": True}},
+    "authorized_keys": {
+        "basename": "authorized_keys",
+        "cls": AuthorizedKeysConfig,
+        "kwargs": {"is_config_upload": True},
+    },
     "cmdline": {"basename": "cmdline.txt", "cls": CmdlineConfig, "kwargs": {}},
     "wireguard": {"basename": "wireguard.conf", "cls": WireguardConfig, "kwargs": {}},
     "mosquitto_cert": {"basename": "server.crt", "cls": MosquittoCertConfig, "kwargs": {}},
@@ -61,13 +65,11 @@ NON_DELETABLE_CONFIG_TYPES = frozenset({"hotspot"})
 # Zip/upload file basename -> config type name (unchanged mapping, moved here
 # from app.routers.configs.RECOGNIZED_CONFIG_FILES so both the router and the
 # privileged ops use the identical table).
-RECOGNIZED_CONFIG_FILES: Dict[str, str] = {
-    info["basename"]: config_type for config_type, info in CONFIG_TYPES.items()
-}
+RECOGNIZED_CONFIG_FILES: dict[str, str] = {info["basename"]: config_type for config_type, info in CONFIG_TYPES.items()}
 
 # config type -> systemd unit to restart after a successful save. Also serves
 # as the source list for which units a config save is allowed to restart.
-SERVICE_MAPPING: Dict[str, str] = {
+SERVICE_MAPPING: dict[str, str] = {
     "radiotracking": "radiotracking",
     "schedule": "tsschedule",
     "soundscapepipe": "soundscapepipe",

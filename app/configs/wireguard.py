@@ -3,7 +3,7 @@
 import re
 from configparser import ConfigParser
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from app.configs import BaseConfig
 
@@ -12,9 +12,7 @@ from app.configs import BaseConfig
 # tsconfig must never be allowed to set them - that would be arbitrary root code
 # execution via a "VPN config" upload. Matched case-insensitively at the start of a
 # line (optionally indented), same as wg-quick's own key parsing.
-_HOOK_KEY_PATTERN = re.compile(
-    r"^\s*(PreUp|PostUp|PreDown|PostDown|SaveConfig)\s*=", re.IGNORECASE | re.MULTILINE
-)
+_HOOK_KEY_PATTERN = re.compile(r"^\s*(PreUp|PostUp|PreDown|PostDown|SaveConfig)\s*=", re.IGNORECASE | re.MULTILINE)
 
 
 class WireguardConfig(BaseConfig):
@@ -34,7 +32,7 @@ class WireguardConfig(BaseConfig):
         """Return the configuration file path."""
         return Path("/boot/firmware/wireguard.conf")
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the wireguard configuration from disk.
 
         Returns:
@@ -45,12 +43,12 @@ class WireguardConfig(BaseConfig):
                 with open(self.config_file, "r") as f:
                     content = f.read()
                 return {"content": content}
-            except (IOError, OSError):
+            except OSError:
                 pass
 
         return {"content": ""}
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the wireguard configuration to disk.
 
         Args:
@@ -62,7 +60,7 @@ class WireguardConfig(BaseConfig):
         with open(self.config_file, "w") as f:
             f.write(content)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the wireguard configuration.
 
         Args:
@@ -115,6 +113,6 @@ class WireguardConfig(BaseConfig):
                 errors.append("Configuration must contain [Peer] section")
 
         except Exception as e:
-            errors.append(f"Invalid INI file format: {str(e)}")
+            errors.append(f"Invalid INI file format: {e!s}")
 
         return errors

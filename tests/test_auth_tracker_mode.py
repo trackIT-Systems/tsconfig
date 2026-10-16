@@ -10,11 +10,11 @@ from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from app.auth import middleware as auth_middleware
 from app.auth import session
 from app.auth.middleware import AuthenticationMiddleware
 from app.auth.session import SECURE_SESSION_COOKIE, SESSION_COOKIE, create_session_token, is_authorized
 from app.config_loader import config_loader
-from app.auth import middleware as auth_middleware
 from app.routers import auth as auth_router
 
 REMOTE = {"X-Forwarded-For": "203.0.113.7", "X-Forwarded-Proto": "http", "X-Forwarded-Host": "dev"}
@@ -159,7 +159,9 @@ class TestWebDavBasicAuth:
         assert r.status_code == 401
         assert r.headers["www-authenticate"].startswith("Basic")
 
-    @pytest.mark.parametrize("header", ["Basic", "Basic !!!notbase64", "Bearer abc", "Basic " + base64.b64encode(b"nocolon").decode()])
+    @pytest.mark.parametrize(
+        "header", ["Basic", "Basic !!!notbase64", "Bearer abc", "Basic " + base64.b64encode(b"nocolon").decode()]
+    )
     def test_malformed_authorization_is_rejected_without_asking_pam(self, remote, header):
         with patch.object(auth_middleware, "authenticate_operator", AsyncMock(return_value=True)) as pam:
             r = self.check(remote, {"Authorization": header})
@@ -193,7 +195,12 @@ class TestWebDavBasicAuth:
 
     def test_basic_is_not_accepted_for_other_urls(self, remote):
         with patch.object(auth_middleware, "authenticate_operator", AsyncMock(return_value=True)) as pam:
-            assert remote.get("/auth/check", headers={**basic("pi", "natur"), "X-Forwarded-Uri": "/data/files/x"}).status_code == 401
+            assert (
+                remote.get(
+                    "/auth/check", headers={**basic("pi", "natur"), "X-Forwarded-Uri": "/data/files/x"}
+                ).status_code
+                == 401
+            )
             assert remote.get("/auth/check", headers=basic("pi", "natur")).status_code == 401
             assert remote.get("/api/secret", headers={**basic("pi", "natur"), **DAV}).status_code == 401
         pam.assert_not_called()
@@ -301,7 +308,7 @@ class TestLoginPage:
             assert label in html
         assert html.count('class="nav-link disabled"') == 5
         assert 'href="#' not in html  # nothing in the navbar is a live link
-        assert "id=\"globalExpertModeToggle\" disabled" in html
+        assert 'id="globalExpertModeToggle" disabled' in html
 
     def test_uses_the_shared_footer(self, remote):
         html = self.page(remote).text
@@ -423,9 +430,8 @@ class TestHttpsSession:
 class TestWebsocket:
     def test_rejected_without_session(self):
         client = TestClient(make_app(), headers=REMOTE)
-        with pytest.raises(WebSocketDisconnect):
-            with client.websocket_connect("/ws/probe"):
-                pass
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/probe"):
+            pass
 
     def test_allowed_with_session(self):
         client = TestClient(make_app(), headers=REMOTE, cookies=session_cookie())

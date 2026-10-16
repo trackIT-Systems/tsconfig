@@ -5,8 +5,6 @@ contract, and error handling (never leaking a traceback to the caller).
 import io
 import json
 
-import pytest
-
 from app.configs.wireguard import WireguardConfig
 from app.privileged import cli, ops
 

@@ -32,12 +32,11 @@ import io
 import json
 import sys
 import zipfile
-from typing import Optional
 
 try:
+    import cbor2
     from bleak import BleakClient, BleakScanner
     from bleak.backends.device import BLEDevice
-    import cbor2
 except ImportError as e:
     # Only fail if not just showing help
     if "--help" not in sys.argv and "-h" not in sys.argv:
@@ -123,7 +122,7 @@ def format_json(data: str) -> str:
         return data
 
 
-async def write_large_data(client: BleakClient, char, data: str, mtu: int = None):
+async def write_large_data(client: BleakClient, char, data: str, mtu: int | None = None):
     """Write large data to a characteristic using MTU-aware chunking.
 
     Args:
@@ -138,10 +137,10 @@ async def write_large_data(client: BleakClient, char, data: str, mtu: int = None
     # Get MTU from client if not provided
     if mtu is None:
         mtu = client.mtu_size
-    
+
     # Calculate chunk size (MTU - 3 bytes for ATT header)
     chunk_size = max(mtu - 3, 20)
-    
+
     data_bytes = data.encode("utf-8")
     total_size = len(data_bytes)
 
@@ -163,12 +162,12 @@ async def write_large_data(client: BleakClient, char, data: str, mtu: int = None
         offset = 0
         chunk_num = 0
         while offset < total_size:
-            chunk = data_bytes[offset:offset + chunk_size]
+            chunk = data_bytes[offset : offset + chunk_size]
             chunk_num += 1
-            
+
             print_info(f"  Writing chunk {chunk_num}/{num_chunks} ({len(chunk)} bytes)...")
             await client.write_gatt_char(char, chunk)
-            
+
             offset += chunk_size
 
         print_success(f"All {num_chunks} chunks written successfully")
@@ -190,7 +189,7 @@ class ChunkedReader:
 
     def set_metadata(self, content_length: int, chunk_count: int):
         """Set expected metadata from CBOR read response.
-        
+
         Args:
             content_length: Total bytes expected
             chunk_count: Number of notification chunks expected
@@ -205,11 +204,11 @@ class ChunkedReader:
         try:
             # Accumulate raw bytes
             self.buffer.extend(data)
-            
+
             # Check if we've received all expected data
             if self.expected_length > 0 and len(self.buffer) >= self.expected_length:
                 # Decode UTF-8 JSON (read responses with metadata)
-                self.complete_data = self.buffer[:self.expected_length].decode("utf-8")
+                self.complete_data = self.buffer[: self.expected_length].decode("utf-8")
             elif self.expected_length == 0:
                 # Write responses without metadata - try to parse as complete JSON
                 try:
@@ -222,7 +221,6 @@ class ChunkedReader:
                     pass
         except Exception as e:
             print_error(f"Error handling notification: {e}")
-
 
 
 def get_device_uuids(device) -> list:
@@ -266,7 +264,7 @@ def is_tsconfig_device(device) -> bool:
     return False
 
 
-def get_serial_from_device(device) -> Optional[str]:
+def get_serial_from_device(device) -> str | None:
     """Extract serial number from device service data.
 
     Args:
@@ -283,9 +281,7 @@ def get_serial_from_device(device) -> Optional[str]:
             for key in service_data:
                 if "7473" in str(key).lower():
                     data = service_data[key]
-                    if isinstance(data, bytes):
-                        return data.hex()
-                    elif hasattr(data, "hex"):
+                    if isinstance(data, bytes) or hasattr(data, "hex"):
                         return data.hex()
     except (AttributeError, KeyError, TypeError):
         pass
@@ -308,7 +304,7 @@ async def _scan_tsconfig_single(timeout: float, attempt: int, retries: int) -> l
     return tsconfig_devices
 
 
-async def _find_device_single(name: str, timeout: float, attempt: int, retries: int) -> Optional[BLEDevice]:
+async def _find_device_single(name: str, timeout: float, attempt: int, retries: int) -> BLEDevice | None:
     """Single attempt to find a device by name."""
     print_info(f"Searching for '{name}' (attempt {attempt}/{retries}, {timeout}s)")
     device = await BleakScanner.find_device_by_name(name, timeout=timeout)
@@ -326,7 +322,7 @@ async def scan_for_tsconfig_devices(timeout: float = 10.0, retries: int = 3) -> 
     return await retry_scan(_scan_tsconfig_single, timeout, retries=retries, delay=1.0)
 
 
-async def find_device_by_name(name: str, timeout: float = 10.0, retries: int = 3) -> Optional[BLEDevice]:
+async def find_device_by_name(name: str, timeout: float = 10.0, retries: int = 3) -> BLEDevice | None:
     """Find a BLE device by name with retry logic."""
     return await retry_scan(_find_device_single, name, timeout, retries=retries, delay=1.0, return_single=True)
 
@@ -348,7 +344,7 @@ def find_characteristic(client: BleakClient, uuid: str):
     return None
 
 
-async def read_with_notifications(client: BleakClient, uuid: str, name: str, timeout: float = 5.0) -> Optional[str]:
+async def read_with_notifications(client: BleakClient, uuid: str, name: str, timeout: float = 5.0) -> str | None:
     """Read a characteristic using notifications with automatic cleanup.
 
     Args:
@@ -374,7 +370,7 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
         await asyncio.sleep(0.5)
 
         data = await client.read_gatt_char(char)
-        
+
         # Parse CBOR metadata
         try:
             metadata = cbor2.loads(bytes(data))
@@ -384,7 +380,7 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
             content_type = metadata.get(3, 0)  # 0=json, 1=text, 2=binary
             status = metadata.get(4, 0)  # 0=ready, 1=error
             error_message = metadata.get(5, None)
-            
+
             # Handle error response
             if status == 1:  # STATUS_ERROR
                 print_error(f"  {error_message or 'Unknown error'}")
@@ -428,7 +424,7 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
 
 async def write_with_notifications(
     client: BleakClient, uuid: str, name: str, data: dict, timeout: float = 2.0
-) -> Optional[str]:
+) -> str | None:
     """Write data to a characteristic and wait for response via notifications.
 
     Args:
@@ -463,7 +459,7 @@ async def write_with_notifications(
 
         print_success(f"{name} sent successfully")
         print_info("Waiting for response...")
-        
+
         # Wait for response notifications
         for _ in range(int(timeout * 10)):
             await asyncio.sleep(0.1)
@@ -513,7 +509,7 @@ async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, ret
     return None if return_single else []
 
 
-async def send_login(client: BleakClient, request: dict, method: str) -> Optional[dict]:
+async def send_login(client: BleakClient, request: dict, method: str) -> dict | None:
     """Send one login request; return the decoded response, or None if there was none."""
     response = await write_with_notifications(client, AUTHENTICATE_UUID, "Authenticate", request, timeout=5.0)
     if response is None:
@@ -531,7 +527,7 @@ async def send_login(client: BleakClient, request: dict, method: str) -> Optiona
     return result
 
 
-def read_userconf_hash(path: str) -> Optional[str]:
+def read_userconf_hash(path: str) -> str | None:
     """Return pi's hash from a userconf.txt (`pi:$6$...`), or None."""
     try:
         with open(path, encoding="utf-8") as f:
@@ -545,7 +541,7 @@ def read_userconf_hash(path: str) -> Optional[str]:
     return password_hash
 
 
-async def login(client: BleakClient, password: str, password_hash: Optional[str] = None) -> bool:
+async def login(client: BleakClient, password: str, password_hash: str | None = None) -> bool:
     """Log in as the operator on this connection.
 
     With `password_hash` (pi's hash from the bundle applied to the device) that is
@@ -664,7 +660,7 @@ async def test_write_operations(client: BleakClient, enabled: bool = False):
         print(format_json(response))
 
 
-async def upload_file(filepath: str) -> Optional[bytes]:
+async def upload_file(filepath: str) -> bytes | None:
     """Load and encode a file for upload.
 
     Args:
@@ -720,7 +716,7 @@ async def test_upload_service(client: BleakClient, enabled: bool = False, destru
         print(format_json(response))
 
 
-async def create_zip_upload(file_paths: list) -> Optional[str]:
+async def create_zip_upload(file_paths: list) -> str | None:
     """Create a zip file from multiple files and return base64-encoded content.
 
     Args:

@@ -6,27 +6,27 @@ for each tsconfig API endpoint exposed via BLE GATT.
 
 import asyncio
 import contextvars
-import json
 import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 import dbus
 import dbus.service
 
-from app.bluetooth.api_client import TsConfigApiClient
 from app.bluetooth import executor as ble_executor
+from app.bluetooth.api_client import TsConfigApiClient
 from app.bluetooth.auth import BleAuthenticator, BleRequestError, secure_flags
 from app.bluetooth.protocol import (
+    ATT_HEADER_SIZE,
+    ATT_MAX_VALUE_LEN,
+    CONTENT_TYPE_JSON,
+    CONTENT_TYPE_TEXT,
+    DEFAULT_MTU,
+    STATUS_ERROR,
+    STATUS_READY,
     BinaryChunker,
     formatter,
     parser,
-    CONTENT_TYPE_JSON,
-    CONTENT_TYPE_TEXT,
-    STATUS_READY,
-    STATUS_ERROR,
-    DEFAULT_MTU,
-    ATT_HEADER_SIZE,
-    ATT_MAX_VALUE_LEN,
 )
 from app.identity import OPERATOR_USER, STAFF_USER
 from app.logging_config import get_logger
@@ -48,7 +48,7 @@ READ_TIMEOUT_S = 4.0
 
 # The connection (BlueZ device path) whose request a handler is serving. Handlers run on the
 # executor, possibly several at once for different connections, so this cannot be an attribute.
-_current_device: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("ble_current_device", default=None)
+_current_device: contextvars.ContextVar[str | None] = contextvars.ContextVar("ble_current_device", default=None)
 
 
 class Characteristic(dbus.service.Object):
@@ -59,11 +59,11 @@ class Characteristic(dbus.service.Object):
         bus: dbus.Bus,
         index: int,
         uuid: str,
-        flags: List[str],
+        flags: list[str],
         service,
         api_client: TsConfigApiClient,
-        authenticator: Optional[BleAuthenticator] = None,
-        encrypted: Optional[bool] = None,
+        authenticator: BleAuthenticator | None = None,
+        encrypted: bool | None = None,
     ):
         """Initialize a GATT Characteristic.
 
@@ -90,14 +90,14 @@ class Characteristic(dbus.service.Object):
         self.authenticator = authenticator
         self.notifying = False
         # ATT MTU per connection, as BlueZ reports it with each read/write
-        self._mtus: Dict[str, int] = {}
+        self._mtus: dict[str, int] = {}
         # Counts a connection's disconnects: a response is only delivered if its request was
         # made in the current epoch, so nothing of a closed connection reaches a later one
-        self._epoch: Dict[str, int] = {}
+        self._epoch: dict[str, int] = {}
 
         dbus.service.Object.__init__(self, bus, self.path)
 
-    def get_properties(self) -> Dict[str, Any]:
+    def get_properties(self) -> dict[str, Any]:
         """Get characteristic properties for D-Bus."""
         return {
             GATT_CHRC_IFACE: {
@@ -111,7 +111,7 @@ class Characteristic(dbus.service.Object):
         """Get the D-Bus object path."""
         return dbus.ObjectPath(self.path)
 
-    def get_mtu(self, options: Dict[str, Any]) -> int:
+    def get_mtu(self, options: dict[str, Any]) -> int:
         """The negotiated ATT MTU of the connection a call came from.
 
         BlueZ passes it in the call's options (`mtu`); without it the BLE minimum is assumed.
@@ -127,7 +127,7 @@ class Characteristic(dbus.service.Object):
         except (TypeError, ValueError):
             return DEFAULT_MTU
 
-    def note_connection(self, options: Dict[str, Any]) -> Optional[str]:
+    def note_connection(self, options: dict[str, Any]) -> str | None:
         """Remember the MTU of the calling connection; returns its device path (None if unknown)."""
         device = options.get("device")
         device = str(device) if device else None
@@ -138,7 +138,7 @@ class Characteristic(dbus.service.Object):
                 logger.debug(f"MTU of {device} is {mtu} for {self.uuid}")
         return device
 
-    def chunker_for(self, device: Optional[str]) -> BinaryChunker:
+    def chunker_for(self, device: str | None) -> BinaryChunker:
         """Chunker sized for a connection's MTU (the BLE minimum if it is not known).
 
         Chunks never exceed `ATT_MAX_VALUE_LEN`: BlueZ reports an ATT MTU of 517 for a
@@ -190,7 +190,6 @@ class Characteristic(dbus.service.Object):
     @dbus.service.signal(DBUS_PROP_IFACE, signature="sa{sv}as")
     def PropertiesChanged(self, interface, changed_properties, invalidated_properties):
         """Signal that properties have changed (used for notifications)."""
-        pass
 
     def send_notification(self, value: bytes):
         """Send a notification to connected clients.
@@ -205,7 +204,7 @@ class Characteristic(dbus.service.Object):
         # This updates the "Value" property of the characteristic
         self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": dbus.Array(value, signature="y")}, [])
 
-    def send_chunked_response(self, data: str, device: Optional[str] = None):
+    def send_chunked_response(self, data: str, device: str | None = None):
         """Send a chunked response via notifications.
 
         Args:
@@ -225,9 +224,9 @@ class Characteristic(dbus.service.Object):
         # Send chunks sequentially (no delays - rely on BlueZ queuing)
         for i, chunk in enumerate(chunks):
             self.send_notification(chunk)
-            logger.debug(f"Sent chunk {i+1}/{len(chunks)} ({len(chunk)} bytes)")
+            logger.debug(f"Sent chunk {i + 1}/{len(chunks)} ({len(chunk)} bytes)")
 
-    def is_authorized(self, options: Dict[str, Any]) -> bool:
+    def is_authorized(self, options: dict[str, Any]) -> bool:
         """Whether the requesting connection may use this characteristic.
 
         Open characteristics (no authenticator) always allow; gated ones need
@@ -249,7 +248,7 @@ class ReadOnlyCharacteristic(Characteristic):
         service,
         api_client,
         read_handler: Callable,
-        authenticator: Optional[BleAuthenticator] = None,
+        authenticator: BleAuthenticator | None = None,
     ):
         """Initialize a read-only characteristic.
 
@@ -323,7 +322,9 @@ class ReadOnlyCharacteristic(Characteristic):
 
                 # The data follows as notifications AFTER this reply, so that the notification
                 # does not overwrite the read response value
-                logger.debug(f"Preparing {len(response_bytes)} bytes in {chunk_count} notification chunks for {self.uuid}")
+                logger.debug(
+                    f"Preparing {len(response_bytes)} bytes in {chunk_count} notification chunks for {self.uuid}"
+                )
                 reply_cb(
                     dbus.Array(
                         formatter.metadata_cbor(
@@ -354,8 +355,8 @@ class WriteOnlyCharacteristic(Characteristic):
         service,
         api_client,
         write_handler: Callable,
-        authenticator: Optional[BleAuthenticator] = None,
-        encrypted: Optional[bool] = None,
+        authenticator: BleAuthenticator | None = None,
+        encrypted: bool | None = None,
     ):
         """Initialize a write-only characteristic.
 
@@ -369,14 +370,12 @@ class WriteOnlyCharacteristic(Characteristic):
             authenticator: Gate writes behind the operator login (None = open)
             encrypted: Require an encrypted link (defaults to True when gated)
         """
-        super().__init__(
-            bus, index, uuid, ["write", "notify"], service, api_client, authenticator, encrypted
-        )
+        super().__init__(bus, index, uuid, ["write", "notify"], service, api_client, authenticator, encrypted)
         self.write_handler = write_handler
         # Partially received requests, per connection (BlueZ device path) so that one
         # client's aborted upload can never corrupt another client's request
-        self.write_buffers: Dict[str, bytearray] = {}
-        self._last_write: Dict[str, float] = {}
+        self.write_buffers: dict[str, bytearray] = {}
+        self._last_write: dict[str, float] = {}
 
     def on_disconnect(self, device: str):
         """Discard the half-received request of a connection that ended."""
@@ -398,18 +397,18 @@ class WriteOnlyCharacteristic(Characteristic):
         return buffer
 
     @property
-    def current_device(self) -> Optional[str]:
+    def current_device(self) -> str | None:
         """The connection whose request the running handler is serving (None outside a handler)."""
         return _current_device.get()
 
-    async def _run_handler(self, device: Optional[str], request_data: Dict[str, Any]):
+    async def _run_handler(self, device: str | None, request_data: dict[str, Any]):
         token = _current_device.set(device)
         try:
             return await self.write_handler(request_data)
         finally:
             _current_device.reset(token)
 
-    def _dispatch(self, request_data: Dict[str, Any], device: Optional[str]):
+    def _dispatch(self, request_data: dict[str, Any], device: str | None):
         """Run a complete request on the executor; the response follows as notifications."""
         epoch = self._epoch.get(device or "", 0)
 
@@ -523,7 +522,7 @@ class AvailableServicesCharacteristic(ReadOnlyCharacteristic):
 class SystemdServicesListCharacteristic(ReadOnlyCharacteristic):
     """Systemd Services List characteristic."""
 
-    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator | None = None):
         super().__init__(
             bus,
             index,
@@ -538,8 +537,8 @@ class SystemdServicesListCharacteristic(ReadOnlyCharacteristic):
 class SystemdServiceActionCharacteristic(WriteOnlyCharacteristic):
     """Systemd Service Action characteristic."""
 
-    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
-        async def action_handler(data: Dict[str, Any]):
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator | None = None):
+        async def action_handler(data: dict[str, Any]):
             if not parser.validate_service_action(data):
                 raise ValueError("Invalid service action request. Required: service, action")
             return await api_client.systemd_service_action(data["service"], data["action"])
@@ -552,8 +551,8 @@ class SystemdServiceActionCharacteristic(WriteOnlyCharacteristic):
 class SystemdRebootCharacteristic(WriteOnlyCharacteristic):
     """System Reboot characteristic."""
 
-    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
-        async def reboot_handler(data: Dict[str, Any]):
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator | None = None):
+        async def reboot_handler(data: dict[str, Any]):
             return await api_client.systemd_reboot()
 
         super().__init__(
@@ -564,8 +563,8 @@ class SystemdRebootCharacteristic(WriteOnlyCharacteristic):
 class SystemdServiceLogsCharacteristic(WriteOnlyCharacteristic):
     """Systemd Service Logs characteristic."""
 
-    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
-        async def logs_handler(data: Dict[str, Any]):
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator | None = None):
+        async def logs_handler(data: dict[str, Any]):
             if not parser.validate_log_request(data):
                 raise ValueError("Invalid log request. Required: service")
             lines = data.get("lines", 100)
@@ -583,8 +582,8 @@ class SystemdServiceLogsCharacteristic(WriteOnlyCharacteristic):
 class UploadConfigCharacteristic(WriteOnlyCharacteristic):
     """Config Upload characteristic (POST /api/configs/update)."""
 
-    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
-        async def upload_handler(data: Dict[str, Any]):
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator | None = None):
+        async def upload_handler(data: dict[str, Any]):
             if not parser.validate_upload_request(data):
                 raise ValueError("Invalid upload request. Required: filename, content")
             mtime, force, encoding = data.get("mtime"), data.get("force", False), data.get("encoding")
@@ -611,8 +610,8 @@ class UploadConfigCharacteristic(WriteOnlyCharacteristic):
 class UploadZipCharacteristic(WriteOnlyCharacteristic):
     """Zip Upload characteristic (POST /api/configs.zip)."""
 
-    def __init__(self, bus, index, service, api_client, authenticator: Optional[BleAuthenticator] = None):
-        async def upload_zip_handler(data: Dict[str, Any]):
+    def __init__(self, bus, index, service, api_client, authenticator: BleAuthenticator | None = None):
+        async def upload_zip_handler(data: dict[str, Any]):
             if not parser.validate_upload_request(data):
                 raise ValueError("Invalid upload request. Required: filename, content")
             return await api_client.upload_zip(
@@ -648,7 +647,7 @@ class AuthenticateCharacteristic(WriteOnlyCharacteristic):
                 raise BleRequestError(result.message, result.code, **extra)
             return {"authenticated": True}
 
-        async def login_handler(data: Dict[str, Any]):
+        async def login_handler(data: dict[str, Any]):
             if "hash" in data:
                 token, username = data["hash"], data.get("username", OPERATOR_USER)
                 if "password" in data:

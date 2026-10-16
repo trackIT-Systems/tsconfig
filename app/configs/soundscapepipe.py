@@ -1,7 +1,7 @@
 """Soundscapepipe configuration management."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 from pydantic import BaseModel
@@ -12,12 +12,12 @@ from app.configs import BaseConfig
 class DetectorEntry(BaseModel):
     """Detector configuration entry."""
 
-    detection_threshold: Optional[float] = None
-    class_threshold: Optional[float] = None
-    vocalization_threshold: Optional[float] = None
-    model_path: Optional[str] = None
-    tasks: Optional[List["ScheduleTaskEntry"]] = None
-    channel_strategy: Optional[str] = "mix"
+    detection_threshold: float | None = None
+    class_threshold: float | None = None
+    vocalization_threshold: float | None = None
+    model_path: str | None = None
+    tasks: list["ScheduleTaskEntry"] | None = None
+    channel_strategy: str | None = "mix"
 
 
 class ScheduleTaskEntry(BaseModel):
@@ -32,7 +32,7 @@ class LureTaskEntry(BaseModel):
     """Lure task configuration entry."""
 
     species: str
-    paths: List[str]
+    paths: list[str]
     start: str
     stop: str
     record: bool = False
@@ -41,9 +41,9 @@ class LureTaskEntry(BaseModel):
 class GroupEntry(BaseModel):
     """Group configuration entry."""
 
-    ratio: Optional[float] = None
-    maximize_confidence: Optional[bool] = None
-    species: List[str]
+    ratio: float | None = None
+    maximize_confidence: bool | None = None
+    species: list[str]
 
 
 class SoundscapepipeConfig(BaseConfig):
@@ -65,7 +65,7 @@ class SoundscapepipeConfig(BaseConfig):
     def config_file(self) -> Path:
         return self.config_dir / "soundscapepipe.yml"
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the soundscapepipe configuration from disk.
 
         Raises:
@@ -88,12 +88,12 @@ class SoundscapepipeConfig(BaseConfig):
 
         return data
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the soundscapepipe configuration to disk."""
         with open(self.config_file, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the soundscapepipe configuration."""
         errors = []
 

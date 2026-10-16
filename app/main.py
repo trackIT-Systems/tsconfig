@@ -1,6 +1,5 @@
 """tsOS Configuration Manager."""
 
-import asyncio
 import datetime
 import json
 import os
@@ -21,10 +20,10 @@ from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.geolocation import GeolocationConfig
+from app.configs.mqttutil import MqttUtilConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
-from app.configs.mqttutil import MqttUtilConfig
 from app.configs.tsupdate import TsupdateConfig
 from app.logging_config import get_logger, setup_logging
 from app.routers import (
@@ -32,15 +31,15 @@ from app.routers import (
     authorized_keys,
     configs,
     deployment,
+    mqttutil,
     network,
     radiotracking,
     schedule,
     shell,
     soundscapepipe,
-    systemd,
     system_reset,
+    systemd,
     tsupdate,
-    mqttutil,
     userconf,
 )
 from app.utils.subprocess_async import run_subprocess_async
@@ -359,7 +358,7 @@ async def get_geolocation():
         geolocation = geolocation_config.load()
         return geolocation
     except (FileNotFoundError, ValueError) as e:
-        logger.debug(f"Geolocation not available: {str(e)}")
+        logger.debug(f"Geolocation not available: {e!s}")
         return None
 
 
@@ -498,7 +497,7 @@ async def get_system_status():
 
         return JSONResponse(content=system_info)
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Failed to get system status: {str(e)}"})
+        return JSONResponse(status_code=500, content={"error": f"Failed to get system status: {e!s}"})
 
 
 def _get_freedesktop_os_release():
@@ -534,11 +533,11 @@ async def _get_tsupdate_status():
         }
 
         return tsupdate_status
-    except (FileNotFoundError, subprocess.TimeoutExpired, asyncio.TimeoutError, json.JSONDecodeError) as e:
-        logger.debug(f"Failed to get tsupdate status: {str(e)}")
+    except (TimeoutError, FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+        logger.debug(f"Failed to get tsupdate status: {e!s}")
         return None
     except Exception as e:
-        logger.debug(f"Unexpected error getting tsupdate status: {str(e)}")
+        logger.debug(f"Unexpected error getting tsupdate status: {e!s}")
         return None
 
 
@@ -599,7 +598,7 @@ def _get_consolidated_disk_usage():
 
             # Collect all mountpoints and fstypes for this device
             mountpoints = [p.mountpoint for p in partitions]
-            fstypes = list(set(p.fstype for p in partitions))  # Unique fstypes
+            fstypes = list({p.fstype for p in partitions})  # Unique fstypes
             primary_fstype = fstypes[0] if fstypes else primary_partition.fstype
 
             disk_info = {
@@ -638,7 +637,7 @@ In server mode, you can optionally pass a config_group parameter to check servic
     """,
     response_description="List of available configuration services",
 )
-async def get_available_services(config_group: str = None):
+async def get_available_services(config_group: str | None = None):
     """Get list of services that have configuration files available."""
     available_services = []
 
@@ -737,7 +736,7 @@ async def get_timedatectl_status():
                 ["timedatectl", "--version"], capture_output=True, text=True, timeout=5
             )
             timedatectl_status["available"] = test_result.returncode == 0
-        except (subprocess.TimeoutExpired, asyncio.TimeoutError, FileNotFoundError):
+        except (TimeoutError, subprocess.TimeoutExpired, FileNotFoundError):
             timedatectl_status["available"] = False
             timedatectl_status["error"] = "timedatectl command not found"
             return JSONResponse(content=timedatectl_status)
@@ -756,17 +755,17 @@ async def get_timedatectl_status():
                 timedatectl_status["status"] = _parse_timedatectl_status(status_result.stdout)
             else:
                 timedatectl_status["error"] = f"timedatectl status failed: {status_result.stderr.strip()}"
-        except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+        except (TimeoutError, subprocess.TimeoutExpired):
             timedatectl_status["error"] = "timedatectl status command timed out"
         except Exception as e:
-            timedatectl_status["error"] = f"Error executing timedatectl status: {str(e)}"
+            timedatectl_status["error"] = f"Error executing timedatectl status: {e!s}"
 
         return JSONResponse(content=timedatectl_status)
 
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to get timedatectl status: {str(e)}"},
+            content={"error": f"Failed to get timedatectl status: {e!s}"},
         )
 
 
@@ -836,7 +835,7 @@ async def get_network_connectivity():
         try:
             test_result = await run_subprocess_async(["nmcli", "--version"], capture_output=True, text=True, timeout=5)
             network_connectivity_status["available"] = test_result.returncode == 0
-        except (subprocess.TimeoutExpired, asyncio.TimeoutError, FileNotFoundError):
+        except (TimeoutError, subprocess.TimeoutExpired, FileNotFoundError):
             network_connectivity_status["available"] = False
             network_connectivity_status["error"] = "nmcli command not found"
             return JSONResponse(content=network_connectivity_status)
@@ -864,21 +863,21 @@ async def get_network_connectivity():
                 network_connectivity_status["error"] = (
                     f"nmcli networking connectivity failed: {connectivity_result.stderr.strip()}"
                 )
-        except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+        except (TimeoutError, subprocess.TimeoutExpired):
             network_connectivity_status["error"] = "nmcli networking connectivity command timed out"
         except Exception as e:
-            network_connectivity_status["error"] = f"Error executing nmcli networking connectivity: {str(e)}"
+            network_connectivity_status["error"] = f"Error executing nmcli networking connectivity: {e!s}"
 
         return JSONResponse(content=network_connectivity_status)
 
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to get network connectivity status: {str(e)}"},
+            content={"error": f"Failed to get network connectivity status: {e!s}"},
         )
 
 
-def _get_available_services_for_template(config_group: str = None) -> list:
+def _get_available_services_for_template(config_group: str | None = None) -> list:
     """Helper function to get available services for template rendering.
 
     Returns a list of service names that have configuration files available.
@@ -916,7 +915,7 @@ def _get_available_services_for_template(config_group: str = None) -> list:
     include_in_schema=False,
     summary="Web Interface Home Page",
 )
-async def home(request: Request, config_group: str = None):
+async def home(request: Request, config_group: str | None = None):
     """Render the main configuration page with status integration.
 
     In server mode, accepts optional config_group query parameter to display

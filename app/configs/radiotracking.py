@@ -2,7 +2,7 @@
 
 from configparser import ConfigParser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field, validator
 
@@ -12,11 +12,11 @@ from app.configs import BaseConfig
 class RTLSDREntry(BaseModel):
     """RTL-SDR device configuration."""
 
-    device: List[str] = Field(default_factory=lambda: ["0"])
-    calibration: List[float] = Field(default_factory=lambda: [0.0])
+    device: list[str] = Field(default_factory=lambda: ["0"])
+    calibration: list[float] = Field(default_factory=lambda: [0.0])
     center_freq: int = Field(..., ge=0)
     sample_rate: int = Field(..., ge=0)
-    sdr_callback_length: Optional[int] = None
+    sdr_callback_length: int | None = None
     gain: float = Field(..., ge=0)
     lna_gain: int = Field(..., ge=0, le=15)
     mixer_gain: int = Field(..., ge=0, le=15)
@@ -79,8 +79,8 @@ class OptionalArgumentsEntry(BaseModel):
     verbose: int = Field(..., ge=0)
     calibrate: bool = False
     config: str
-    station: Optional[str] = None
-    schedule: List[str] = Field(default_factory=list)
+    station: str | None = None
+    schedule: list[str] = Field(default_factory=list)
 
 
 class RadioTrackingConfig(BaseConfig):
@@ -102,7 +102,7 @@ class RadioTrackingConfig(BaseConfig):
     def config_file(self) -> Path:
         return self.config_dir / "radiotracking.ini"
 
-    def _convert_value(self, value: str) -> Union[str, int, float, bool, List[str], List[float], None]:
+    def _convert_value(self, value: str) -> str | int | float | bool | list[str] | list[float] | None:
         """Convert string value from INI to appropriate Python type."""
         # Handle None values
         if value.lower() == "none":
@@ -157,7 +157,7 @@ class RadioTrackingConfig(BaseConfig):
             return f"'{value}'"
         return str(value)
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the radio tracking configuration from disk.
 
         Raises:
@@ -179,7 +179,7 @@ class RadioTrackingConfig(BaseConfig):
                 f"Radio tracking configuration not found at {self.config_file}. Please create a configuration first."
             )
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the radio tracking configuration to disk."""
         parser = ConfigParser()
 
@@ -191,7 +191,7 @@ class RadioTrackingConfig(BaseConfig):
         with open(self.config_file, "w") as f:
             parser.write(f)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the radio tracking configuration."""
         errors = []
 
@@ -206,36 +206,36 @@ class RadioTrackingConfig(BaseConfig):
             if "optional arguments" in config:
                 OptionalArgumentsEntry(**config["optional arguments"])
         except Exception as e:
-            errors.append(f"Invalid optional arguments: {str(e)}")
+            errors.append(f"Invalid optional arguments: {e!s}")
 
         try:
             if "rtl-sdr" in config:
                 RTLSDREntry(**config["rtl-sdr"])
         except Exception as e:
-            errors.append(f"Invalid RTL-SDR configuration: {str(e)}")
+            errors.append(f"Invalid RTL-SDR configuration: {e!s}")
 
         try:
             if "analysis" in config:
                 AnalysisEntry(**config["analysis"])
         except Exception as e:
-            errors.append(f"Invalid analysis configuration: {str(e)}")
+            errors.append(f"Invalid analysis configuration: {e!s}")
 
         try:
             if "matching" in config:
                 MatchingEntry(**config["matching"])
         except Exception as e:
-            errors.append(f"Invalid matching configuration: {str(e)}")
+            errors.append(f"Invalid matching configuration: {e!s}")
 
         try:
             if "publish" in config:
                 PublishEntry(**config["publish"])
         except Exception as e:
-            errors.append(f"Invalid publish configuration: {str(e)}")
+            errors.append(f"Invalid publish configuration: {e!s}")
 
         try:
             if "dashboard" in config:
                 DashboardEntry(**config["dashboard"])
         except Exception as e:
-            errors.append(f"Invalid dashboard configuration: {str(e)}")
+            errors.append(f"Invalid dashboard configuration: {e!s}")
 
         return errors

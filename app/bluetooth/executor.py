@@ -12,14 +12,15 @@ one after the other, in the order they were submitted.
 
 import asyncio
 import threading
-from typing import Any, Awaitable, Callable, Dict, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 # on_done(result, error): exactly one of them is meaningful (error is None on success)
-DoneCallback = Callable[[Any, Optional[BaseException]], None]
+DoneCallback = Callable[[Any, BaseException | None], None]
 
 
 class SyncExecutor:
@@ -29,8 +30,8 @@ class SyncExecutor:
         self,
         coro: Awaitable[Any],
         on_done: DoneCallback,
-        key: Optional[str] = None,
-        timeout: Optional[float] = None,
+        key: str | None = None,
+        timeout: float | None = None,
     ) -> None:
         loop = asyncio.new_event_loop()
         try:
@@ -65,9 +66,9 @@ class ThreadedExecutor:
 
     def __init__(self, dispatch: Callable[[Callable[[], None]], None]):
         self._dispatch = dispatch
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._thread: Optional[threading.Thread] = None
-        self._tails: Dict[str, "asyncio.Future[None]"] = {}  # key -> completion of its newest request
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._tails: dict[str, asyncio.Future[None]] = {}  # key -> completion of its newest request
 
     def _ensure_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
@@ -85,9 +86,9 @@ class ThreadedExecutor:
             ready.wait()
         return self._loop
 
-    async def _run(self, coro: Awaitable[Any], key: Optional[str], timeout: Optional[float]) -> Any:
+    async def _run(self, coro: Awaitable[Any], key: str | None, timeout: float | None) -> Any:
         previous = self._tails.get(key) if key is not None else None
-        finished: "asyncio.Future[None]" = asyncio.get_running_loop().create_future()
+        finished: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         if key is not None:
             self._tails[key] = finished
         try:
@@ -103,8 +104,8 @@ class ThreadedExecutor:
         self,
         coro: Awaitable[Any],
         on_done: DoneCallback,
-        key: Optional[str] = None,
-        timeout: Optional[float] = None,
+        key: str | None = None,
+        timeout: float | None = None,
     ) -> None:
         future = asyncio.run_coroutine_threadsafe(self._run(coro, key, timeout), self._ensure_loop())
 

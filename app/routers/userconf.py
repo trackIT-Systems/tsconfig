@@ -1,7 +1,6 @@
 """userconf.txt (pi's password) configuration endpoints."""
 
 import subprocess
-from typing import Optional
 
 from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
@@ -29,7 +28,7 @@ class UserconfPasswordHash(BaseModel):
 @router.put("")
 async def update_userconf(
     config: UserconfUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump()
     return await userconf_router.update_config_helper(config_dict, config_group)
@@ -38,7 +37,7 @@ async def update_userconf(
 @router.post("/validate")
 async def validate_userconf(
     config: UserconfUpdate,
-    config_group: Optional[str] = Query(None, description="Config group name for server mode"),
+    config_group: str | None = Query(None, description="Config group name for server mode"),
 ):
     config_dict = config.model_dump()
     return userconf_router.validate_config_helper(config_dict, config_group)

@@ -1,7 +1,7 @@
 """Geolocation configuration management."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from app.configs import BaseConfig
 
@@ -23,7 +23,7 @@ class GeolocationConfig(BaseConfig):
         """Return the configuration file path."""
         return Path("/boot/firmware/geolocation")
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the geolocation from disk.
 
         Returns:
@@ -62,12 +62,12 @@ class GeolocationConfig(BaseConfig):
 
             return {"lat": lat, "lon": lon, "alt": alt, "accuracy": accuracy}
 
-        except (IOError, OSError) as e:
-            raise FileNotFoundError(f"Failed to read geolocation file: {str(e)}")
+        except OSError as e:
+            raise FileNotFoundError(f"Failed to read geolocation file: {e!s}")
         except (ValueError, IndexError) as e:
-            raise ValueError(f"Invalid geolocation file format: {str(e)}")
+            raise ValueError(f"Invalid geolocation file format: {e!s}")
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the geolocation to disk.
 
         Args:
@@ -91,7 +91,7 @@ class GeolocationConfig(BaseConfig):
         with open(self.config_file, "w") as f:
             f.write(content)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the geolocation configuration.
 
         Args:

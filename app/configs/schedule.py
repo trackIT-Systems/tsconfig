@@ -1,7 +1,7 @@
 """Schedule configuration management."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 from pydantic import BaseModel
@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from app.configs import BaseConfig
 
 
-def _validate_hh_mm(value: str, field_name: str) -> List[str]:
+def _validate_hh_mm(value: str, field_name: str) -> list[str]:
     """Validate an HH:MM duration string."""
     errors = []
     if not isinstance(value, str) or not value:
@@ -53,7 +53,7 @@ class ScheduleConfig(BaseConfig):
     def config_file(self) -> Path:
         return self.config_dir / "schedule.yml"
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load the schedule configuration from disk.
 
         Raises:
@@ -70,12 +70,12 @@ class ScheduleConfig(BaseConfig):
                 f"Schedule configuration not found at {self.config_file}. Please create a configuration first."
             )
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save the schedule configuration to disk."""
         with open(self.config_file, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
 
-    def validate(self, config: Dict[str, Any]) -> List[str]:
+    def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the schedule configuration."""
         errors = []
 
@@ -111,11 +111,11 @@ class ScheduleConfig(BaseConfig):
                 if entry.get("name") == "maintenance":
                     start = entry.get("start", "")
                     stop = entry.get("stop", "")
-                    
+
                     start_errors = _validate_hh_mm(start, "Maintenance start time")
                     if start_errors:
                         errors.extend([f"Schedule entry {i} ('maintenance'): {err}" for err in start_errors])
-                        
+
                     stop_errors = _validate_hh_mm(stop, "Maintenance stop time")
                     if stop_errors:
                         errors.extend([f"Schedule entry {i} ('maintenance'): {err}" for err in stop_errors])

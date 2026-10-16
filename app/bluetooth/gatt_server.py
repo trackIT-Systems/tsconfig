@@ -4,9 +4,9 @@ This module provides the main BLE GATT server that manages the D-Bus application
 services, and BLE advertising.
 """
 
-import logging
 import socket
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 import dbus
 import dbus.mainloop.glib
@@ -132,7 +132,7 @@ class Application(dbus.service.Object):
         bus: dbus.Bus,
         path: str,
         api_client: TsConfigApiClient,
-        authenticator: Optional[BleAuthenticator] = None,
+        authenticator: BleAuthenticator | None = None,
     ):
         """Initialize the GATT application.
 
@@ -144,7 +144,7 @@ class Application(dbus.service.Object):
                 (and link encryption) entirely
         """
         self.path = path
-        self.services: List = []
+        self.services: list = []
         self.api_client = api_client
         self.authenticator = authenticator
 
@@ -203,8 +203,8 @@ class Advertisement(dbus.service.Object):
         bus: dbus.Bus,
         index: int,
         advertising_type: str,
-        device_name: Optional[str] = None,
-        on_release: Optional[Callable[[], None]] = None,
+        device_name: str | None = None,
+        on_release: Callable[[], None] | None = None,
     ):
         """Initialize the BLE advertisement.
 
@@ -223,8 +223,8 @@ class Advertisement(dbus.service.Object):
         # Format: 1 byte (length) + 1 byte (type) + name + UUID (16 bytes) + flags (~3 bytes) = ~21 bytes for name
         hostname = device_name or socket.gethostname()
         self.local_name = hostname[:20] if len(hostname) > 20 else hostname
-        self.service_uuids: List[str] = []
-        self.service_data: Dict[str, bytes] = {}
+        self.service_uuids: list[str] = []
+        self.service_data: dict[str, bytes] = {}
         # Disable TX power to save advertisement space
         self.include_tx_power = False
 
@@ -253,7 +253,7 @@ class Advertisement(dbus.service.Object):
         self.service_data[uuid] = data
         logger.debug(f"Set service data for UUID {uuid}: {len(data)} bytes")
 
-    def get_properties(self) -> Dict[str, Any]:
+    def get_properties(self) -> dict[str, Any]:
         """Get advertisement properties for D-Bus."""
         properties = {
             "Type": self.ad_type,
@@ -263,14 +263,14 @@ class Advertisement(dbus.service.Object):
             "MinInterval": dbus.UInt32(ADVERTISING_INTERVAL_MS),
             "MaxInterval": dbus.UInt32(ADVERTISING_INTERVAL_MS),
         }
-        
+
         # Add service data if present
         if self.service_data:
             service_data_dict = {}
             for uuid, data in self.service_data.items():
-                service_data_dict[uuid] = dbus.Array(data, signature='y')
-            properties["ServiceData"] = dbus.Dictionary(service_data_dict, signature='sv')
-        
+                service_data_dict[uuid] = dbus.Array(data, signature="y")
+            properties["ServiceData"] = dbus.Dictionary(service_data_dict, signature="sv")
+
         return {LE_ADVERTISEMENT_IFACE: properties}
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
@@ -300,7 +300,7 @@ class BleGattServer:
     def __init__(
         self,
         api_url: str = "http://localhost:8000",
-        device_name: Optional[str] = None,
+        device_name: str | None = None,
         require_auth: bool = True,
         discoverable: bool = True,
     ):
@@ -316,24 +316,24 @@ class BleGattServer:
         self.api_url = api_url
         self.device_name = device_name or socket.gethostname()
         self.require_auth = require_auth
-        self.authenticator: Optional[BleAuthenticator] = BleAuthenticator() if require_auth else None
-        self.agent: Optional[NoInputNoOutputAgent] = None
+        self.authenticator: BleAuthenticator | None = BleAuthenticator() if require_auth else None
+        self.agent: NoInputNoOutputAgent | None = None
         self.discoverable = discoverable
 
-        self.bus: Optional[dbus.Bus] = None
-        self.adapter_props: Optional[dbus.Interface] = None
-        self.ad_manager: Optional[dbus.Interface] = None
-        self.gatt_manager: Optional[dbus.Interface] = None
-        self.application: Optional[Application] = None
-        self.advertisement: Optional[Advertisement] = None
-        self.api_client: Optional[TsConfigApiClient] = None
-        self.mainloop: Optional[GLib.MainLoop] = None
-        self.executor: Optional[ble_executor.ThreadedExecutor] = None
+        self.bus: dbus.Bus | None = None
+        self.adapter_props: dbus.Interface | None = None
+        self.ad_manager: dbus.Interface | None = None
+        self.gatt_manager: dbus.Interface | None = None
+        self.application: Application | None = None
+        self.advertisement: Advertisement | None = None
+        self.api_client: TsConfigApiClient | None = None
+        self.mainloop: GLib.MainLoop | None = None
+        self.executor: ble_executor.ThreadedExecutor | None = None
         self.supervisor = Supervisor(register=self._register_missing, schedule=self._schedule)
 
         self._app_inflight = False
         self._adv_inflight = False
-        self._active_instances: Optional[int] = None  # last ActiveInstances read from BlueZ
+        self._active_instances: int | None = None  # last ActiveInstances read from BlueZ
         self._owner_reported = False
 
         logger.info(f"BLE GATT Server initialized for device: {self.device_name}")
@@ -511,9 +511,7 @@ class BleGattServer:
                 return
             self.supervisor.registration_failed("GATT application", error)
 
-        self.gatt_manager.RegisterApplication(
-            self.application.get_path(), {}, reply_handler=done, error_handler=failed
-        )
+        self.gatt_manager.RegisterApplication(self.application.get_path(), {}, reply_handler=done, error_handler=failed)
 
     def register_advertisement(self):
         """Register the BLE advertisement with BlueZ."""

@@ -11,7 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.configs.userconf import UserconfConfig
-from app.routers.userconf import hash_userconf_password, UserconfPasswordHash
+from app.routers.userconf import UserconfPasswordHash, hash_userconf_password
 
 
 @pytest.mark.asyncio
@@ -31,7 +31,8 @@ class TestHashUserconfPassword:
 
     async def test_password_never_passed_as_a_command_line_argument(self):
         with patch(
-            "app.routers.userconf.run_subprocess_async", new=AsyncMock(return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="$6$abc$xyz\n"))
+            "app.routers.userconf.run_subprocess_async",
+            new=AsyncMock(return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="$6$abc$xyz\n")),
         ) as mock_run:
             await hash_userconf_password(UserconfPasswordHash(password="correct-horse-battery-staple"))
         args, kwargs = mock_run.call_args
@@ -39,12 +40,14 @@ class TestHashUserconfPassword:
         assert kwargs["input_data"] == b"correct-horse-battery-staple\n"
 
     async def test_subprocess_failure_surfaces_as_500_not_a_traceback(self):
-        with patch(
-            "app.routers.userconf.run_subprocess_async",
-            new=AsyncMock(side_effect=FileNotFoundError("openssl not found")),
+        with (
+            patch(
+                "app.routers.userconf.run_subprocess_async",
+                new=AsyncMock(side_effect=FileNotFoundError("openssl not found")),
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                await hash_userconf_password(UserconfPasswordHash(password="hunter2"))
+            await hash_userconf_password(UserconfPasswordHash(password="hunter2"))
         assert exc_info.value.status_code == 500
 
 

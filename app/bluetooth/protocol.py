@@ -19,7 +19,8 @@ UUID Scheme:
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
 import cbor2
 
 # Base UUID pattern
@@ -63,7 +64,7 @@ ATT_MAX_VALUE_LEN = 512
 
 class BinaryChunker:
     """Handle MTU-aware chunking of data for BLE notifications.
-    
+
     This chunker splits raw bytes into MTU-sized chunks without any
     framing overhead, relying on BLE's ordered delivery guarantee.
     """
@@ -78,7 +79,7 @@ class BinaryChunker:
         # Usable payload size: MTU - ATT header
         self.chunk_size = max(mtu - ATT_HEADER_SIZE, 20)  # Minimum 20 bytes
 
-    def chunk_data(self, data: bytes) -> List[bytes]:
+    def chunk_data(self, data: bytes) -> list[bytes]:
         """Split data into MTU-sized chunks for BLE transmission.
 
         Args:
@@ -94,7 +95,7 @@ class BinaryChunker:
         chunks = []
         offset = 0
         while offset < len(data):
-            chunk = data[offset:offset + self.chunk_size]
+            chunk = data[offset : offset + self.chunk_size]
             chunks.append(chunk)
             offset += self.chunk_size
 
@@ -173,7 +174,7 @@ class ResponseFormatter:
         chunk_count: int,
         content_type: int = CONTENT_TYPE_JSON,
         status: int = STATUS_READY,
-        error_message: Optional[str] = None
+        error_message: str | None = None,
     ) -> bytes:
         """Format a metadata response using CBOR for read operations.
 
@@ -196,11 +197,11 @@ class ResponseFormatter:
             3: content_type,
             4: status,
         }
-        
+
         # Add error message if present
         if error_message:
             metadata[5] = error_message
-        
+
         return cbor2.dumps(metadata)
 
 
@@ -215,7 +216,7 @@ class RequestParser:
     """Parse incoming BLE write requests."""
 
     @staticmethod
-    def parse_json(data: bytes) -> Optional[Dict[str, Any]]:
+    def parse_json(data: bytes) -> dict[str, Any] | None:
         """Parse JSON data from a BLE write operation.
 
         Args:
@@ -231,7 +232,7 @@ class RequestParser:
             return None
 
     @staticmethod
-    def classify_json(data: bytes) -> Tuple[str, Any]:
+    def classify_json(data: bytes) -> tuple[str, Any]:
         """Parse a possibly partial JSON request that arrives in several writes.
 
         Unlike `parse_json`, this tells a request that is merely not complete yet
@@ -267,7 +268,7 @@ class RequestParser:
             return "invalid", None
 
     @staticmethod
-    def validate_service_action(data: Dict[str, Any]) -> bool:
+    def validate_service_action(data: dict[str, Any]) -> bool:
         """Validate a systemd service action request.
 
         Args:
@@ -280,7 +281,7 @@ class RequestParser:
         return all(field in data for field in required_fields)
 
     @staticmethod
-    def validate_log_request(data: Dict[str, Any]) -> bool:
+    def validate_log_request(data: dict[str, Any]) -> bool:
         """Validate a log request.
 
         Args:
@@ -292,7 +293,7 @@ class RequestParser:
         return "service" in data
 
     @staticmethod
-    def validate_upload_request(data: Dict[str, Any]) -> bool:
+    def validate_upload_request(data: dict[str, Any]) -> bool:
         """Validate a file upload request.
 
         Args:

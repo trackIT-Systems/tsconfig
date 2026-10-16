@@ -16,12 +16,11 @@ Level policy:
 import logging
 import os
 import sys
-from typing import Optional
 
 
-def setup_logging(verbose: bool = False, log_level: Optional[str] = None, verbosity: int = 0) -> None:
+def setup_logging(verbose: bool = False, log_level: str | None = None, verbosity: int = 0) -> None:
     """Set up logging configuration for the application.
-    
+
     Args:
         verbose: Deprecated. If True, force DEBUG level (overrides other settings)
         log_level: Optional log level override (DEBUG, INFO, WARNING, ERROR)
@@ -41,10 +40,10 @@ def setup_logging(verbose: bool = False, log_level: Optional[str] = None, verbos
         # Read from environment variable, default to WARNING
         env_level = os.environ.get("LOG_LEVEL", "WARNING").upper()
         level = getattr(logging, env_level, logging.WARNING)
-    
+
     # Configure logging format (no timestamps - journald handles this)
     format_string = "%(name)s - %(levelname)s - %(message)s"
-    
+
     # Set up basic configuration
     logging.basicConfig(
         level=level,
@@ -52,7 +51,7 @@ def setup_logging(verbose: bool = False, log_level: Optional[str] = None, verbos
         handlers=[logging.StreamHandler(sys.stdout)],
         force=True,  # Override any existing configuration
     )
-    
+
     # Per-request chatter (HTTP access logs, httpx client calls) is DEBUG-only:
     # at INFO it would log every UI polling GET. Below DEBUG, pin it to WARNING.
     # ACCESS_LOG_LEVEL overrides this explicitly.
@@ -71,10 +70,10 @@ def setup_logging(verbose: bool = False, log_level: Optional[str] = None, verbos
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance with the given name.
-    
+
     Args:
         name: Logger name (typically __name__)
-        
+
     Returns:
         Logger instance
     """

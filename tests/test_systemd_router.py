@@ -34,9 +34,10 @@ class TestServiceAction:
     @pytest.mark.parametrize("action", ["start", "stop", "restart", "reload"])
     async def test_non_persistent_actions_accepted(self, action):
         fake_service = type("S", (), {"name": "tsconfig", "expert": False})()
-        with patch.object(systemd, "get_configured_services", return_value=[fake_service]), patch.object(
-            systemd, "systemctl_action", new=AsyncMock(return_value=(True, None))
-        ) as mock_action:
+        with (
+            patch.object(systemd, "get_configured_services", return_value=[fake_service]),
+            patch.object(systemd, "systemctl_action", new=AsyncMock(return_value=(True, None))) as mock_action,
+        ):
             result = await systemd.service_action(FakeAction(action, "tsconfig"))
         assert result["success"] is True
         assert result["action"] == action
@@ -50,8 +51,9 @@ class TestServiceAction:
 
     async def test_denied_action_surfaces_as_500(self):
         fake_service = type("S", (), {"name": "sshd", "expert": True})()
-        with patch.object(systemd, "get_configured_services", return_value=[fake_service]), patch.object(
-            systemd, "systemctl_action", new=AsyncMock(return_value=(False, "not allowed by polkit"))
+        with (
+            patch.object(systemd, "get_configured_services", return_value=[fake_service]),
+            patch.object(systemd, "systemctl_action", new=AsyncMock(return_value=(False, "not allowed by polkit"))),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await systemd.service_action(FakeAction("restart", "sshd"))

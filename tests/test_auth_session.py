@@ -82,8 +82,18 @@ class TestSanitizeNext:
 
     @pytest.mark.parametrize(
         "bad",
-        ["//evil.example", "http://evil.example/", "https://evil.example", "\\\\evil", "/\\evil", "javascript:alert(1)",
-         "/%2Fevil.example", "/foo\r\nSet-Cookie: x=y", "evil", ""],
+        [
+            "//evil.example",
+            "http://evil.example/",
+            "https://evil.example",
+            "\\\\evil",
+            "/\\evil",
+            "javascript:alert(1)",
+            "/%2Fevil.example",
+            "/foo\r\nSet-Cookie: x=y",
+            "evil",
+            "",
+        ],
     )
     def test_rejects_everything_else(self, bad):
         assert sanitize_next(bad) == "/"
@@ -140,7 +150,17 @@ class TestParseBasicAuth:
 
     @pytest.mark.parametrize(
         "header",
-        [None, "", "Basic", "Basic ", "Bearer abc", "Basic !!!", _basic(b"nocolon"), _basic(b"\xff\xfe:x"), "Basic " + "A" * 2000],
+        [
+            None,
+            "",
+            "Basic",
+            "Basic ",
+            "Bearer abc",
+            "Basic !!!",
+            _basic(b"nocolon"),
+            _basic(b"\xff\xfe:x"),
+            "Basic " + "A" * 2000,
+        ],
     )
     def test_rejects_anything_else(self, header):
         assert parse_basic_auth(header) is None

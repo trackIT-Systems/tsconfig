@@ -4,8 +4,7 @@ This module provides GATT service classes that group related characteristics
 according to the REST API structure.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import dbus
 import dbus.service
@@ -50,7 +49,7 @@ class Service(dbus.service.Object):
         primary: bool,
         app_path: str,
         api_client: TsConfigApiClient,
-        authenticator: Optional[BleAuthenticator] = None,
+        authenticator: BleAuthenticator | None = None,
     ):
         """Initialize a GATT Service.
 
@@ -69,11 +68,11 @@ class Service(dbus.service.Object):
         self.primary = primary
         self.api_client = api_client
         self.authenticator = authenticator
-        self.characteristics: List = []
+        self.characteristics: list = []
 
         dbus.service.Object.__init__(self, bus, self.path)
 
-    def get_properties(self) -> Dict[str, Any]:
+    def get_properties(self) -> dict[str, Any]:
         """Get service properties for D-Bus."""
         return {
             GATT_SERVICE_IFACE: {
@@ -87,7 +86,7 @@ class Service(dbus.service.Object):
         """Get the D-Bus object path."""
         return dbus.ObjectPath(self.path)
 
-    def get_characteristic_paths(self) -> List[str]:
+    def get_characteristic_paths(self) -> list[str]:
         """Get paths of all characteristics in this service."""
         return [chrc.get_path() for chrc in self.characteristics]
 
@@ -116,7 +115,7 @@ class SystemService(Service):
         index: int,
         app_path: str,
         api_client: TsConfigApiClient,
-        authenticator: Optional[BleAuthenticator] = None,
+        authenticator: BleAuthenticator | None = None,
     ):
         """Initialize System Service.
 
@@ -155,7 +154,7 @@ class SystemdService(Service):
         index: int,
         app_path: str,
         api_client: TsConfigApiClient,
-        authenticator: Optional[BleAuthenticator] = None,
+        authenticator: BleAuthenticator | None = None,
     ):
         """Initialize Systemd Service.
 
@@ -194,7 +193,7 @@ class UploadService(Service):
         index: int,
         app_path: str,
         api_client: TsConfigApiClient,
-        authenticator: Optional[BleAuthenticator] = None,
+        authenticator: BleAuthenticator | None = None,
     ):
         """Initialize Upload Service.
 
