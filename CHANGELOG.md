@@ -61,6 +61,8 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - Server mode: OIDC login and token refresh no longer turn their own errors into `500`. An unavailable OIDC handler answers `503`, and a user who lost access gets `403 Access denied` on refresh instead of a server error
 - Privileged operations that time out report the timeout. Once `pkexec` has made the process root, `pi` cannot kill it, so the timeout surfaced as a `PermissionError` and the stuck process ran on. The root process now ends itself after 60 s (longer than the caller's 30 s)
 - A scheduled reboot can no longer be lost: its task was only weakly referenced by the event loop and could be garbage-collected before it ran. A failing `systemctl reboot` is now logged
+- `/api/system-status` answers in a few milliseconds instead of about 0.57 s. It no longer blocks the server for 100 ms to measure CPU usage (it reports usage since the previous call), and asks `tsupdate status` (a 0.5 s Python start) once instead of on every 5 s poll, since the booted partition and the boot method do not change while the system runs
+- The status page loads the radiotracking and soundscapepipe configs once per refresh instead of twice
 
 ## [2026.7.1] - 2026-07-14
 

@@ -83,16 +83,9 @@ export function statusPage() {
             await this.loadSystemConfig();
             // Load available services to check which services are configured
             await this.loadAvailableServices();
+            // Also loads the soundscapepipe and radiotracking configs
             await this.refreshStatus();
             await this.loadServices();
-            // Load soundscapepipe config and service status only if service is available
-            if (this.isServiceAvailable('soundscapepipe')) {
-                await this.loadSoundscapepipeConfig();
-            }
-            // Load radiotracking config and service status only if service is available
-            if (this.isServiceAvailable('radiotracking')) {
-                await this.loadRadiotrackingConfig();
-            }
             // Subscribe to service updates to refresh service status
             this.onServicesUpdate = () => {
                 this.updateSoundscapepipeService();
@@ -110,16 +103,9 @@ export function statusPage() {
                 // Only refresh if status tab is active
                 const currentHash = window.location.hash.slice(1);
                 if (currentHash === 'status' || (currentHash === '' && this.activeConfig === 'status')) {
+                    // Also loads the soundscapepipe and radiotracking configs
                     this.refreshStatus();
                     this.loadServices();
-                    // Only load soundscapepipe config if service is available
-                    if (this.isServiceAvailable('soundscapepipe')) {
-                        this.loadSoundscapepipeConfig();
-                    }
-                    // Only load radiotracking config if service is available
-                    if (this.isServiceAvailable('radiotracking')) {
-                        this.loadRadiotrackingConfig();
-                    }
                 }
             }, this.refreshIntervalSeconds * 1000);
         },

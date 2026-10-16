@@ -48,6 +48,9 @@ from app.utils.subprocess_async import run_subprocess_async
 setup_logging()
 logger = get_logger(__name__)
 
+# The first cpu_percent(interval=None) call only starts the measurement
+psutil.cpu_percent(interval=None)
+
 # Get base URL from environment variable (default to "/" for root)
 BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
 if not BASE_URL:
@@ -425,7 +428,9 @@ async def get_system_status():
 
         # CPU information
         cpu_times = psutil.cpu_times()._asdict()
-        cpu_percent = psutil.cpu_percent(interval=0.1)
+        # Usage since the previous call (primed at import), instead of blocking
+        # the event loop to measure over an interval
+        cpu_percent = psutil.cpu_percent(interval=None)
         cpu_count = psutil.cpu_count()
         cpu_count_logical = psutil.cpu_count(logical=True)
 
@@ -510,8 +515,17 @@ def _get_freedesktop_os_release():
         return None
 
 
+# The booted partition and the boot method cannot change while the system runs,
+# so a successful `tsupdate status` (about 0.5 s, a Python process start) is
+# asked once instead of on every status poll.
+_tsupdate_status_cache: dict | None = None
+
+
 async def _get_tsupdate_status():
     """Get tsupdate status information."""
+    global _tsupdate_status_cache
+    if _tsupdate_status_cache is not None:
+        return _tsupdate_status_cache
     try:
         result = await run_subprocess_async(
             ["tsupdate", "status", "--json"],
@@ -533,6 +547,7 @@ async def _get_tsupdate_status():
             "active_partition_label": status_data.get("active_partition_label"),
         }
 
+        _tsupdate_status_cache = tsupdate_status
         return tsupdate_status
     except (TimeoutError, FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
         logger.debug(f"Failed to get tsupdate status: {e!s}")
