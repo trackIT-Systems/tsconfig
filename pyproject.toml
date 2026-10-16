@@ -8,6 +8,9 @@ authors = [
 ]
 dependencies = [
     "fastapi>=0.115.11",
+    "starlette>=0.46.1",
+    "pydantic>=2.10.6",
+    "anyio>=4.8.0",
     "uvicorn[standard]>=0.32.0",
     "websockets>=15.0.1",
     "jinja2>=3.1.6",
@@ -23,9 +26,17 @@ requires-python = ">=3.12"
 tsconfig = "app.cli:main"
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.23.0",
+# Server mode: OIDC login (imported lazily, so a tracker does not need them)
+server = [
+    "authlib>=1.6.8",
+    "itsdangerous>=2.2.0",
+]
+# BLE gateway (python -m app.ble_gateway). On a tsOS image these come from
+# Debian packages (python3-dbus, python3-gi, python3-cbor2).
+ble = [
+    "cbor2>=5.6.5",
+    "dbus-python>=1.4.0",
+    "pygobject>=3.54.5",
 ]
 
 [build-system]
@@ -47,18 +58,19 @@ line-length = 120
 line-ending = "auto"
 
 [dependency-groups]
+# What the tests need (the BLE tests fake dbus and gi, so no `ble` extra)
 dev = [
-    "bleak>=2.1.1",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
     "cbor2>=5.6.5",
-    # Starlette's TestClient uses httpx2 since 1.7 and warns when it falls back to httpx
+]
+# Starlette's TestClient prefers httpx2 since 1.7 and warns when it falls back
+# to httpx. Separate from dev because httpx2 needs a newer anyio than Debian's.
+testclient = [
     "httpx2>=2.13.1",
 ]
-ble = [
-    "dbus-python>=1.4.0",
-    "pygobject>=3.54.5",
+# The manual BLE client test_ble_client.py
+ble-client = [
+    "bleak>=2.1.1",
     "cbor2>=5.6.5",
-]
-auth = [
-    "authlib>=1.6.8",
-    "itsdangerous>=2.2.0",
 ]

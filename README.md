@@ -60,7 +60,7 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
 ## Installation
 
 ### Prerequisites
-- Python 3.9 or higher
+- Python 3.12 or higher (tsOS runs 3.13)
 - Linux-based system (tested on Raspberry Pi OS / tsOS)
 - Appropriate system permissions for system control features
 
@@ -75,13 +75,11 @@ tsOS Configuration Manager is designed for trackIT Systems sensor stations runni
    ```bash
    pdm install
    ```
+   Extras: `pdm install -G server` adds the OIDC libraries for server mode, `pdm install -G ble` the BLE
+   gateway's. Without PDM: `pip install -e .` (plus `".[server]"` or `".[ble]"`) and `pip install --group dev`
+   for the test tools. On a tsOS image everything comes from Debian packages (see `tsOS-base.Pifile`).
 
-3. **Configure system permissions** (required for service control and reboot):
-   ```bash
-   ./setup_systemd_permissions.sh
-   ```
-
-4. **Run the application**:
+3. **Run the application**:
    ```bash
    # Using uvicorn directly (recommended)
    python3 -m uvicorn app.main:app --reload
@@ -225,7 +223,7 @@ The BLE gateway provides wireless access to the tsconfig API via Bluetooth GATT,
 
 1. **Install BLE dependencies**:
    ```bash
-   pdm install --group ble
+   pdm install -G ble
    ```
 
 2. **Verify Bluetooth adapter**:

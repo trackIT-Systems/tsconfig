@@ -16,11 +16,11 @@ class OIDCHandler:
     """OIDC authentication handler."""
 
     def __init__(self):
-        # Lazy import of itsdangerous to avoid import errors when auth group is not installed
+        # Lazy import of itsdangerous to avoid import errors when the server extra is not installed
         try:
             from itsdangerous import URLSafeTimedSerializer
         except ImportError:
-            raise ImportError("Auth dependencies are not installed. Install them with: pdm install -G auth")
+            raise ImportError("Auth dependencies are not installed. Install them with: pip install 'tsconfig[server]'")
 
         # Secret for signing state parameters (CSRF protection)
         # In production, this should be loaded from an environment variable
@@ -239,7 +239,7 @@ class OIDCHandler:
             from authlib.jose import JsonWebKey, jwt
             from authlib.jose.errors import JoseError
         except ImportError:
-            raise ValueError("Auth dependencies are not installed. Install them with: pdm install -G auth")
+            raise ValueError("Auth dependencies are not installed. Install them with: pip install 'tsconfig[server]'")
 
         try:
             # Get JWKS for signature validation
