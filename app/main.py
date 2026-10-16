@@ -8,6 +8,7 @@ import socket
 import subprocess
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import psutil
 from fastapi import FastAPI, Request
@@ -191,8 +192,26 @@ if not config_loader.is_server_mode():
     app.include_router(shell.router)
     app.include_router(network.router)
 
+
 # Mount static files (must be after all route definitions to avoid conflicts)
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+class AppStaticFiles(StaticFiles):
+    """Static files whose own code must never be served stale.
+
+    Starlette sends only ETag and Last-Modified, so a browser may reuse
+    its copy of the application's JS and CSS for a while on its own
+    judgement, and after an update run old scripts against the new API (the
+    modules import each other, so a version in the page's script URL would
+    not reach them). `no-cache` makes it ask first; unchanged files answer
+    304. The vendored libraries are versioned by their path and stay cacheable."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        if Path(full_path).relative_to(Path(self.directory).resolve()).parts[0] != "vendor":
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", AppStaticFiles(directory="app/static"), name="static")
 
 # Add authentication middleware (operator login in tracker mode, OIDC in server mode)
 app.add_middleware(AuthenticationMiddleware)
