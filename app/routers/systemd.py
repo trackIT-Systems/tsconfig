@@ -3,7 +3,7 @@
 import asyncio
 import subprocess
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 import anyio
 import psutil
@@ -151,7 +151,7 @@ def calculate_service_uptime(properties: dict[str, str], active_state: str) -> s
             # Systemd timestamps are typically in format like "Mon 2023-12-04 10:30:15 UTC" or Unix timestamp
             if timestamp_str.isdigit():
                 # Unix timestamp in microseconds
-                timestamp = datetime.fromtimestamp(int(timestamp_str) / 1000000)
+                timestamp = datetime.fromtimestamp(int(timestamp_str) / 1000000, UTC)
             else:
                 # Try to parse various timestamp formats
                 timestamp_formats = [
@@ -163,7 +163,8 @@ def calculate_service_uptime(properties: dict[str, str], active_state: str) -> s
 
                 for fmt in timestamp_formats:
                     try:
-                        timestamp = datetime.strptime(timestamp_str, fmt)
+                        # systemd prints local time; %Z only checks the zone name
+                        timestamp = datetime.strptime(timestamp_str, fmt).astimezone()
                         break
                     except ValueError:
                         continue
@@ -173,14 +174,7 @@ def calculate_service_uptime(properties: dict[str, str], active_state: str) -> s
         except (ValueError, OSError):
             return None
 
-        # Calculate duration
-        now = datetime.now()
-        if timestamp.tzinfo is None:
-            # Use local time for comparison since systemd timestamps are typically local
-            timestamp = timestamp.replace(tzinfo=None)
-            now = datetime.now()
-
-        duration = now - timestamp
+        duration = datetime.now(UTC) - timestamp
 
         # Format duration using the shared formatting function
         return format_uptime_from_seconds(duration.total_seconds())

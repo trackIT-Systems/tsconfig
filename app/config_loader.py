@@ -182,7 +182,7 @@ class ConfigLoader:
         group_root.mkdir(parents=True, exist_ok=True)
 
         # Create timestamped directory (format: YYYYMMDD_HHMMSS)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
         versioned_dir = group_root / timestamp
         versioned_dir.mkdir(parents=True, exist_ok=True)
 

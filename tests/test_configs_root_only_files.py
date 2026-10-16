@@ -23,6 +23,11 @@ class Untraversable(type(Path())):
         raise PermissionError(13, "Permission denied", str(self))
 
 
+def utc(*args: int) -> datetime:
+    """A naive UTC datetime, as app.routers.configs uses for file times."""
+    return datetime(*args, tzinfo=UTC).replace(tzinfo=None)
+
+
 def root_only_instance():
     return SimpleNamespace(config_file=Untraversable("/etc/NetworkManager/system-connections/hotspot.nmconnection"))
 
@@ -30,7 +35,7 @@ def root_only_instance():
 def test_timestamp_comparison_treats_unreadable_file_as_updatable():
     results = configs.compare_file_timestamps(
         {"hotspot.nmconnection": root_only_instance()},
-        {"hotspot.nmconnection": datetime(2026, 1, 1, 12, 0, 0)},
+        {"hotspot.nmconnection": utc(2026, 1, 1, 12, 0, 0)},
     )
     result = results["hotspot.nmconnection"]
     assert result["exists_on_disk"] is True
@@ -40,7 +45,7 @@ def test_timestamp_comparison_treats_unreadable_file_as_updatable():
 
 def test_timestamp_comparison_uses_the_mtime_reported_by_the_privileged_op():
     instance = root_only_instance()
-    zip_time = datetime(2026, 6, 1, 12, 0, 0)
+    zip_time = utc(2026, 6, 1, 12, 0, 0)
     epoch = lambda dt: dt.replace(tzinfo=UTC).timestamp()
 
     def compare(disk_time):
@@ -49,11 +54,11 @@ def test_timestamp_comparison_uses_the_mtime_reported_by_the_privileged_op():
             {"hotspot.nmconnection": instance}, {"hotspot.nmconnection": zip_time}, stats
         )["hotspot.nmconnection"]
 
-    newer_bundle = compare(datetime(2026, 5, 1))
+    newer_bundle = compare(utc(2026, 5, 1))
     assert newer_bundle["should_update"] is True and newer_bundle["existing_timestamp"] is not None
     same_bundle = compare(zip_time)
     assert same_bundle["should_update"] is False  # applied before: skipped without --force
-    older_bundle = compare(datetime(2026, 7, 1))
+    older_bundle = compare(utc(2026, 7, 1))
     assert older_bundle["should_update"] is False and older_bundle["is_newer"] is False
 
 
@@ -61,7 +66,7 @@ def test_privileged_report_of_a_missing_file_means_update():
     stats = {"hotspot.nmconnection": {"exists": False, "mtime": None}}
     result = configs.compare_file_timestamps(
         {"hotspot.nmconnection": root_only_instance()},
-        {"hotspot.nmconnection": datetime(2026, 1, 1)},
+        {"hotspot.nmconnection": utc(2026, 1, 1)},
         stats,
     )["hotspot.nmconnection"]
     assert result["exists_on_disk"] is False and result["should_update"] is True
@@ -89,7 +94,7 @@ async def test_failed_privileged_lookup_falls_back_to_updatable():
         stats = await configs.collect_privileged_stats({"hotspot.nmconnection": root_only_instance()})
     assert stats == {}
     result = configs.compare_file_timestamps(
-        {"hotspot.nmconnection": root_only_instance()}, {"hotspot.nmconnection": datetime(2026, 1, 1)}, stats
+        {"hotspot.nmconnection": root_only_instance()}, {"hotspot.nmconnection": utc(2026, 1, 1)}, stats
     )["hotspot.nmconnection"]
     assert result["should_update"] is True
 

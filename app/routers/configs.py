@@ -36,6 +36,16 @@ router = APIRouter(prefix="/api/configs", tags=["configs"])
 logger = get_logger(__name__)
 
 
+def utc_from_timestamp(timestamp: float) -> datetime:
+    """`timestamp` as a naive datetime in UTC.
+
+    This module compares and reports file times as naive UTC datetimes (the
+    API sends them as isoformat(), some with a "Z" appended), so aware values
+    are converted at the boundary.
+    """
+    return datetime.fromtimestamp(timestamp, UTC).replace(tzinfo=None)
+
+
 def truncate_mtime_for_fat32(dt: datetime) -> datetime:
     """Truncate datetime down to previous even second for FAT32 compatibility.
 
@@ -277,7 +287,7 @@ def build_standard_response(success: bool, config_type: str, filename: str, **kw
         "success": success,
         "config_type": config_type,
         "filename": filename,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now().astimezone().isoformat(),
     }
     response.update(kwargs)
     return response
@@ -377,7 +387,7 @@ async def list_configs():
 
             if config_instance.config_file.exists():
                 file_stat = config_instance.config_file.stat()
-                mtime = datetime.utcfromtimestamp(file_stat.st_mtime)
+                mtime = utc_from_timestamp(file_stat.st_mtime)
 
                 files_metadata.append(
                     {
@@ -401,7 +411,7 @@ async def list_configs():
 
     # Add most recent mtime if any files exist
     if most_recent_mtime_timestamp is not None:
-        most_recent_dt = datetime.utcfromtimestamp(most_recent_mtime_timestamp)
+        most_recent_dt = utc_from_timestamp(most_recent_mtime_timestamp)
         response_data["most_recent_mtime"] = most_recent_dt.isoformat() + "Z"
 
     # Prepare response with Last-Modified header
@@ -522,7 +532,7 @@ async def upload_config(
 
         if config_instance.config_file.exists():
             # Read file mtime as UTC (naive datetime)
-            existing_mtime = datetime.utcfromtimestamp(config_instance.config_file.stat().st_mtime)
+            existing_mtime = utc_from_timestamp(config_instance.config_file.stat().st_mtime)
 
             if upload_mtime_truncated <= existing_mtime:
                 return build_standard_response(
@@ -669,7 +679,7 @@ def extract_zip_file_timestamps(zip_buffer: BytesIO) -> dict[str, datetime]:
             # zip_info.date_time is (year, month, day, hour, minute, second)
             # Zip timestamps don't have timezone info, so we treat them as UTC
             if len(zip_info.date_time) >= 6:
-                zip_datetime = datetime(*zip_info.date_time[:6])
+                zip_datetime = datetime(*zip_info.date_time[:6], tzinfo=UTC).replace(tzinfo=None)
                 timestamps[basename] = zip_datetime
 
     return timestamps
@@ -763,7 +773,7 @@ def compare_file_timestamps(
 
         if exists and known and mtime is not None:
             # Read file mtime as UTC (naive datetime)
-            existing_mtime = datetime.utcfromtimestamp(mtime)
+            existing_mtime = utc_from_timestamp(mtime)
             result["existing_timestamp"] = existing_mtime.isoformat()
 
             # Compare truncated zip timestamp with existing timestamp
@@ -1571,7 +1581,7 @@ async def download_config_zip():
 
                 # Get file mtime
                 file_stat = config_instance.config_file.stat()
-                mtime = datetime.utcfromtimestamp(file_stat.st_mtime)
+                mtime = utc_from_timestamp(file_stat.st_mtime)
 
                 existing_files[filename] = {
                     "content": content,

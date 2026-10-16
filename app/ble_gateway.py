@@ -106,17 +106,6 @@ def main():
     logger.info(f"Discoverable: {not args.no_discoverable}")
     logger.info("=" * 60)
 
-    # Check for dependencies
-    try:
-        import dbus
-        import dbus.mainloop.glib
-        from gi.repository import GLib
-    except ImportError as e:
-        logger.error("Required dependencies not installed!")
-        logger.error("Please install BLE dependencies: pdm install --group ble")
-        logger.error(f"Missing: {e}")
-        sys.exit(1)
-
     # Wait a little for the API, but start anyway: the gateway must stay reachable (and answer
     # requests with errors) while tsconfig is restarting or down, and works again once it is back.
     logger.debug(f"Verifying API connectivity to {args.api_url}...")

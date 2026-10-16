@@ -110,6 +110,8 @@ async def login(
         logger.info("Redirecting to OIDC provider for authentication")
         return RedirectResponse(url=authorization_url, status_code=302)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error initiating OIDC login: {e}")
         raise HTTPException(
@@ -406,6 +408,8 @@ async def refresh_token(
             status_code=401,
             detail="Token refresh failed",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during token refresh: {e}")
         raise HTTPException(

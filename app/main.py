@@ -473,7 +473,7 @@ async def get_system_status():
         system_info = {
             "operating_system": f"{platform.system()} {platform.release()}",
             "uptime": uptime_seconds,
-            "current_datetime": datetime.datetime.now().isoformat(),
+            "current_datetime": datetime.datetime.now().astimezone().isoformat(),
             "timezone": str(datetime.datetime.now().astimezone().tzinfo),
             "hostname": socket.gethostname(),
             "version": __version__,
@@ -727,7 +727,7 @@ async def get_timedatectl_status():
             "available": False,
             "status": None,
             "error": None,
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now().astimezone().isoformat(),
         }
 
         # Check if timedatectl command is available
@@ -828,7 +828,7 @@ async def get_network_connectivity():
             "available": False,
             "connectivity": None,
             "error": None,
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now().astimezone().isoformat(),
         }
 
         # Check if nmcli command is available
