@@ -448,13 +448,22 @@ export function statusPage() {
                 boxZoom: true
             });
 
-            // Add Mapbox satellite streets layer with high-resolution tiles
-            L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g', {
-                attribution: '© Mapbox © OpenStreetMap',
-                maxZoom: 19,
-                tileSize: 512,
-                zoomOffset: -1
-            }).addTo(this.geolocationMap);
+            // Satellite imagery from Mapbox if tsconfig.yml has a token
+            // (map.mapbox_token), otherwise the OpenStreetMap street map
+            if (window.MAPBOX_TOKEN) {
+                L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}@2x?access_token={accessToken}', {
+                    accessToken: window.MAPBOX_TOKEN,
+                    attribution: '© Mapbox © OpenStreetMap',
+                    maxZoom: 19,
+                    tileSize: 512,
+                    zoomOffset: -1
+                }).addTo(this.geolocationMap);
+            } else {
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(this.geolocationMap);
+            }
 
             // Add marker at the tracker position (non-draggable, read-only)
             const trackerIcon = L.VectorMarkers.icon({

@@ -9,6 +9,12 @@ file_locations:
 system:
   status_refresh_interval: 5  # Default system status refresh interval in seconds
 
+# Map on the status page: satellite imagery from Mapbox with this public
+# (pk.) token, restricted to our URLs in the Mapbox account. Without a token
+# the map shows OpenStreetMap.
+map:
+  mapbox_token: "pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g"
+
 # Feature flags
 features:
   audioprotopnet: false  # set true to enable AudioProtoPNet detector UI

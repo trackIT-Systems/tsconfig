@@ -25,6 +25,11 @@ VERSIONED_CONFIG_FILES: list[str] = [
 ]
 
 
+# The tsconfig.yml shipped with the code. Devices read a copy made when the
+# image was built, which a code update does not touch.
+SHIPPED_MAIN_CONFIG = Path(__file__).resolve().parent.parent / "configs" / "tsconfig.yml"
+
+
 def _default_main_config_path() -> Path:
     env_path = os.environ.get("TSCONFIG_CONFIG_FILE", "").strip()
     if env_path:
@@ -76,6 +81,19 @@ class ConfigLoader:
         config = self.load_config()
         system_config = config.get("system", {})
         return system_config.get("status_refresh_interval", 30)
+
+    def get_mapbox_token(self) -> str | None:
+        """Get the Mapbox access token for the status page map, if configured.
+
+        A tsconfig.yml without a `map` section (a device's copy from before
+        the token moved there) uses the token shipped with the code, so the
+        map keeps its satellite view after an update. An empty token turns
+        Mapbox off.
+        """
+        config = self.load_config()
+        if "map" not in config and self.config_path.resolve() != SHIPPED_MAIN_CONFIG:
+            config = ConfigLoader(SHIPPED_MAIN_CONFIG).load_config()
+        return (config.get("map") or {}).get("mapbox_token") or None
 
     def is_feature_enabled(self, feature: str) -> bool:
         """Check if a feature flag is enabled in tsconfig.yml."""

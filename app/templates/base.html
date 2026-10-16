@@ -9,6 +9,7 @@
     <script>
         window.BASE_URL = "{{ base_url or '' }}";
         window.INITIAL_CONFIG_GROUP = "{{ config_group or '' }}";
+        window.MAPBOX_TOKEN = {{ mapbox_token | tojson }};
     </script>
     
     <!-- Common CSS -->
