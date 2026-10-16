@@ -19,6 +19,11 @@ import { soundscapepipeConfig } from './components/soundscapepipeConfig.js';
 import { tsupdateConfig } from './components/tsupdateConfig.js';
 import { mqttutilConfig } from './components/mqttutilConfig.js';
 import { statusPage } from './components/statusPage.js';
+import { servicesList } from './components/servicesList.js';
+import { geolocationMap } from './components/geolocationMap.js';
+import { radiotrackingSummary } from './components/radiotrackingSummary.js';
+import { soundscapepipeSummary } from './components/soundscapepipeSummary.js';
+import { audioStreamPlayer } from './components/audioStreamPlayer.js';
 import { logViewer } from './components/logViewer.js';
 import { shellViewer } from './components/shellViewer.js';
 
@@ -35,6 +40,11 @@ window.soundscapepipeConfig = soundscapepipeConfig;
 window.tsupdateConfig = tsupdateConfig;
 window.mqttutilConfig = mqttutilConfig;
 window.statusPage = statusPage;
+window.servicesList = servicesList;
+window.geolocationMap = geolocationMap;
+window.radiotrackingSummary = radiotrackingSummary;
+window.soundscapepipeSummary = soundscapepipeSummary;
+window.audioStreamPlayer = audioStreamPlayer;
 window.logViewer = logViewer;
 window.shellViewer = shellViewer;
 

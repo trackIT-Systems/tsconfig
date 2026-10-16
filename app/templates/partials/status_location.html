@@ -1,5 +1,5 @@
             <!-- Tracker Location -->
-            <div class="row mb-4 mt-4">
+            <div class="row mb-4 mt-4" x-data="geolocationMap(() => systemInfo?.os_release?.NAME)">
                 <div class="col">
                     <div class="card">
                         <div class="card-header">

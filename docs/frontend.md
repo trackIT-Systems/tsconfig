@@ -61,6 +61,32 @@ Save and Save & Restart must send the same data, so there is one `buildPayload()
 each had a copy, and the copies had drifted apart (tsupdate's Save did not convert two of its
 HH:MM fields).
 
+## The status page
+
+`statusPage` only does what is the page's own: the system's state (uptime, load, memory, disks, time,
+network, modem), the refresh that keeps it current and the reboot. The cards that load and show
+their own data are components inside its template, each with its own `x-data`:
+
+| Card | Component | Follows the refresh through |
+|---|---|---|
+| System Services | `servicesList` | `serviceManager` (it subscribes; the refresh fetches the units) |
+| Radiotracking | `radiotrackingSummary` | the `status-refreshed` event |
+| Soundscapepipe | `soundscapepipeSummary` | the `status-refreshed` event and `serviceManager` |
+| Location | `geolocationMap` | loads once |
+| the live audio player (status page and soundscapepipe settings) | `audioStreamPlayer` | its own 5-second check |
+
+After every refresh `statusPage` dispatches `status-refreshed` on `window`, with the available
+services as its detail; a card reloads its config if its service is among them. A new card needs a
+component and that line in the template, nothing in `statusPage`.
+
+Components inside `x-data` can read the outer data in their *templates* (`expertMode`, `loading`), but
+their *methods* cannot: a component defined in a module has no access to the page's scope. What a
+method needs from outside is passed to the factory as a closure, which the template creates in its
+own scope: `x-data="geolocationMap(() => systemInfo?.os_release?.NAME)"`.
+
+A `<template x-if>` renders only its first element. Two buttons in one template show one button: the
+status page's Restart button was missing for that reason.
+
 ## Server mode
 
 `serverModeManager` is the one place that knows whether this is the server and which config group

@@ -1,6 +1,6 @@
             <!-- Soundscapepipe Status Panel -->
             <div class="row mt-4" x-show="isServiceAvailable('soundscapepipe')" x-cloak>
-                <div class="col">
+                <div class="col" x-data="soundscapepipeSummary()">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">
@@ -29,91 +29,7 @@
                             <div x-show="soundscapepipeConfig" x-cloak>
                                 <div>
                                     <!-- Configuration Information -->
-                                    <div x-data="{ 
-                                        streamAvailable: false, 
-                                        checkingStream: true,
-                                        streamCheckInterval: null,
-                                        pauseTimer: null,
-                                        audioConnected: true,
-                                        async checkStreamAvailability(force = false, showChecking = false) {
-                                            if (!force && soundscapepipeService && soundscapepipeService.active === false) {
-                                                this.streamAvailable = false;
-                                                this.checkingStream = false;
-                                                return;
-                                            }
-                                            // Only show checking state if explicitly requested (initial load)
-                                            if (showChecking) {
-                                                this.checkingStream = true;
-                                            }
-                                            try {
-                                                const response = await fetch('/stream.mp3', {
-                                                    method: 'HEAD',
-                                                    cache: 'no-cache'
-                                                });
-                                                this.streamAvailable = response.ok;
-                                            } catch (error) {
-                                                this.streamAvailable = false;
-                                            }
-                                            this.checkingStream = false;
-                                        },
-                                        startStreamChecking() {
-                                            this.streamCheckInterval = setInterval(() => {
-                                                // Don't show checking state on periodic checks to avoid flicker
-                                                this.checkStreamAvailability(false, false);
-                                            }, 5000);
-                                        },
-                                        stopStreamChecking() {
-                                            if (this.streamCheckInterval) {
-                                                clearInterval(this.streamCheckInterval);
-                                                this.streamCheckInterval = null;
-                                            }
-                                            this.streamAvailable = false;
-                                        },
-                                        handleAudioPause() {
-                                            this.pauseTimer = setTimeout(() => {
-                                                this.disconnectAudio();
-                                            }, 5000);
-                                        },
-                                        handleAudioPlay() {
-                                            if (this.pauseTimer) {
-                                                clearTimeout(this.pauseTimer);
-                                                this.pauseTimer = null;
-                                            }
-                                            if (!this.audioConnected) {
-                                                const audio = this.$refs.audioPlayer;
-                                                if (audio) {
-                                                    audio.pause();
-                                                }
-                                                this.reconnectAudio();
-                                            }
-                                        },
-                                        disconnectAudio() {
-                                            const audio = this.$refs.audioPlayer;
-                                            if (audio) {
-                                                audio.pause();
-                                                this.audioConnected = false;
-                                            }
-                                        },
-                                        reconnectAudio() {
-                                            const audio = this.$refs.audioPlayer; 
-                                            if (audio) {
-                                                audio.src = '/stream.mp3?' + Date.now();
-                                                audio.load();
-                                                this.audioConnected = true;
-                                                setTimeout(() => {
-                                                    audio.play().catch(() => {});
-                                                }, 100);
-                                            }
-                                        },
-                                        destroy() {
-                                            if (this.pauseTimer) {
-                                                clearTimeout(this.pauseTimer);
-                                                this.pauseTimer = null;
-                                            }
-                                            this.stopStreamChecking();
-                                        }
-                                    }"
-                                    x-init="checkStreamAvailability(true, true); startStreamChecking()">
+                                    <div x-data="audioStreamPlayer(() => soundscapepipeService && soundscapepipeService.active === false)">
                                     <div class="mb-3">
                                         <audio 
                                             x-ref="audioPlayer"

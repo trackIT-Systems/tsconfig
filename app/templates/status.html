@@ -21,7 +21,7 @@
         <!-- Status and service notifications appear as toast messages -->
 
         <!-- Systemd Services -->
-        <div class="row mb-3">
+        <div class="row mb-3" x-data="servicesList()">
             <div class="col">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -131,7 +131,8 @@
                                     <div class="d-flex align-items-center gap-2">
                                         <!-- Action buttons -->
                                         <div class="d-flex gap-1">
-                                            <!-- Action buttons - hide for kernel service -->
+                                            <!-- Action buttons - hide for kernel service.
+                                                 A template renders only its first element, so each button has one. -->
                                             <template x-if="service.name !== 'kernel' && service.name !== 'dmesg'">
                                                 <!-- Start/Stop button -->
                                                 <button class="btn btn-sm" 
@@ -163,6 +164,8 @@
                                                         <i class="fas fa-check"></i>
                                                     </template>
                                                 </button>
+                                            </template>
+                                            <template x-if="service.name !== 'kernel' && service.name !== 'dmesg'">
                                                 <!-- Restart button -->
                                                 <button class="btn btn-sm" 
                                                         :class="{
