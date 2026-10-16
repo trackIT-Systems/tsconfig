@@ -65,6 +65,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - A scheduled reboot can no longer be lost: its task was only weakly referenced by the event loop and could be garbage-collected before it ran. A failing `systemctl reboot` is now logged
 - `/api/system-status` answers in a few milliseconds instead of about 0.57 s. It no longer blocks the server for 100 ms to measure CPU usage (it reports usage since the previous call), and asks `tsupdate status` (a 0.5 s Python start) once instead of on every 5 s poll, since the booted partition and the boot method do not change while the system runs
 - The status page loads the radiotracking and soundscapepipe configs once per refresh instead of twice
+- A downloaded config bundle carries `/boot/firmware/authorized_keys`, the file a bundle upload writes (copied to `~/.ssh/authorized_keys2` at boot). It carried the operator's own `~/.ssh/authorized_keys` instead, so a downloaded bundle did not upload back unchanged
 
 ## [2026.7.1] - 2026-07-14
 

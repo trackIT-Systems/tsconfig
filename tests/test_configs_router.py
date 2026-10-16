@@ -7,6 +7,7 @@ calling config_instance.save()/systemctl/systemd-run directly.
 
 import io
 import zipfile
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -188,3 +189,11 @@ class TestUploadConfigZip:
         assert "schedule.yml" in result["saved_files"]
         mock_write.assert_called_once()
         assert mock_write.call_args.args[0] == "schedule"
+
+
+def test_bundle_authorized_keys_is_the_boot_partition_file_for_download_and_upload():
+    # The bundle member is /boot/firmware/authorized_keys (copied to
+    # ~/.ssh/authorized_keys2 at boot), so a downloaded bundle uploads back
+    # unchanged. The operator's own ~/.ssh/authorized_keys is not part of it.
+    with patch.object(configs.config_loader, "is_server_mode", return_value=False):
+        assert configs.get_config_instance("authorized_keys").config_file == Path("/boot/firmware/authorized_keys")

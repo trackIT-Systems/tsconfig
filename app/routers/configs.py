@@ -643,22 +643,21 @@ RECOGNIZED_CONFIG_FILES = registry.RECOGNIZED_CONFIG_FILES
 SERVICE_MAPPING = registry.SERVICE_MAPPING
 
 
-def get_config_instance(config_type: str, is_config_upload: bool = False):
-    """Get appropriate config instance for the given type.
+def get_config_instance(config_type: str):
+    """Get the config instance for a config file as config bundles carry it.
 
     Args:
         config_type: Type of configuration (radiotracking, schedule, soundscapepipe, authorized_keys,
                      cmdline, wireguard, mosquitto_cert, mosquitto_conf, geolocation)
-        is_config_upload: Whether this is for config upload (affects authorized_keys behavior).
-            Only meaningful for "authorized_keys": True targets the boot-partition upload
-            file (privileged write required), False targets /home/pi/.ssh/authorized_keys
-            (pi-owned, no privilege needed).
 
     Returns:
-        Config instance for the specified type
+        Config instance for the specified type. For "authorized_keys" that is
+        /boot/firmware/authorized_keys (copied to ~/.ssh/authorized_keys2 at
+        boot), on upload and on download alike - not the operator's own
+        ~/.ssh/authorized_keys, which the SSH keys page edits.
     """
     if config_type == "authorized_keys":
-        return AuthorizedKeysConfig(is_config_upload=is_config_upload)
+        return AuthorizedKeysConfig(is_config_upload=True)
     return registry.get_privileged_config_instance(config_type)
 
 
@@ -918,7 +917,7 @@ async def _apply_config_zip_from_path(
     config_instances = {}
     for filename, content in recognized_files.items():
         config_type = RECOGNIZED_CONFIG_FILES[filename]
-        config_instance = get_config_instance(config_type, is_config_upload=True)
+        config_instance = get_config_instance(config_type)
         config_instances[filename] = config_instance
         parsed_config = parse_config_file(filename, content)
         validation_errors = config_instance.validate(parsed_config)
@@ -1111,7 +1110,7 @@ async def upload_config_zip(
 
         try:
             # Get config instance (with config upload flag for authorized_keys)
-            config_instance = get_config_instance(config_type, is_config_upload=True)
+            config_instance = get_config_instance(config_type)
             config_instances[filename] = config_instance
 
             # Parse the file

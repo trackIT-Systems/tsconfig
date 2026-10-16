@@ -229,7 +229,7 @@ async def process_zip_upload(
 
         try:
             # Get config instance (with config upload flag for authorized_keys)
-            config_instance = get_config_instance(config_type, is_config_upload=True)
+            config_instance = get_config_instance(config_type)
             config_instances[filename] = config_instance
 
             # Parse the file
