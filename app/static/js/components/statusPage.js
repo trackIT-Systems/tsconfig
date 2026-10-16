@@ -3,7 +3,7 @@ import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { systemConfigManager } from '../managers/systemConfigManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
-import { apiUrl } from '../utils/apiUtils.js';
+import { apiUrl, getJsonShared } from '../utils/apiUtils.js';
 
 export function statusPage() {
     return {
@@ -122,7 +122,7 @@ export function statusPage() {
                 // Refresh system status, services, timedatectl, network connectivity, and modem info in parallel
                 // Force refresh services since this is a manual refresh
                 const [statusResponse, timedatectlResponse, networkConnectivityResponse, modemResponse] = await Promise.all([
-                    fetch(apiUrl('/api/system-status')),
+                    getJsonShared(apiUrl('/api/system-status')),
                     fetch(apiUrl('/api/timedatectl-status')),
                     fetch(apiUrl('/api/network-connectivity')),
                     fetch(apiUrl('/api/network/modem')),
@@ -132,8 +132,8 @@ export function statusPage() {
                 if (!statusResponse.ok) {
                     throw new Error(`HTTP ${statusResponse.status}: ${statusResponse.statusText}`);
                 }
-                
-                const data = await statusResponse.json();
+
+                const data = statusResponse.data;
                 this.systemInfo = data;
                 this.lastUpdated = new Date().toLocaleTimeString();
                 
@@ -426,6 +426,11 @@ export function statusPage() {
         },
 
         initGeolocationMap() {
+            // Called with a delay: a status page that was removed meanwhile must not
+            // take the map container of the one that replaced it
+            if (this.destroyed) {
+                return;
+            }
             // Only initialize if we have geolocation data and map not already initialized
             if (!this.geolocation || this.geolocationMapInitialized || !document.getElementById('geolocationMap')) {
                 return;
@@ -592,10 +597,9 @@ export function statusPage() {
                     url += `?config_group=${encodeURIComponent(window.serverModeManager.getCurrentConfigGroup())}`;
                 }
                 
-                const response = await fetch(apiUrl(url));
+                const response = await getJsonShared(apiUrl(url));
                 if (response.ok) {
-                    const data = await response.json();
-                    this.availableServices = data.available_services || [];
+                    this.availableServices = response.data.available_services || [];
                 } else {
                     console.error('Failed to load available services');
                     this.availableServices = [];

@@ -1,6 +1,6 @@
 // Authentication utilities for OIDC
 
-import { apiUrl } from './utils/apiUtils.js';
+import { apiUrl, getServerModeInfo } from './utils/apiUtils.js';
 
 /**
  * Authentication manager for handling OIDC authentication
@@ -22,13 +22,12 @@ export const authManager = {
 
         try {
             // Check if we're in server mode with OIDC enabled
-            const serverModeResponse = await fetch(apiUrl('/api/server-mode'));
-            if (!serverModeResponse.ok) {
+            const serverModeData = await getServerModeInfo();
+            if (!serverModeData) {
                 this.initialized = true;
                 return;
             }
 
-            const serverModeData = await serverModeResponse.json();
             this.trackerMode = !serverModeData.enabled;
             if (!serverModeData.enabled || !serverModeData.oidc_enabled) {
                 // OIDC not enabled, skip authentication

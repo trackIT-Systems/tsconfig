@@ -66,6 +66,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - `/api/system-status` answers in a few milliseconds instead of about 0.57 s. It no longer blocks the server for 100 ms to measure CPU usage (it reports usage since the previous call), and asks `tsupdate status` (a 0.5 s Python start) once instead of on every 5 s poll, since the booted partition and the boot method do not change while the system runs
 - The status page loads the radiotracking and soundscapepipe configs once per refresh instead of twice
 - A downloaded config bundle carries `/boot/firmware/authorized_keys`, the file a bundle upload writes (copied to `~/.ssh/authorized_keys2` at boot). It carried the operator's own `~/.ssh/authorized_keys` instead, so a downloaded bundle did not upload back unchanged
+- The web UI asks for `/api/server-mode`, `/api/available-services` and `/api/system-status` once on the first page load instead of twice each (10 instead of 13 requests). Components that are left while still loading no longer start their refresh timers afterwards, and a status page left during its map setup no longer breaks the map of the next one. SSH key service actions show their toast with the right type
 
 ## [2026.7.1] - 2026-07-14
 

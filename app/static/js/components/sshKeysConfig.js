@@ -57,6 +57,8 @@ export function sshKeysConfig() {
                 clearInterval(this.refreshInterval);
             }
             
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             this.refreshInterval = setInterval(() => {
                 // Only refresh if settings tab is active and not in server mode
                 const currentHash = window.location.hash.slice(1);
@@ -68,6 +70,7 @@ export function sshKeysConfig() {
         },
 
         destroy() {
+            this.destroyed = true;
             // Clean up interval when component is destroyed
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
@@ -266,6 +269,10 @@ export function sshKeysConfig() {
         },
 
         showMessage(msg, type = 'success') {
+            // serviceActionMixin passes isError as a boolean instead of a type
+            if (typeof type === 'boolean') {
+                type = type ? 'error' : 'success';
+            }
             // Use global toast manager
             if (window.toastManager) {
                 const title = type === 'success' ? 'SSH Keys - Success' : 

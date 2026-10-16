@@ -153,6 +153,8 @@ export function radiotrackingConfig() {
                 clearInterval(this.refreshInterval);
             }
             
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             this.refreshInterval = setInterval(() => {
                 // Only refresh if radiotracking tab is active and not in server mode
                 const currentHash = window.location.hash.slice(1);
@@ -163,6 +165,7 @@ export function radiotrackingConfig() {
         },
 
         destroy() {
+            this.destroyed = true;
             // Clean up interval when component is destroyed
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);

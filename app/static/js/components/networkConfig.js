@@ -147,6 +147,7 @@ export function networkConfig() {
         },
         
         destroy() {
+            this.destroyed = true;
             this.stopAutoRefresh();
             this._initialized = false;
         },
@@ -802,6 +803,8 @@ export function networkConfig() {
             // Refresh connection and service status periodically (without showing refreshing state)
             const interval = await getSystemRefreshInterval();
             
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             this.statusInterval = setInterval(() => {
                 // Only refresh if network tab is active and not already refreshing
                 const currentHash = window.location.hash.slice(1);

@@ -1,4 +1,4 @@
-import { apiUrl } from '../utils/apiUtils.js';
+import { apiUrl, getJsonShared } from '../utils/apiUtils.js';
 
 export function configManager() {
     return {
@@ -240,10 +240,9 @@ export function configManager() {
                     url += `?config_group=${encodeURIComponent(this.currentConfigGroup)}`;
                 }
                 
-                const response = await fetch(apiUrl(url));
+                const response = await getJsonShared(apiUrl(url));
                 if (response.ok) {
-                    const data = await response.json();
-                    this.availableServices = data.available_services || [];
+                    this.availableServices = response.data.available_services || [];
                     this.servicesLoaded = true;
                 } else {
                     console.error('Failed to load available services');
@@ -265,10 +264,9 @@ export function configManager() {
             }
             
             try {
-                const response = await fetch(apiUrl('/api/system-status'));
+                const response = await getJsonShared(apiUrl('/api/system-status'));
                 if (response.ok) {
-                    const data = await response.json();
-                    this.hostname = data.hostname || 'Unknown';
+                    this.hostname = response.data.hostname || 'Unknown';
                 } else {
                     console.error('Failed to load hostname from system status');
                     this.hostname = 'Unknown';

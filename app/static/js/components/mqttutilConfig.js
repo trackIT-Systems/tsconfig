@@ -198,6 +198,8 @@ export function mqttutilConfig() {
                 this.loadServiceStatus();
             }
 
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             this.refreshInterval = setInterval(() => {
                 const currentHash = window.location.hash.slice(1);
                 const parts = currentHash.split('/');
@@ -212,6 +214,7 @@ export function mqttutilConfig() {
         },
 
         destroy() {
+            this.destroyed = true;
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
                 this.refreshInterval = null;

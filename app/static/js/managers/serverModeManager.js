@@ -1,5 +1,5 @@
 // Server mode manager - handles server mode state and config groups
-import { apiUrl } from '../utils/apiUtils.js';
+import { apiUrl, getServerModeInfo } from '../utils/apiUtils.js';
 
 export const serverModeManager = {
     enabled: false,
@@ -14,9 +14,8 @@ export const serverModeManager = {
         }
 
         try {
-            const response = await fetch(apiUrl('/api/server-mode'));
-            if (response.ok) {
-                const data = await response.json();
+            const data = await getServerModeInfo();
+            if (data) {
                 this.enabled = data.enabled || false;
                 this.configGroups = data.config_groups || [];
                 this.configRoot = data.config_root || null;

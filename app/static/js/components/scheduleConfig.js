@@ -56,6 +56,8 @@ export function scheduleConfig() {
             // Initialize expert mode from URL
             this.updateExpertMode();
             
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             // Set up polling to detect expert mode changes
             // (history.replaceState doesn't trigger events, so we poll)
             this.expertModeCheckInterval = setInterval(() => {
@@ -91,6 +93,8 @@ export function scheduleConfig() {
                 clearInterval(this.refreshInterval);
             }
             
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             this.refreshInterval = setInterval(() => {
                 // Only refresh if settings tab is active and not in server mode
                 const currentHash = window.location.hash.slice(1);
@@ -102,6 +106,7 @@ export function scheduleConfig() {
         },
 
         destroy() {
+            this.destroyed = true;
             // Clean up intervals when component is destroyed
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);

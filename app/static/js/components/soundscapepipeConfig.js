@@ -104,6 +104,8 @@ export function soundscapepipeConfig() {
             // Set up watchers for detector enabled state changes
             this.setupDetectorWatchers();
             
+            // destroy() may have run while this was still loading (tab left)
+            if (this.destroyed) return;
             // Auto-refresh service status every 30 seconds when tab is active
             this.refreshInterval = setInterval(() => {
                 // Only refresh if soundscapepipe tab is active
@@ -120,6 +122,7 @@ export function soundscapepipeConfig() {
         },
 
         destroy() {
+            this.destroyed = true;
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
                 this.refreshInterval = null;
