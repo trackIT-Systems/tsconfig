@@ -242,9 +242,9 @@ active_sessions: dict[str, PtyProcess] = {}
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for interactive shell sessions."""
-    # BaseHTTPMiddleware (AuthenticationMiddleware) does not see websocket
-    # connections, so the operator login has to be enforced here. Closing
-    # before accept() rejects the handshake.
+    # AuthenticationMiddleware refuses unauthenticated handshakes as well;
+    # this check stays so the shell does not depend on the middleware being
+    # installed. Closing before accept() rejects the handshake.
     if not is_authorized(websocket):
         logger.warning("Rejected unauthenticated shell websocket connection")
         await websocket.close(code=1008)

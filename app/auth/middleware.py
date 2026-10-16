@@ -2,12 +2,14 @@
 
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
 from urllib.parse import quote
 
-from fastapi import Request, Response
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import RedirectResponse
+from starlette.requests import HTTPConnection
+from starlette.responses import RedirectResponse, Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.websockets import WebSocketClose
 
 from app import __version__
 from app.auth.oidc_config import oidc_config
@@ -45,19 +47,52 @@ UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 BASIC_CHALLENGE = {"WWW-Authenticate": 'Basic realm="tsOS"'}
 
 
-class AuthenticationMiddleware(BaseHTTPMiddleware):
+@dataclass
+class Proceed:
+    """The request may go on to the application. `decorate`, if set, adds
+    cookies to the application's response (sliding session expiry, refreshed
+    OIDC tokens)."""
+
+    decorate: Callable[[Response], None] | None = None
+
+
+def _decorating_send(send: Send, decorate: Callable[[Response], None]) -> Send:
+    """Wrap `send` so the cookies `decorate` sets on a Response are added to
+    the application's response."""
+
+    async def send_with_cookies(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            cookies = Response()
+            decorate(cookies)
+            # Only the cookies: the empty Response also carries a content-length
+            extra = [(name, value) for name, value in cookies.raw_headers if name == b"set-cookie"]
+            message = {**message, "headers": [*message.get("headers", []), *extra]}
+        await send(message)
+
+    return send_with_cookies
+
+
+class AuthenticationMiddleware:
     """
-    Middleware to enforce authentication.
+    Pure ASGI middleware to enforce authentication, for HTTP requests and
+    websocket handshakes alike (a refused handshake is closed before accept).
 
     In tracker mode: requires the operator's session cookie (PAM login of `pi`),
     except for requests made directly by a process on the device itself
     (loopback without proxy headers - mqttutil, tsconfig-ble) and the public
     paths below
     In server mode: Validates JWT token for all non-public endpoints
+
+    This is not a BaseHTTPMiddleware: that one does not see websockets and
+    runs the application in a separate task per request, with its own
+    receive channel, so the application's response and its client-disconnect
+    detection (the log stream) are not talking to the server directly. The
+    decision is made before the application is called; whatever must be added
+    to its response goes through a wrapped `send`.
     """
 
-    def __init__(self, app, public_paths: list[str] | None = None):
-        super().__init__(app)
+    def __init__(self, app: ASGIApp, public_paths: list[str] | None = None):
+        self.app = app
         # Get base URL from environment (for generating redirect URLs)
         base_url = os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
         if not base_url:
@@ -106,7 +141,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     def _is_tracker_public_path(self, path: str) -> bool:
         return any(path.startswith(public_path) for public_path in self.tracker_public_paths)
 
-    def _login_redirect_url(self, request: Request) -> str:
+    def _login_redirect_url(self, request: HTTPConnection) -> str:
         """Login URL carrying the page to return to. Behind Caddy's
         forward_auth the original URI is in X-Forwarded-Uri."""
         original = request.headers.get("x-forwarded-uri")
@@ -115,14 +150,14 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         next_path = sanitize_next(original)
         return f"{self.base_url}/auth/login?next={quote(next_path, safe='')}"
 
-    def _is_dav_auth_check(self, request: Request) -> bool:
+    def _is_dav_auth_check(self, request: HTTPConnection) -> bool:
         """Is this Caddy's forward_auth subrequest for a WebDAV URL?"""
         if request.url.path != f"{self.base_url}/auth/check":
             return False
         original = request.headers.get("x-forwarded-uri", "")
         return original == DAV_PATH_PREFIX or original.startswith(DAV_PATH_PREFIX + "/")
 
-    async def _check_basic_credentials(self, request: Request) -> Response:
+    async def _check_basic_credentials(self, request: HTTPConnection) -> Response:
         """Verify `Authorization: Basic pi:<password>` for a WebDAV request."""
         credentials = parse_basic_auth(request.headers.get("authorization"))
         if credentials is None:
@@ -161,19 +196,18 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         verified_basic_credentials.remember(username, password)
         return Response(status_code=200)
 
-    async def _dispatch_tracker(self, request: Request, call_next: Callable) -> Response:
+    async def _decide_tracker(self, request: HTTPConnection) -> Response | Proceed:
         """Tracker mode: operator session cookie or trusted local request."""
-        if request.method in UNSAFE_METHODS and is_cross_origin(request):
-            logger.warning(
-                f"Refused cross-origin {request.method} {request.url.path} from {request.headers.get('origin')!r}"
-            )
+        method = request.scope.get("method", "GET")  # websocket scopes have none
+        if (method in UNSAFE_METHODS or request.scope["type"] == "websocket") and is_cross_origin(request):
+            logger.warning(f"Refused cross-origin {method} {request.url.path} from {request.headers.get('origin')!r}")
             return Response(
                 content='{"detail":"Cross-origin request refused"}',
                 status_code=403,
                 media_type="application/json",
             )
         if self._is_tracker_public_path(request.url.path) or is_trusted_local(request):
-            return await call_next(request)
+            return Proceed()
 
         issued = has_valid_session(request)
         if issued is None:
@@ -187,13 +221,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 media_type="application/json",
             )
 
-        response = await call_next(request)
         if session_needs_refresh(issued):
             # Sliding expiry: re-issue the cookie while the operator is active.
-            set_session_cookie(response, request)
-        return response
+            return Proceed(decorate=lambda response: set_session_cookie(response, request))
+        return Proceed()
 
-    def _is_browser_request(self, request: Request) -> bool:
+    def _is_browser_request(self, request: HTTPConnection) -> bool:
         """
         Detect if request is from a browser (vs API client).
 
@@ -214,7 +247,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # Default to browser for other cases (like Accept: image/*, etc.)
         return bool(accept) and accept.strip() not in ("*/*", "*")
 
-    async def _get_token_from_request(self, request: Request) -> str | None:
+    async def _get_token_from_request(self, request: HTTPConnection) -> str | None:
         """Extract authentication token from request (header or cookie)."""
         # Try Authorization header first
         auth_header = request.headers.get("authorization")
@@ -228,11 +261,29 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         return None
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Process the request and enforce authentication if needed."""
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        decision = await self._decide(HTTPConnection(scope))
+        if isinstance(decision, Response):
+            if scope["type"] == "websocket":
+                # Closing before accept rejects the handshake
+                await WebSocketClose(code=1008)(scope, receive, send)
+            else:
+                await decision(scope, receive, send)
+            return
+
+        if decision.decorate is not None and scope["type"] == "http":
+            send = _decorating_send(send, decision.decorate)
+        await self.app(scope, receive, send)
+
+    async def _decide(self, request: HTTPConnection) -> Response | Proceed:
+        """Decide whether the request may go on, or answer it right here."""
         # Tracker mode: operator login (PAM) instead of OIDC
         if not config_loader.is_server_mode():
-            return await self._dispatch_tracker(request, call_next)
+            return await self._decide_tracker(request)
 
         # In server mode, check if OIDC is configured
         if not oidc_config.is_configured():
@@ -240,12 +291,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             # This is a configuration error, but we'll allow the request
             # The endpoints themselves can decide if they need auth
             logger.warning("Server mode enabled but OIDC not configured")
-            return await call_next(request)
+            return Proceed()
 
         # Check if path is public (doesn't require authentication)
         path = request.url.path
         if self._is_public_path(path):
-            return await call_next(request)
+            return Proceed()
 
         # For all other paths, require authentication
         token = await self._get_token_from_request(request)
@@ -320,7 +371,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             request.state.user = user_info
 
             # Token is valid and user is authorized, proceed with request
-            return await call_next(request)
+            return Proceed()
 
         except ValueError as e:
             # Token validation failed - try to refresh before giving up
@@ -356,32 +407,30 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                                 # Success! Attach user info to request state
                                 request.state.user = user_info
 
-                                # Continue with the request
-                                response = await call_next(request)
-
-                                # Update cookies in the response
-                                response.set_cookie(
-                                    key="auth_token",
-                                    value=new_token,
-                                    httponly=True,
-                                    secure=True,
-                                    samesite="lax",
-                                    max_age=token_response.get("expires_in", 3600),
-                                )
-
-                                # Update refresh token if rotated
                                 new_refresh_token = token_response.get("refresh_token", refresh_token)
-                                response.set_cookie(
-                                    key="refresh_token",
-                                    value=new_refresh_token,
-                                    httponly=True,
-                                    secure=True,
-                                    samesite="lax",
-                                    max_age=30 * 24 * 60 * 60,
-                                )
+                                expires_in = token_response.get("expires_in", 3600)
+
+                                def set_refreshed_cookies(response: Response) -> None:
+                                    response.set_cookie(
+                                        key="auth_token",
+                                        value=new_token,
+                                        httponly=True,
+                                        secure=True,
+                                        samesite="lax",
+                                        max_age=expires_in,
+                                    )
+                                    # The refresh token may have been rotated
+                                    response.set_cookie(
+                                        key="refresh_token",
+                                        value=new_refresh_token,
+                                        httponly=True,
+                                        secure=True,
+                                        samesite="lax",
+                                        max_age=30 * 24 * 60 * 60,
+                                    )
 
                                 logger.debug(f"Successfully refreshed token for user: {user_info.get('email')}")
-                                return response
+                                return Proceed(decorate=set_refreshed_cookies)
                             else:
                                 logger.warning(f"User authorization failed after token refresh: {error_msg}")
                 except Exception as refresh_error:

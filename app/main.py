@@ -28,6 +28,7 @@ from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.configs.tsupdate import TsupdateConfig
 from app.logging_config import get_logger, setup_logging
+from app.proxy_headers import ProxyHeadersMiddleware
 from app.routers import (
     auth,
     authorized_keys,
@@ -193,57 +194,11 @@ if not config_loader.is_server_mode():
 # Mount static files (must be after all route definitions to avoid conflicts)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Add authentication middleware (only active in server mode)
+# Add authentication middleware (operator login in tracker mode, OIDC in server mode)
 app.add_middleware(AuthenticationMiddleware)
 
 # Add proxy headers middleware to handle X-Forwarded-* headers from reverse proxy
 if config_loader.is_server_mode():
-    from starlette.middleware.base import BaseHTTPMiddleware
-
-    class ProxyHeadersMiddleware(BaseHTTPMiddleware):
-        """Middleware to handle proxy headers and reconstruct the original request URL.
-
-        This middleware handles the case where Caddy strips the base path prefix
-        (e.g., /tsconfig) before forwarding to the app. We need to store the
-        public-facing URL components for proper redirect URL construction.
-        """
-
-        async def dispatch(self, request: Request, call_next):
-            # Get forwarded headers
-            forwarded_proto = request.headers.get("x-forwarded-proto")
-            forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
-
-            logger.debug(f"ProxyHeadersMiddleware: proto={forwarded_proto}, host={forwarded_host}")
-
-            # Store original values for URL reconstruction
-            if forwarded_proto and forwarded_host:
-                # Store proxy information in request state for use by other middleware/endpoints
-                request.state.forwarded_proto = forwarded_proto
-                request.state.forwarded_host = forwarded_host
-
-                # Build the complete public URL including root_path
-                root_path = request.scope.get("root_path", "")
-                path = request.scope.get("path", "/")
-                query_string = request.scope.get("query_string", b"").decode()
-
-                logger.debug(f"ProxyHeadersMiddleware: root_path='{root_path}', path='{path}', query='{query_string}'")
-
-                # Construct full URL: scheme://host/root_path/path?query
-                full_path = f"{root_path}{path}"
-                if query_string:
-                    public_url = f"{forwarded_proto}://{forwarded_host}{full_path}?{query_string}"
-                else:
-                    public_url = f"{forwarded_proto}://{forwarded_host}{full_path}"
-
-                logger.debug(f"ProxyHeadersMiddleware: constructed public_url='{public_url}'")
-
-                # Store the public URL in request state
-                request.state.public_url = public_url
-            else:
-                logger.debug("ProxyHeadersMiddleware: no forwarded headers found, skipping URL reconstruction")
-
-            return await call_next(request)
-
     app.add_middleware(ProxyHeadersMiddleware)
 
 # Templates
@@ -270,15 +225,6 @@ async def validate_oidc_config():
         else:
             logger.warning("Server mode is enabled but OIDC is not configured")
             logger.warning("Authentication will not be enforced")
-
-
-# Add base_url to template context for all responses
-@app.middleware("http")
-async def add_base_url_to_context(request: Request, call_next):
-    """Add base_url to request state for use in templates."""
-    request.state.base_url = BASE_URL
-    response = await call_next(request)
-    return response
 
 
 @app.get(
