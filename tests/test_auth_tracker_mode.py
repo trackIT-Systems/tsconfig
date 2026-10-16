@@ -80,11 +80,13 @@ class TestGate:
         assert r.headers["location"] == "/auth/login?next=%2Fapi%2Fsecret%3Fx%3D1"
 
     def test_valid_session_passes(self, remote):
-        r = remote.get("/api/secret", cookies=session_cookie())
+        remote.cookies = session_cookie()
+        r = remote.get("/api/secret")
         assert r.status_code == 200
 
     def test_garbage_cookie_is_rejected(self, remote):
-        assert remote.get("/api/secret", cookies={SESSION_COOKIE: "1.2.3"}).status_code == 401
+        remote.cookies = {SESSION_COOKIE: "1.2.3"}
+        assert remote.get("/api/secret").status_code == 401
 
     def test_local_process_needs_no_login(self, local):
         assert local.get("/api/secret").status_code == 200
@@ -104,12 +106,14 @@ class TestGate:
 
     def test_sliding_cookie_is_reissued_when_old(self, remote):
         old = create_session_token(now=__import__("time").time() - session.SESSION_REFRESH_AFTER_SECONDS - 60)
-        r = remote.get("/api/secret", cookies={SESSION_COOKIE: old})
+        remote.cookies = {SESSION_COOKIE: old}
+        r = remote.get("/api/secret")
         assert r.status_code == 200
         assert SESSION_COOKIE in r.headers.get("set-cookie", "")
 
     def test_fresh_cookie_is_not_reissued(self, remote):
-        r = remote.get("/api/secret", cookies=session_cookie())
+        remote.cookies = session_cookie()
+        r = remote.get("/api/secret")
         assert "set-cookie" not in r.headers
 
 
@@ -117,31 +121,38 @@ class TestCrossOrigin:
     """State-changing requests and websockets from another site's page are refused."""
 
     def test_post_from_another_site_is_refused_even_with_a_session(self, remote):
-        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "http://evil.example"})
+        remote.cookies = session_cookie()
+        r = remote.post("/api/change", headers={"Origin": "http://evil.example"})
         assert r.status_code == 403
 
     def test_post_from_the_device_page_passes(self, remote):
-        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "http://testserver"})
+        remote.cookies = session_cookie()
+        r = remote.post("/api/change", headers={"Origin": "http://testserver"})
         assert r.status_code == 200
 
     def test_the_same_device_over_https_counts_as_same_origin(self, remote):
-        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "https://testserver"})
+        remote.cookies = session_cookie()
+        r = remote.post("/api/change", headers={"Origin": "https://testserver"})
         assert r.status_code == 200
 
     def test_another_port_is_another_origin(self, remote):
-        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "http://testserver:8080"})
+        remote.cookies = session_cookie()
+        r = remote.post("/api/change", headers={"Origin": "http://testserver:8080"})
         assert r.status_code == 403
 
     @pytest.mark.parametrize("origin", ["null", "", "not a url"])
     def test_opaque_or_malformed_origin_is_refused(self, remote, origin):
-        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": origin})
+        remote.cookies = session_cookie()
+        r = remote.post("/api/change", headers={"Origin": origin})
         assert r.status_code == 403
 
     def test_request_without_origin_is_not_from_a_page_and_passes(self, remote):
-        assert remote.post("/api/change", cookies=session_cookie()).status_code == 200
+        remote.cookies = session_cookie()
+        assert remote.post("/api/change").status_code == 200
 
     def test_reads_are_not_checked(self, remote):
-        r = remote.get("/api/secret", cookies=session_cookie(), headers={"Origin": "http://evil.example"})
+        remote.cookies = session_cookie()
+        r = remote.get("/api/secret", headers={"Origin": "http://evil.example"})
         assert r.status_code == 200
 
     def test_the_login_form_cannot_be_posted_from_another_site(self, remote):
@@ -181,7 +192,8 @@ class TestAuthCheck:
         assert remote.get("/auth/check").status_code == 401
 
     def test_authenticated_gets_200(self, remote):
-        assert remote.get("/auth/check", cookies=session_cookie()).status_code == 200
+        remote.cookies = session_cookie()
+        assert remote.get("/auth/check").status_code == 200
 
     def test_hostile_forwarded_uri_is_not_used_as_redirect_target(self, remote):
         r = remote.get("/auth/check", headers={**HTML, "X-Forwarded-Uri": "//evil.example/"})
@@ -272,7 +284,8 @@ class TestWebDavBasicAuth:
         pam.assert_not_called()
 
     def test_session_cookie_still_works_for_dav_urls(self, remote):
-        assert remote.get("/auth/check", headers=DAV, cookies=session_cookie()).status_code == 200
+        remote.cookies = session_cookie()
+        assert remote.get("/auth/check", headers=DAV).status_code == 200
 
 
 class TestStaffLogin:
@@ -294,7 +307,8 @@ class TestStaffLogin:
             root_cookie = self.post(remote, "root").cookies.get(SESSION_COOKIE)
             pi_cookie = self.post(remote, "pi").cookies.get(SESSION_COOKIE)
         assert len(root_cookie.split(".")) == len(pi_cookie.split(".")) == 3
-        assert remote.get("/api/secret", cookies={SESSION_COOKIE: root_cookie}).status_code == 200
+        remote.cookies = {SESSION_COOKIE: root_cookie}
+        assert remote.get("/api/secret").status_code == 200
 
     def test_wrong_root_password_is_refused(self, remote):
         with patch.object(auth_router, "authenticate_operator", AsyncMock(return_value=False)):
@@ -401,7 +415,8 @@ class TestLogin:
         with patch.object(auth_router, "authenticate_operator", AsyncMock(return_value=True)):
             r = remote.post("/auth/login", data={"password": "natur"})
         token = r.cookies.get(SESSION_COOKIE)
-        assert remote.get("/api/secret", cookies={SESSION_COOKIE: token}).status_code == 200
+        remote.cookies = {SESSION_COOKIE: token}
+        assert remote.get("/api/secret").status_code == 200
 
     def test_open_redirect_in_next_is_neutralised(self, remote):
         with patch.object(auth_router, "authenticate_operator", AsyncMock(return_value=True)):
@@ -441,7 +456,8 @@ class TestLogin:
         assert session.login_retry_after("203.0.113.7") == 0
 
     def test_logout_clears_cookie_and_goes_to_login(self, remote):
-        r = remote.get("/auth/logout", cookies=session_cookie())
+        remote.cookies = session_cookie()
+        r = remote.get("/auth/logout")
         assert r.status_code == 303
         assert r.headers["location"] == "/auth/login"
         assert SESSION_COOKIE in r.headers["set-cookie"]
@@ -470,18 +486,22 @@ class TestHttpsSession:
 
     def test_secure_cookie_opens_the_gate(self, https):
         token = create_session_token()
-        assert https.get("/api/secret", cookies={SECURE_SESSION_COOKIE: token}).status_code == 200
+        https.cookies = {SECURE_SESSION_COOKIE: token}
+        assert https.get("/api/secret").status_code == 200
 
     def test_plain_cookie_still_works_over_https(self, https):
-        assert https.get("/api/secret", cookies=session_cookie()).status_code == 200
+        https.cookies = session_cookie()
+        assert https.get("/api/secret").status_code == 200
 
     def test_sliding_refresh_over_https_issues_the_secure_cookie(self, https):
         old = create_session_token(now=__import__("time").time() - session.SESSION_REFRESH_AFTER_SECONDS - 60)
-        r = https.get("/api/secret", cookies={SESSION_COOKIE: old})
+        https.cookies = {SESSION_COOKIE: old}
+        r = https.get("/api/secret")
         assert r.headers["set-cookie"].startswith(f"{SECURE_SESSION_COOKIE}=")
 
     def test_logout_clears_both_cookies(self, https):
-        r = https.get("/auth/logout", cookies=session_cookie())
+        https.cookies = session_cookie()
+        r = https.get("/auth/logout")
         cookies = r.headers.get_list("set-cookie")
         assert any(c.startswith(f"{SESSION_COOKIE}=") for c in cookies)
         assert any(c.startswith(f"{SECURE_SESSION_COOKIE}=") and "secure" in c.lower() for c in cookies)

@@ -4,7 +4,7 @@ from configparser import ConfigParser
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.configs import BaseConfig
 
@@ -24,7 +24,8 @@ class RTLSDREntry(BaseModel):
     sdr_max_restart: int = Field(..., ge=0)
     sdr_timeout_s: int = Field(..., gt=0)
 
-    @validator("sample_rate")
+    @field_validator("sample_rate")
+    @classmethod
     def validate_sample_rate(cls, v):
         if not ((230_000 <= v <= 300_000) or (900_000 <= v <= 3_200_000)):
             raise ValueError("Sample rate must be either between 230-300 kHz or between 900 kHz-3.2 MHz")

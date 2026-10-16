@@ -1,4 +1,4 @@
-"""Tests for app.privileged.ops - the operations that run as root via sudo.
+"""Tests for app.privileged.ops - the operations that run as root via pkexec.
 
 See app/privileged/__init__.py for the security model these enforce: every
 op re-validates its own input from scratch, on the assumption that whatever

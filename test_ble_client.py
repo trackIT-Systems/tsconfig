@@ -900,11 +900,11 @@ async def main():
     if not device:
         print_error(f"Device not found after {args.retries} attempts")
         troubleshooting = [
-            "1. Verify BLE gateway: sudo systemctl status tsconfig-ble",
-            "2. Check advertising: sudo bluetoothctl scan on",
-            "3. Restart service: sudo systemctl restart tsconfig-ble",
+            "1. Verify BLE gateway: systemctl status tsconfig-ble",
+            "2. Check advertising: bluetoothctl scan on",
+            "3. Restart service: systemctl restart tsconfig-ble",
             "4. Try: --timeout 15 --retries 5",
-            "5. Check logs: sudo journalctl -u tsconfig-ble -n 50",
+            "5. Check logs: journalctl -u tsconfig-ble -n 50",
         ]
         print_info("\nTroubleshooting:")
         for step in troubleshooting:
@@ -940,10 +940,10 @@ async def main():
     except Exception as e:  # noqa: BLE001 - top-level boundary: report any failure with troubleshooting hints
         print_error(f"Connection failed: {e}")
         troubleshooting = [
-            "1. Verify BLE gateway: sudo systemctl status tsconfig-ble",
+            "1. Verify BLE gateway: systemctl status tsconfig-ble",
             "2. Check Bluetooth enabled on both devices",
             "3. Pairing (Just Works) is started by the OS on first access; accept it if prompted",
-            "4. Check logs: sudo journalctl -u tsconfig-ble -f",
+            "4. Check logs: journalctl -u tsconfig-ble -f",
         ]
         print_info("\nTroubleshooting:")
         for step in troubleshooting:

@@ -36,6 +36,10 @@ build-backend = "pdm.backend"
 [tool.pdm]
 distribution = true
 
+[tool.pytest.ini_options]
+# test_ble_client.py at the top level is a manual BLE client, not a test module
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 120
 

@@ -150,8 +150,10 @@ def main():
         logger.info("Shutdown requested by user")
         sys.exit(0)
     except PermissionError:
-        logger.error("Permission denied! BLE operations require elevated privileges.")
-        logger.error("Try running with: sudo python3 -m app.ble_gateway")
+        logger.error("Permission denied while starting the BLE GATT server.")
+        logger.error(
+            "On a tracker it runs as the tsconfig-ble user; see the BLE section of docs/security.md in tsOS-base."
+        )
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to start BLE GATT server: {e}", exc_info=args.verbose >= 2)

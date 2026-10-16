@@ -7,6 +7,7 @@ import platform
 import socket
 import subprocess
 import time
+from contextlib import asynccontextmanager
 
 import psutil
 from fastapi import FastAPI, Request
@@ -111,6 +112,17 @@ tags_metadata = [
     },
 ]
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # uvicorn applies its own logging config after this module is imported,
+    # which resets the uvicorn/uvicorn.access levels; re-apply ours once the
+    # server is up.
+    setup_logging()
+    await validate_oidc_config()
+    yield
+
+
 app = FastAPI(
     title="tsOS Configuration Manager",
     description="""
@@ -149,6 +161,7 @@ Each endpoint includes detailed request/response schemas and the ability to try 
         "name": "© 2025 trackIT Systems. All rights reserved.",
     },
     root_path=BASE_URL,
+    lifespan=lifespan,
 )
 
 # Log application startup
@@ -236,15 +249,6 @@ if config_loader.is_server_mode():
 templates = Jinja2Templates(directory="app/templates")
 
 
-# uvicorn applies its own logging config after this module is imported, which
-# resets the uvicorn/uvicorn.access levels; re-apply ours once the server is up.
-@app.on_event("startup")
-async def reapply_logging_config():
-    setup_logging()
-
-
-# Startup event to validate OIDC configuration in server mode
-@app.on_event("startup")
 async def validate_oidc_config():
     """Validate OIDC configuration on startup if in server mode."""
     if config_loader.is_server_mode():

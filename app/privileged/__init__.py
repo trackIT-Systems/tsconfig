@@ -1,15 +1,16 @@
-"""Privileged operations, meant to run as root via sudo on behalf of `pi`.
+"""Privileged operations, run as root via pkexec on behalf of `pi`.
 
 This package is the *only* code in tsconfig that is ever invoked with root
-privileges in the target (post-hardening) deployment model: tsconfig.service
-itself runs as `pi`, and reaches every action that needs root - writing a
-boot-partition config file, restarting a select systemd unit, rebooting,
-reading logs, changing network settings - by calling `sudo` for an
-allowlisted command. For file writes, network changes and system actions
-(everything except plain `systemctl restart <unit>`, which sudoers grants
-directly), the sudoers allowlist grants exactly one thing: running the
-`tsconfig-privileged` wrapper script, which execs
-`python3 -I -m app.privileged`.
+privileges on a tracker. tsconfig.service itself runs as `pi`; restarting
+units, rebooting and changing network settings are direct, unprivileged
+calls authorized by polkit rules, and logs are readable through the
+`systemd-journal` group. What has no such native path - writing, deleting
+and stat-ing root-owned config files, wiping the overlay, removing GSM
+fields from a netplan file - goes through
+`pkexec /usr/local/sbin/tsconfig-privileged`, a wrapper (authorized by the
+`systems.trackit.tsos.tsconfig-privileged` polkit action) that execs
+`python3 -I -m app.privileged`. See tsOS-base's docs/security.md,
+"`tsconfig-privileged` via `pkexec`".
 
 Because this runs as root and is reachable by an operator who does not have
 general root access, two rules apply everywhere in this package:
