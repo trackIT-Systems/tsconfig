@@ -1,4 +1,5 @@
 import { apiUrl, getJsonShared } from '../utils/apiUtils.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
 
 export function configManager() {
     return {
@@ -33,10 +34,10 @@ export function configManager() {
 
         async init() {
             // Initialize server mode manager first
-            await window.serverModeManager.initialize();
-            this.serverMode = window.serverModeManager.isEnabled();
-            this.configGroups = window.serverModeManager.getConfigGroups();
-            this.currentConfigGroup = window.serverModeManager.getCurrentConfigGroup();
+            await serverModeManager.initialize();
+            this.serverMode = serverModeManager.isEnabled();
+            this.configGroups = serverModeManager.getConfigGroups();
+            this.currentConfigGroup = serverModeManager.getCurrentConfigGroup();
             
             // Load available services and hostname
             await Promise.all([
@@ -89,7 +90,7 @@ export function configManager() {
             this.$watch('currentConfigGroup', (value, oldValue) => {
                 // Keep serverModeManager in sync (but avoid infinite loops)
                 if (this.serverMode && value && value !== oldValue && oldValue !== undefined) {
-                    window.serverModeManager.currentConfigGroup = value;
+                    serverModeManager.currentConfigGroup = value;
                     
                     // Update URL query parameter to reflect new config group
                     const urlParams = new URLSearchParams(window.location.search);

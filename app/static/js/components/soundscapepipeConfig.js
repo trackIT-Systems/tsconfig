@@ -1,19 +1,20 @@
-import { saveStateMixin } from '../mixins/saveStateMixin.js';
-import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
-import { serviceManager } from '../managers/serviceManager.js';
+import { compose } from '../mixins/compose.js';
+import { configPageMixin } from '../mixins/configPageMixin.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
 import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
 import { apiUrl } from '../utils/apiUtils.js';
 
 export function soundscapepipeConfig() {
-    return {
-        ...saveStateMixin(),
-        ...serviceActionMixin(),
-        
-        // Server mode helper
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
-        },
-        
+    return compose(configPageMixin({
+        service: 'soundscapepipe',
+        apiPath: '/api/soundscapepipe',
+        title: 'Soundscapepipe',
+        failureText: 'Failed to save soundscapepipe configuration',
+        refreshOn: ['soundscapepipe'],
+        refreshSeconds: 30,
+        initDelayMs: 150,
+        savedMessage: 'Soundscapepipe configuration saved successfully!',
+    }), {
         config: {
             stream_port: 5001,
             input_device_match: "trackIT Analog Frontend",
@@ -64,13 +65,6 @@ export function soundscapepipeConfig() {
             frontend_gain_pin_b: 13
         },
         configLoaded: false,
-        serviceStatus: {
-            active: false,
-            enabled: false,
-            status: 'unknown',
-            uptime: 'N/A'
-        },
-        refreshInterval: null,
         audioDevices: {},
         loadingDevices: false,
         modelFiles: {},
@@ -79,7 +73,6 @@ export function soundscapepipeConfig() {
         loadingLureFiles: false,
         speciesData: {},
         loadingSpecies: false,
-        actionLoading: false,
         diskInfo: [],
 
         async init() {
@@ -104,52 +97,16 @@ export function soundscapepipeConfig() {
             // Set up watchers for detector enabled state changes
             this.setupDetectorWatchers();
             
-            // destroy() may have run while this was still loading (tab left)
-            if (this.destroyed) return;
-            // Auto-refresh service status every 30 seconds when tab is active
-            this.refreshInterval = setInterval(() => {
-                // Only refresh if soundscapepipe tab is active
-                const currentHash = window.location.hash.slice(1);
-                if (currentHash === 'soundscapepipe') {
-                    this.loadServiceStatus();
-                }
-            }, 30000);
-            
-            // Listen for config group changes in server mode
-            window.addEventListener('config-group-changed', async () => {
-                await this.loadConfig();
-            });
-        },
+            await this.startServiceStatusRefresh();
 
-        destroy() {
-            this.destroyed = true;
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-                this.refreshInterval = null;
-            }
-        },
-
-        async loadServiceStatus() {
-            try {
-                const services = await serviceManager.getServices();
-                const soundscapepipeService = services.find(service => service.name === 'soundscapepipe');
-                if (soundscapepipeService) {
-                    this.serviceStatus = {
-                        active: soundscapepipeService.active,
-                        enabled: soundscapepipeService.enabled,
-                        status: soundscapepipeService.status,
-                        uptime: soundscapepipeService.uptime || 'N/A'
-                    };
-                }
-            } catch (error) {
-                console.error('Failed to load service status:', error);
-            }
+            // Server mode: another config group was chosen
+            this.listen(window, 'config-group-changed', () => this.loadConfig());
         },
 
         async loadConfig() {
             try {
                 // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe') || '/api/soundscapepipe';
+                const url = serverModeManager.buildApiUrl('/api/soundscapepipe');
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
@@ -331,374 +288,141 @@ export function soundscapepipeConfig() {
             }
         },
 
-        async saveConfig() {
-            const configSaveFunction = async () => {
-                // Validate species groups first
-                const speciesErrors = this.validateSpeciesGroups();
-                if (speciesErrors.length > 0) {
-                    this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
-                    throw new Error('Species validation failed');
-                }
-
-                // Create a copy of the config and filter out disabled detectors
-                const configToSave = { ...this.config };
-                
-                // Filter detectors to only include enabled ones
-                configToSave.detectors = {};
-                
-                if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
-                    configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
-                    delete configToSave.detectors.birdedge.enabled; // Remove the enabled flag from saved config
-                    // Clean up tasks - convert UI components back to time strings
-                    if (configToSave.detectors.birdedge.tasks) {
-                        configToSave.detectors.birdedge.tasks = configToSave.detectors.birdedge.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-                
-                if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
-                    configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
-                    delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
-                    // Set both thresholds to the same value from class_threshold
-                    configToSave.detectors.yolobat.detection_threshold = this.config.detectors.yolobat.class_threshold;
-                    // Remove schedule if it exists (YoloBat doesn't use schedule property)
-                    delete configToSave.detectors.yolobat.schedule;
-                    // Clean up tasks - convert UI components back to time strings
-                    if (configToSave.detectors.yolobat.tasks) {
-                        configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-
-                if (this.config.detectors.audioprotopnet && this.config.detectors.audioprotopnet.enabled) {
-                    configToSave.detectors.audioprotopnet = { ...this.config.detectors.audioprotopnet };
-                    delete configToSave.detectors.audioprotopnet.enabled;
-                    if (configToSave.detectors.audioprotopnet.tasks) {
-                        configToSave.detectors.audioprotopnet.tasks = configToSave.detectors.audioprotopnet.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-                
-                if (this.config.detectors.schedule && this.config.detectors.schedule.enabled) {
-                    configToSave.detectors.schedule = { ...this.config.detectors.schedule };
-                    delete configToSave.detectors.schedule.enabled; // Remove the enabled flag from saved config
-                    // Clean up tasks - convert UI components back to time strings
-                    if (configToSave.detectors.schedule.tasks) {
-                        configToSave.detectors.schedule.tasks = configToSave.detectors.schedule.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-
-                // Ensure all lure task time strings are synced with UI components before saving
-                if (this.config.lure && this.config.lure.tasks) {
-                    this.config.lure.tasks.forEach(task => {
-                        this.updateLureTaskTimeString(task, 'start');
-                        this.updateLureTaskTimeString(task, 'stop');
-                    });
-                }
-
-                // Clean up lure tasks - convert UI components back to time strings and filter out empty tasks
-                if (configToSave.lure && configToSave.lure.tasks) {
-                    // Filter out tasks that don't have a species name (empty/incomplete tasks)
-                    const validTasks = configToSave.lure.tasks.filter(task => 
-                        task && task.species && task.species.trim() !== ''
-                    );
-                    
-                    // Create a new array to avoid modifying the original that UI is bound to
-                    configToSave.lure = {
-                        ...configToSave.lure,
-                        tasks: validTasks.map(task => {
-                            const cleanTask = { 
-                                species: task.species, 
-                                paths: task.paths || [''],
-                                start: task.start || '00:00', 
-                                stop: task.stop || '00:00',
-                                record: Boolean(task.record)
-                            };
-                            return cleanTask;
-                        })
-                    };
-                } else if (configToSave.lure) {
-                    // Ensure tasks is always an empty array, not null
-                    configToSave.lure.tasks = [];
-                }
-
-                // Clean up groups - remove null/undefined values and filter empty species
-                if (configToSave.groups) {
-                    configToSave.groups = {};
-                    Object.keys(this.config.groups).forEach(groupName => {
-                        const group = this.config.groups[groupName];
-                        const cleanGroup = {
-                            species: (group.species || []).filter(species => species && species.trim() !== '')
-                        };
-                        
-                        // Only include ratio if it's not null/undefined
-                        if (group.ratio !== null && group.ratio !== undefined) {
-                            cleanGroup.ratio = group.ratio;
-                        }
-                        
-                        // Only include length_s if it's not null/undefined
-                        if (group.length_s !== null && group.length_s !== undefined) {
-                            cleanGroup.length_s = group.length_s;
-                        }
-                        
-                        // Always include maximize_confidence as a boolean
-                        cleanGroup.maximize_confidence = Boolean(group.maximize_confidence);
-                        
-                        configToSave.groups[groupName] = cleanGroup;
-                    });
-                }
-
-
-
-                // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe') || '/api/soundscapepipe';
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(configToSave)
-                });
-                
-                if (response.ok) {
-                    // Only show message in tracker mode (server mode will show messages in the mixin)
-                    if (!this.serverMode) {
-                        this.showMessage('Soundscapepipe configuration saved successfully!', false);
-                    }
-                } else {
-                    const error = await response.json();
-                    let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
-                    }
-                    throw new Error(errorMessage);
-                }
-            };
-            
-            // Save only; deployment is triggered separately via deployConfig()
-            await this.handleSaveConfig(configSaveFunction);
-        },
-
-        async deployConfig() {
-            const configGroup = window.serverModeManager?.getCurrentConfigGroup();
-            await this.handleDeployConfig(configGroup);
-        },
-
-        async saveAndRestartService() {
-            const configSaveFunction = async () => {
-                // First save the configuration (custom logic to avoid interfering with regular save button)
-                const speciesErrors = this.validateSpeciesGroups();
-                if (speciesErrors.length > 0) {
-                    this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
-                    throw new Error('Species validation failed');
-                }
-
-                // Create a copy of the config and filter out disabled detectors (same logic as saveConfig)
-                const configToSave = { ...this.config };
-                
-                // Filter detectors to only include enabled ones
-                configToSave.detectors = {};
-                
-                if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
-                    configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
-                    delete configToSave.detectors.birdedge.enabled;
-                    if (configToSave.detectors.birdedge.tasks) {
-                        configToSave.detectors.birdedge.tasks = configToSave.detectors.birdedge.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-                
-                if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
-                    configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
-                    delete configToSave.detectors.yolobat.enabled;
-                    configToSave.detectors.yolobat.detection_threshold = this.config.detectors.yolobat.class_threshold;
-                    delete configToSave.detectors.yolobat.schedule;
-                    if (configToSave.detectors.yolobat.tasks) {
-                        configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-
-                if (this.config.detectors.audioprotopnet && this.config.detectors.audioprotopnet.enabled) {
-                    configToSave.detectors.audioprotopnet = { ...this.config.detectors.audioprotopnet };
-                    delete configToSave.detectors.audioprotopnet.enabled;
-                    if (configToSave.detectors.audioprotopnet.tasks) {
-                        configToSave.detectors.audioprotopnet.tasks = configToSave.detectors.audioprotopnet.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-                
-                if (this.config.detectors.schedule && this.config.detectors.schedule.enabled) {
-                    configToSave.detectors.schedule = { ...this.config.detectors.schedule };
-                    delete configToSave.detectors.schedule.enabled;
-                    if (configToSave.detectors.schedule.tasks) {
-                        configToSave.detectors.schedule.tasks = configToSave.detectors.schedule.tasks.map(task => {
-                            const cleanTask = { name: task.name, start: task.start, stop: task.stop };
-                            return cleanTask;
-                        });
-                    }
-                }
-
-                // Clean up lure and groups (same logic as saveConfig)
-                if (this.config.lure && this.config.lure.tasks) {
-                    this.config.lure.tasks.forEach(task => {
-                        this.updateLureTaskTimeString(task, 'start');
-                        this.updateLureTaskTimeString(task, 'stop');
-                    });
-                }
-
-                if (configToSave.lure && configToSave.lure.tasks) {
-                    const validTasks = configToSave.lure.tasks.filter(task => 
-                        task && task.species && task.species.trim() !== ''
-                    );
-                    
-                    configToSave.lure = {
-                        ...configToSave.lure,
-                        tasks: validTasks.map(task => {
-                            const cleanTask = { 
-                                species: task.species, 
-                                paths: task.paths || [''],
-                                start: task.start || '00:00', 
-                                stop: task.stop || '00:00',
-                                record: Boolean(task.record)
-                            };
-                            return cleanTask;
-                        })
-                    };
-                } else if (configToSave.lure) {
-                    configToSave.lure.tasks = [];
-                }
-
-                if (configToSave.groups) {
-                    configToSave.groups = {};
-                    Object.keys(this.config.groups).forEach(groupName => {
-                        const group = this.config.groups[groupName];
-                        const cleanGroup = {
-                            species: (group.species || []).filter(species => species && species.trim() !== '')
-                        };
-                        
-                        if (group.ratio !== null && group.ratio !== undefined) {
-                            cleanGroup.ratio = group.ratio;
-                        }
-                        
-                        if (group.length_s !== null && group.length_s !== undefined) {
-                            cleanGroup.length_s = group.length_s;
-                        }
-                        
-                        cleanGroup.maximize_confidence = Boolean(group.maximize_confidence);
-                        
-                        configToSave.groups[groupName] = cleanGroup;
-                    });
-                }
-
-                // Save the configuration
-                const saveResponse = await fetch(apiUrl('/api/soundscapepipe'), {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(configToSave)
-                });
-                
-                if (!saveResponse.ok) {
-                    const error = await saveResponse.json();
-                    let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
-                    }
-                    throw new Error(errorMessage);
-                }
-                
-                if (!saveResponse.ok) {
-                    const error = await saveResponse.json();
-                    let errorMessage = error.detail?.message || 'Failed to save soundscapepipe configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nErrors: ' + error.detail.errors.join(', ');
-                    }
-                    throw new Error(errorMessage);
-                }
-            };
-            
-            const restartFunction = async () => {
-                // Then restart the soundscapepipe service
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: 'soundscapepipe',
-                        action: 'restart'
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || 'Failed to restart soundscapepipe service');
-                }
-                
-                this.showMessage(`Configuration saved and ${data.message}`, false);
-                
-                // Refresh service status after restart
-                setTimeout(async () => {
-                    await this.loadServiceStatus();
-                }, 2000);
-            };
-            
-            await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
-        },
-
         resetConfig() {
             this.loadConfig();
         },
 
-        showMessage(message, isError = false) {
-            // Use global toast manager for immediate feedback
-            if (window.toastManager) {
-                const type = isError ? 'error' : 'success';
-                const title = isError ? 'Soundscapepipe Error' : 'Soundscapepipe';
-                window.toastManager.show(message, type, { title });
-            } else {
-                // Fallback: dispatch to parent component for legacy support
-                this.$dispatch('message', { message, error: isError });
+        // Species groups must be valid before anything is sent
+        validate() {
+            const speciesErrors = this.validateSpeciesGroups();
+            if (speciesErrors.length > 0) {
+                this.showMessage('Species validation failed:\n• ' + speciesErrors.join('\n• '), true);
+                throw new Error('Species validation failed');
             }
         },
 
-        streamLogs(serviceName) {
-            // Show the log modal directly
-            const modal = new bootstrap.Modal(document.getElementById('logModal'));
-            // Get the log viewer instance and start streaming
-            const logViewerEl = document.getElementById('logModal');
-            if (logViewerEl && logViewerEl._x_dataStack) {
-                const logViewerInstance = logViewerEl._x_dataStack[0];
-                logViewerInstance.startStreaming(serviceName);
-            }
-            modal.show();
+        // The config as the API wants it: without disabled detectors, UI-only fields and empty entries
+        buildPayload() {
+            // Create a copy of the config and filter out disabled detectors
+            const configToSave = { ...this.config };
             
-            // Scroll to bottom after modal is shown and content is rendered
-            setTimeout(() => {
-                const container = document.getElementById('logContainer');
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
+            // Filter detectors to only include enabled ones
+            configToSave.detectors = {};
+            
+            if (this.config.detectors.birdedge && this.config.detectors.birdedge.enabled) {
+                configToSave.detectors.birdedge = { ...this.config.detectors.birdedge };
+                delete configToSave.detectors.birdedge.enabled; // Remove the enabled flag from saved config
+                // Clean up tasks - convert UI components back to time strings
+                if (configToSave.detectors.birdedge.tasks) {
+                    configToSave.detectors.birdedge.tasks = configToSave.detectors.birdedge.tasks.map(task => {
+                        const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                        return cleanTask;
+                    });
                 }
-            }, 250);
+            }
+            
+            if (this.config.detectors.yolobat && this.config.detectors.yolobat.enabled) {
+                configToSave.detectors.yolobat = { ...this.config.detectors.yolobat };
+                delete configToSave.detectors.yolobat.enabled; // Remove the enabled flag from saved config
+                // Set both thresholds to the same value from class_threshold
+                configToSave.detectors.yolobat.detection_threshold = this.config.detectors.yolobat.class_threshold;
+                // Remove schedule if it exists (YoloBat doesn't use schedule property)
+                delete configToSave.detectors.yolobat.schedule;
+                // Clean up tasks - convert UI components back to time strings
+                if (configToSave.detectors.yolobat.tasks) {
+                    configToSave.detectors.yolobat.tasks = configToSave.detectors.yolobat.tasks.map(task => {
+                        const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                        return cleanTask;
+                    });
+                }
+            }
+
+            if (this.config.detectors.audioprotopnet && this.config.detectors.audioprotopnet.enabled) {
+                configToSave.detectors.audioprotopnet = { ...this.config.detectors.audioprotopnet };
+                delete configToSave.detectors.audioprotopnet.enabled;
+                if (configToSave.detectors.audioprotopnet.tasks) {
+                    configToSave.detectors.audioprotopnet.tasks = configToSave.detectors.audioprotopnet.tasks.map(task => {
+                        const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                        return cleanTask;
+                    });
+                }
+            }
+            
+            if (this.config.detectors.schedule && this.config.detectors.schedule.enabled) {
+                configToSave.detectors.schedule = { ...this.config.detectors.schedule };
+                delete configToSave.detectors.schedule.enabled; // Remove the enabled flag from saved config
+                // Clean up tasks - convert UI components back to time strings
+                if (configToSave.detectors.schedule.tasks) {
+                    configToSave.detectors.schedule.tasks = configToSave.detectors.schedule.tasks.map(task => {
+                        const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                        return cleanTask;
+                    });
+                }
+            }
+
+            // Ensure all lure task time strings are synced with UI components before saving
+            if (this.config.lure && this.config.lure.tasks) {
+                this.config.lure.tasks.forEach(task => {
+                    this.updateLureTaskTimeString(task, 'start');
+                    this.updateLureTaskTimeString(task, 'stop');
+                });
+            }
+
+            // Clean up lure tasks - convert UI components back to time strings and filter out empty tasks
+            if (configToSave.lure && configToSave.lure.tasks) {
+                // Filter out tasks that don't have a species name (empty/incomplete tasks)
+                const validTasks = configToSave.lure.tasks.filter(task => 
+                    task && task.species && task.species.trim() !== ''
+                );
+                
+                // Create a new array to avoid modifying the original that UI is bound to
+                configToSave.lure = {
+                    ...configToSave.lure,
+                    tasks: validTasks.map(task => {
+                        const cleanTask = { 
+                            species: task.species, 
+                            paths: task.paths || [''],
+                            start: task.start || '00:00', 
+                            stop: task.stop || '00:00',
+                            record: Boolean(task.record)
+                        };
+                        return cleanTask;
+                    })
+                };
+            } else if (configToSave.lure) {
+                // Ensure tasks is always an empty array, not null
+                configToSave.lure.tasks = [];
+            }
+
+            // Clean up groups - remove null/undefined values and filter empty species
+            if (configToSave.groups) {
+                configToSave.groups = {};
+                Object.keys(this.config.groups).forEach(groupName => {
+                    const group = this.config.groups[groupName];
+                    const cleanGroup = {
+                        species: (group.species || []).filter(species => species && species.trim() !== '')
+                    };
+                    
+                    // Only include ratio if it's not null/undefined
+                    if (group.ratio !== null && group.ratio !== undefined) {
+                        cleanGroup.ratio = group.ratio;
+                    }
+                    
+                    // Only include length_s if it's not null/undefined
+                    if (group.length_s !== null && group.length_s !== undefined) {
+                        cleanGroup.length_s = group.length_s;
+                    }
+                    
+                    // Always include maximize_confidence as a boolean
+                    cleanGroup.maximize_confidence = Boolean(group.maximize_confidence);
+                    
+                    configToSave.groups[groupName] = cleanGroup;
+                });
+            }
+
+            return configToSave;
         },
+
 
         async loadAudioDevices() {
             this.loadingDevices = true;
@@ -891,7 +615,7 @@ export function soundscapepipeConfig() {
         async loadSpeciesData() {
             this.loadingSpecies = true;
             try {
-                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe/species') || apiUrl('/api/soundscapepipe/species');
+                const url = serverModeManager.buildApiUrl('/api/soundscapepipe/species');
                 const response = await fetch(url);
                 if (response.ok) {
                     this.speciesData = await response.json();
@@ -977,7 +701,7 @@ export function soundscapepipeConfig() {
                     return;
                 }
 
-                const url = window.serverModeManager?.buildApiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`) || apiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`);
+                const url = serverModeManager.buildApiUrl(`/api/soundscapepipe/yolobat-labels?model_path=${encodeURIComponent(modelPath)}`);
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
@@ -1375,6 +1099,5 @@ export function soundscapepipeConfig() {
             
             return errors;
         }
-    }
+    });
 }
-

@@ -1,14 +1,16 @@
-import { saveStateMixin } from '../mixins/saveStateMixin.js';
-import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
-import { serviceManager } from '../managers/serviceManager.js';
-import { getSystemRefreshInterval } from '../utils/systemUtils.js';
-import { apiUrl } from '../utils/apiUtils.js';
+import { compose } from '../mixins/compose.js';
+import { configPageMixin } from '../mixins/configPageMixin.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
 import { parseTimeString, updateTimeString } from '../utils/timeUtils.js';
 
 export function tsupdateConfig() {
-    return {
-        ...saveStateMixin(),
-        ...serviceActionMixin(),
+    return compose(configPageMixin({
+        service: 'tsupdate',
+        apiPath: '/api/tsupdate',
+        title: 'Updates Configuration',
+        failureText: 'Failed to save tsupdate configuration',
+        refreshOn: ['settings'],
+    }), {
         config: {
             check_interval: 3600,
             check_interval_hhmm: '01:00', // UI representation in HH:MM format
@@ -24,96 +26,10 @@ export function tsupdateConfig() {
             maintenance_check_interval_hhmm: '01:00', // UI representation in HH:MM format
             maintenance_do: 'check'
         },
-        // Service status tracking
-        serviceStatus: {
-            active: false,
-            enabled: false,
-            status: 'unknown',
-            uptime: 'N/A'
-        },
-        serviceStatusLoading: false,
-        refreshInterval: null, // For periodic service status refresh
-        actionLoading: false,
         
         // Maintenance schedule entry from schedule.yml (read by tsupdate)
         maintenanceSchedule: null,
         maintenanceScheduleLoading: false,
-
-        // Server mode helper
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
-        },
-
-        async init() {
-            // Small delay to prevent simultaneous API calls during page load
-            await new Promise(resolve => setTimeout(resolve, 50));
-            
-            // Load configuration and set up periodic refresh
-            await this.loadConfig();
-            await this.loadMaintenanceSchedule();
-            await this.setupPeriodicRefresh();
-            
-            // Listen for config group changes in server mode
-            window.addEventListener('config-group-changed', async () => {
-                await this.loadConfig();
-                await this.loadMaintenanceSchedule();
-            });
-            
-            // Listen for schedule changes to refresh maintenance schedule display
-            window.addEventListener('schedule-config-saved', async () => {
-                await this.loadMaintenanceSchedule();
-            });
-        },
-
-        async setupPeriodicRefresh() {
-            // Get the refresh interval from system config
-            const refreshIntervalSeconds = await getSystemRefreshInterval();
-            
-            // Set up periodic refresh for service status
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-            }
-            
-            // destroy() may have run while this was still loading (tab left)
-            if (this.destroyed) return;
-            this.refreshInterval = setInterval(() => {
-                // Only refresh if settings tab is active and not in server mode
-                const currentHash = window.location.hash.slice(1);
-                const mainTab = currentHash.split('/')[0];
-                if (mainTab === 'settings' && !this.serverMode) {
-                    this.loadServiceStatus();
-                }
-            }, refreshIntervalSeconds * 1000);
-        },
-
-        destroy() {
-            this.destroyed = true;
-            // Clean up interval when component is destroyed
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-                this.refreshInterval = null;
-            }
-        },
-
-        async loadServiceStatus() {
-            this.serviceStatusLoading = true;
-            try {
-                const services = await serviceManager.getServices();
-                const tsupdateService = services.find(service => service.name === 'tsupdate');
-                if (tsupdateService) {
-                    this.serviceStatus = {
-                        active: tsupdateService.active,
-                        enabled: tsupdateService.enabled,
-                        status: tsupdateService.status,
-                        uptime: tsupdateService.uptime || 'N/A'
-                    };
-                }
-            } catch (error) {
-                console.error('Failed to load service status:', error);
-            } finally {
-                this.serviceStatusLoading = false;
-            }
-        },
 
         // Helper function to convert seconds to HH:MM format
         secondsToHHMM(seconds) {
@@ -136,12 +52,50 @@ export function tsupdateConfig() {
             return (hours * 3600) + (minutes * 60);
         },
         
+        async loadData() {
+            await this.loadConfig();
+            await this.loadMaintenanceSchedule();
+        },
+
+        subscribe() {
+            // Refresh the maintenance schedule display when the schedule was saved
+            this.listen(window, 'schedule-config-saved', () => this.loadMaintenanceSchedule());
+        },
+
+        // The config as the API wants it: the page edits the intervals as HH:MM
+        buildPayload() {
+            const payload = { ...this.config };
+            payload.check_interval = this.hhmmToSeconds(payload.check_interval_hhmm);
+            payload.persist_timeout = this.hhmmToSeconds(payload.persist_timeout_hhmm);
+            payload.update_countdown = this.hhmmToSeconds(payload.update_countdown_hhmm);
+            if (payload.maintenance_check_interval_hhmm && payload.maintenance_check_interval_hhmm.trim() !== '') {
+                payload.maintenance_check_interval = this.hhmmToSeconds(payload.maintenance_check_interval_hhmm);
+            }
+            // Remove UI-only fields
+            delete payload.check_interval_hhmm;
+            delete payload.persist_timeout_hhmm;
+            delete payload.update_countdown_hhmm;
+            delete payload.maintenance_check_interval_hhmm;
+
+            // Remove null/empty optional maintenance fields
+            if (payload.maintenance_check_interval === null || payload.maintenance_check_interval === undefined) {
+                delete payload.maintenance_check_interval;
+            }
+            if (payload.maintenance_do === null || payload.maintenance_do === undefined || payload.maintenance_do === '') {
+                delete payload.maintenance_do;
+            }
+            if (payload.github_url === '') {
+                payload.github_url = null;
+            }
+            return payload;
+        },
+
         // Load maintenance schedule entry from schedule.yml
         async loadMaintenanceSchedule() {
             this.maintenanceScheduleLoading = true;
             try {
                 // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/schedule') || '/api/schedule';
+                const url = serverModeManager.buildApiUrl('/api/schedule');
                 const response = await fetch(url);
                 if (response.status === 404) {
                     this.maintenanceSchedule = null;
@@ -217,7 +171,7 @@ export function tsupdateConfig() {
         async loadConfig() {
             try {
                 // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/tsupdate') || '/api/tsupdate';
+                const url = serverModeManager.buildApiUrl('/api/tsupdate');
                 const response = await fetch(url);
                 if (response.status === 404) {
                     // Set default configuration
@@ -277,176 +231,5 @@ export function tsupdateConfig() {
             }
         },
 
-        async saveConfig() {
-            const configSaveFunction = async () => {
-                // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/tsupdate') || '/api/tsupdate';
-                
-                // Prepare config for sending - convert HH:MM to seconds and remove UI-only fields
-                const configToSend = { ...this.config };
-                // Convert check_interval_hhmm to check_interval (seconds)
-                configToSend.check_interval = this.hhmmToSeconds(configToSend.check_interval_hhmm);
-                delete configToSend.check_interval_hhmm; // Remove UI-only field
-                
-                // Convert maintenance_check_interval_hhmm if present and not empty
-                if (configToSend.maintenance_check_interval_hhmm && configToSend.maintenance_check_interval_hhmm.trim() !== '') {
-                    configToSend.maintenance_check_interval = this.hhmmToSeconds(configToSend.maintenance_check_interval_hhmm);
-                }
-                delete configToSend.maintenance_check_interval_hhmm; // Remove UI-only field
-                
-                // Remove null/empty optional maintenance fields
-                if (configToSend.maintenance_check_interval === null || configToSend.maintenance_check_interval === undefined) {
-                    delete configToSend.maintenance_check_interval;
-                }
-                if (configToSend.maintenance_do === null || configToSend.maintenance_do === undefined || configToSend.maintenance_do === '') {
-                    delete configToSend.maintenance_do;
-                }
-                
-                if (configToSend.github_url === '') {
-                    configToSend.github_url = null;
-                }
-                
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(configToSend)
-                });
-                if (!response.ok) {
-                    const error = await response.json();
-                    let errorMessage = error.detail?.message || 'Failed to save tsupdate configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
-                    }
-                    if (error.detail?.validation_errors) {
-                        const validationErrors = error.detail.validation_errors.map(err => 
-                            `${err.loc.join('.')}: ${err.msg}`
-                        ).join(', ');
-                        errorMessage += '\nValidation errors: ' + validationErrors;
-                    }
-                    throw new Error(errorMessage);
-                }
-                const data = await response.json();
-                
-                // Only show message in tracker mode (server mode will show messages in the mixin)
-                if (!this.serverMode) {
-                    this.showMessage(data.message, false);  // false means not an error, so it will be success
-                }
-            };
-            
-            // Save only; deployment is triggered separately via deployConfig()
-            await this.handleSaveConfig(configSaveFunction);
-        },
-
-        async deployConfig() {
-            const configGroup = window.serverModeManager?.getCurrentConfigGroup();
-            await this.handleDeployConfig(configGroup);
-        },
-
-        async saveAndRestartService() {
-            const configSaveFunction = async () => {
-                // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/tsupdate') || '/api/tsupdate';
-                
-                // Prepare config for sending - convert HH:MM to seconds and remove UI-only fields
-                const configToSend = { ...this.config };
-                // Convert time fields from HH:MM to seconds
-                configToSend.check_interval = this.hhmmToSeconds(configToSend.check_interval_hhmm);
-                configToSend.persist_timeout = this.hhmmToSeconds(configToSend.persist_timeout_hhmm);
-                configToSend.update_countdown = this.hhmmToSeconds(configToSend.update_countdown_hhmm);
-                // Convert maintenance_check_interval_hhmm if present and not empty
-                if (configToSend.maintenance_check_interval_hhmm && configToSend.maintenance_check_interval_hhmm.trim() !== '') {
-                    configToSend.maintenance_check_interval = this.hhmmToSeconds(configToSend.maintenance_check_interval_hhmm);
-                }
-                // Remove UI-only fields
-                delete configToSend.check_interval_hhmm;
-                delete configToSend.persist_timeout_hhmm;
-                delete configToSend.update_countdown_hhmm;
-                delete configToSend.maintenance_check_interval_hhmm;
-                
-                // Remove null/empty optional maintenance fields
-                if (configToSend.maintenance_check_interval === null || configToSend.maintenance_check_interval === undefined) {
-                    delete configToSend.maintenance_check_interval;
-                }
-                if (configToSend.maintenance_do === null || configToSend.maintenance_do === undefined || configToSend.maintenance_do === '') {
-                    delete configToSend.maintenance_do;
-                }
-                
-                if (configToSend.github_url === '') {
-                    configToSend.github_url = null;
-                }
-                
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(configToSend)
-                });
-                if (!response.ok) {
-                    const error = await response.json();
-                    let errorMessage = error.detail?.message || 'Failed to save tsupdate configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
-                    }
-                    if (error.detail?.validation_errors) {
-                        const validationErrors = error.detail.validation_errors.map(err => 
-                            `${err.loc.join('.')}: ${err.msg}`
-                        ).join(', ');
-                        errorMessage += '\nValidation errors: ' + validationErrors;
-                    }
-                    throw new Error(errorMessage);
-                }
-                const data = await response.json();
-                this.showMessage(data.message, false);  // false means not an error, so it will be success
-            };
-            
-            const restartFunction = async () => {
-                // Then restart the tsupdate service
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: 'tsupdate',
-                        action: 'restart'
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || 'Failed to restart tsupdate service');
-                }
-                
-                this.showMessage(`Configuration saved and ${data.message}`, false);
-                
-                // Refresh service status after restart (only in tracker mode)
-                if (!this.serverMode) {
-                    setTimeout(async () => {
-                        await this.loadServiceStatus();
-                    }, 2000);
-                }
-            };
-            
-            await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
-        },
-
-        showMessage(message, isError) {
-            // Use toast for immediate feedback
-            if (window.toastManager) {
-                const type = isError ? 'error' : 'success';
-                const title = isError ? 'Updates Configuration Error' : 'Updates Configuration';
-                window.toastManager.show(message, type, { title });
-            }
-            
-            // Also dispatch a custom event that the parent can listen for (backward compatibility)
-            window.dispatchEvent(new CustomEvent('show-message', {
-                detail: { message, isError }
-            }));
-        }
-    }
+    });
 }
-

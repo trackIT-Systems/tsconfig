@@ -1,5 +1,6 @@
 // Shared Service Manager - prevents duplicate API calls
 import { apiUrl } from '../utils/apiUtils.js';
+import { serverModeManager } from './serverModeManager.js';
 
 export const serviceManager = {
     services: [],
@@ -58,7 +59,7 @@ export const serviceManager = {
     // Actual API fetch
     async fetchServices() {
         // Don't fetch services in server mode
-        if (window.serverModeManager?.isEnabled()) {
+        if (serverModeManager.isEnabled()) {
             return [];
         }
         

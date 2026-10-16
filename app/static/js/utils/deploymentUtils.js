@@ -4,6 +4,7 @@
  */
 
 import { apiUrl } from './apiUtils.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
 
 /**
  * Trigger deployment for a configuration group
@@ -103,4 +104,32 @@ export function formatDeploymentMessage(result) {
     }
 
     return `Deployed to ${count} stations`;
+}
+
+/**
+ * In server mode, deploy the current config group to its stations and report
+ * the outcome as a toast. Does nothing on a tracker.
+ */
+export async function deployIfServerMode() {
+    if (!serverModeManager.isEnabled()) {
+        return;
+    }
+
+    const configGroup = serverModeManager.getCurrentConfigGroup();
+    if (!configGroup) {
+        console.warn('No config group available for deployment');
+        return;
+    }
+
+    try {
+        const deploymentResult = await triggerDeployment(configGroup);
+        if (window.toastManager) {
+            window.toastManager.success(formatDeploymentMessage(deploymentResult));
+        }
+    } catch (deployError) {
+        console.error('Deployment error:', deployError);
+        if (window.toastManager) {
+            window.toastManager.error(`Deployment failed: ${deployError.message}`);
+        }
+    }
 }

@@ -26,6 +26,16 @@ jobs:
           version: '0.16.10'
           args: format --check
 
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # Node's own test runner: the shared component code needs no packages
+      - run: node --test tests/js/
+
   test:
     runs-on: ubuntu-latest
     strategy:

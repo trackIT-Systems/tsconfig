@@ -1,13 +1,23 @@
+import { compose } from '../mixins/compose.js';
+import { lifecycleMixin } from '../mixins/lifecycleMixin.js';
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
+import { serverModeMixin } from '../mixins/serverModeMixin.js';
 import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
+import { serviceLogsMixin } from '../mixins/serviceLogsMixin.js';
+import { toastMixin } from '../mixins/toastMixin.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 import { apiUrl } from '../utils/apiUtils.js';
 
 export function networkConfig() {
-    return {
-        ...saveStateMixin(),
-        ...serviceActionMixin(),
-        
+    const mixins = [
+        lifecycleMixin(),
+        serverModeMixin(),
+        toastMixin('Network - Success', 'Network - Error'),
+        saveStateMixin(),
+        serviceActionMixin(),
+        serviceLogsMixin(),
+    ];
+    return compose(...mixins, {
         _initialized: false,
         _loadingServiceStatus: false,
         connections: [],
@@ -64,7 +74,6 @@ export function networkConfig() {
         modemError: null,
         loading: false,
         refreshing: false,
-        statusInterval: null,
         showPassword: false,
         showStationPassword: false,
         showCellularPassword: false,
@@ -77,11 +86,6 @@ export function networkConfig() {
         wifiSsidSelectedIndex: -1,
         wifiSsidFiltered: [],
         connectionUpStates: {},
-        
-        // Server mode helper
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
-        },
         
         // Check if hotspot config has been modified
         get isModified() {
@@ -130,10 +134,6 @@ export function networkConfig() {
                 return;
             }
             
-            if (this.statusInterval) {
-                this.stopAutoRefresh();
-            }
-            
             this._initialized = true;
             
             await this.loadServiceStatus();
@@ -144,12 +144,6 @@ export function networkConfig() {
             await this.loadCellularConfig();
             await this.loadModemDetails();
             await this.startAutoRefresh();
-        },
-        
-        destroy() {
-            this.destroyed = true;
-            this.stopAutoRefresh();
-            this._initialized = false;
         },
         
         async loadServiceStatus() {
@@ -195,26 +189,6 @@ export function networkConfig() {
             } finally {
                 this._loadingServiceStatus = false;
             }
-        },
-        
-        streamLogs(serviceName) {
-            // Show the log modal
-            const modal = new bootstrap.Modal(document.getElementById('logModal'));
-            // Get the log viewer instance and start streaming
-            const logViewerEl = document.getElementById('logModal');
-            if (logViewerEl && logViewerEl._x_dataStack) {
-                const logViewerInstance = logViewerEl._x_dataStack[0];
-                logViewerInstance.startStreaming(serviceName);
-            }
-            modal.show();
-            
-            // Scroll to bottom after modal is shown and content is rendered
-            setTimeout(() => {
-                const container = document.getElementById('logContainer');
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }, 250);
         },
         
         async loadConnections(showRefreshing = false) {
@@ -797,34 +771,22 @@ export function networkConfig() {
         },
         
         async startAutoRefresh() {
-            // Clear any existing interval first
-            this.stopAutoRefresh();
-            
             // Refresh connection and service status periodically (without showing refreshing state)
             const interval = await getSystemRefreshInterval();
-            
-            // destroy() may have run while this was still loading (tab left)
-            if (this.destroyed) return;
-            this.statusInterval = setInterval(() => {
+
+            this.every(interval * 1000, () => {
                 // Only refresh if network tab is active and not already refreshing
                 const currentHash = window.location.hash.slice(1);
                 const isNetworkTabActive = currentHash === 'settings/network';
-                
+
                 if (isNetworkTabActive && !this.refreshing) {
                     this.loadServiceStatus();
                     this.loadConnections(false);
                     this.loadModemDetails(false);
                 }
-            }, interval * 1000);
+            });
         },
-        
-        stopAutoRefresh() {
-            if (this.statusInterval) {
-                clearInterval(this.statusInterval);
-                this.statusInterval = null;
-            }
-        },
-        
+
         getConnectionStatusBadgeClass(state) {
             switch (state) {
                 case 'activated':
@@ -957,18 +919,5 @@ export function networkConfig() {
             if (percent > 0) return 1;
             return 0;
         },
-        
-        dispatchMessage(message, isError) {
-            // Use global toast manager
-            if (window.toastManager) {
-                const title = isError ? 'Network - Error' : 'Network - Success';
-                const type = isError ? 'error' : 'success';
-                window.toastManager.show(message, type, { title });
-            } else {
-                // Fallback to console if toast manager not available
-                console.log(`[Network ${isError ? 'ERROR' : 'SUCCESS'}] ${message}`);
-            }
-        }
-    };
+    });
 }
-

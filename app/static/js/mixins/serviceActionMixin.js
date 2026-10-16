@@ -1,4 +1,4 @@
-import { apiUrl } from '../utils/apiUtils.js';
+import { serviceAction } from '../utils/apiUtils.js';
 
 /**
  * Mixin for service action management (start, stop, restart)
@@ -40,106 +40,47 @@ export function serviceActionMixin() {
         },
 
         async performAction(serviceName, action) {
-            this.actionLoading = true;
-            
-            // For restart actions, set the service-specific state
-            if (action === 'restart') {
-                this.setServiceRestartState(serviceName, 'restarting');
-            }
-            
-            try {
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
-                // Use component's message display method
-                this._displaySuccessMessage(data.message);
-                
-                // For restart actions, set the service-specific state
-                if (action === 'restart') {
-                    this.setServiceRestartState(serviceName, 'restarted');
-                }
-                
-                // Refresh service status after action
-                setTimeout(async () => {
-                    await this._refreshServiceStatus();
-                }, 1000);
-                
-            } catch (err) {
-                this._displayErrorMessage(err.message);
-                console.error(`Service ${action} error:`, err);
-                
-                // For restart actions, reset the service-specific state
-                if (action === 'restart') {
-                    this.setServiceRestartState(serviceName, 'idle');
-                }
-            } finally {
-                this.actionLoading = false;
-            }
+            // Only restarts show their progress on the button
+            await this._runServiceAction(
+                serviceName,
+                action,
+                (name, state) => this.setServiceRestartState(name, state),
+                action === 'restart' ? { pending: 'restarting', done: 'restarted' } : {}
+            );
         },
 
         async performStartStopAction(serviceName, action) {
+            await this._runServiceAction(
+                serviceName,
+                action,
+                (name, state) => this.setServiceStartStopState(name, state),
+                { pending: action === 'start' ? 'starting' : 'stopping', done: action === 'start' ? 'started' : 'stopped' }
+            );
+        },
+
+        async _runServiceAction(serviceName, action, setState, states) {
             this.actionLoading = true;
-            
-            // Set the service-specific state
-            if (action === 'start') {
-                this.setServiceStartStopState(serviceName, 'starting');
-            } else if (action === 'stop') {
-                this.setServiceStartStopState(serviceName, 'stopping');
+            if (states.pending) {
+                setState(serviceName, states.pending);
             }
-            
+
             try {
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        service: serviceName,
-                        action: action
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.detail || `Failed to ${action} service`);
-                }
-                
+                const data = await serviceAction(serviceName, action);
                 // Use component's message display method
                 this._displaySuccessMessage(data.message);
-                
-                // Set the service-specific state to completed
-                if (action === 'start') {
-                    this.setServiceStartStopState(serviceName, 'started');
-                } else if (action === 'stop') {
-                    this.setServiceStartStopState(serviceName, 'stopped');
+                if (states.done) {
+                    setState(serviceName, states.done);
                 }
-                
                 // Refresh service status after action
                 setTimeout(async () => {
                     await this._refreshServiceStatus();
                 }, 1000);
-                
             } catch (err) {
                 this._displayErrorMessage(err.message);
                 console.error(`Service ${action} error:`, err);
-                
-                // Reset the service-specific state on error
-                this.setServiceStartStopState(serviceName, 'idle');
+                if (states.pending) {
+                    setState(serviceName, 'idle');
+                }
             } finally {
                 this.actionLoading = false;
             }

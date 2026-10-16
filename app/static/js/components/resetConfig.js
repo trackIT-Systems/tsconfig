@@ -1,16 +1,15 @@
+import { compose } from '../mixins/compose.js';
+import { serverModeMixin } from '../mixins/serverModeMixin.js';
+import { toastMixin } from '../mixins/toastMixin.js';
 import { apiUrl } from '../utils/apiUtils.js';
 
 export function resetConfig() {
-    return {
+    return compose(serverModeMixin(), toastMixin('System Reset - Success', 'System Reset - Error'), {
         resetConfig: true,
         wipeOverlay: false,
         executing: false,
         result: null,
         error: null,
-
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
-        },
 
         init() {
             // Initialize component
@@ -83,18 +82,5 @@ export function resetConfig() {
             }
         },
 
-        showMessage(msg, type = 'success') {
-            if (window.toastManager) {
-                const title =
-                    type === 'success'
-                        ? 'System Reset - Success'
-                        : type === 'error'
-                          ? 'System Reset - Error'
-                          : 'System Reset';
-                window.toastManager.show(msg, type, { title });
-            } else {
-                console.log(`[System Reset ${type.toUpperCase()}] ${msg}`);
-            }
-        },
-    };
+    });
 }

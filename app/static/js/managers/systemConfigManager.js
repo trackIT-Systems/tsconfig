@@ -1,5 +1,6 @@
 // Shared System Config Manager - prevents duplicate API calls
 import { apiUrl } from '../utils/apiUtils.js';
+import { serverModeManager } from './serverModeManager.js';
 
 export const systemConfigManager = {
     config: null,
@@ -30,7 +31,7 @@ export const systemConfigManager = {
     
     async fetchSystemConfig() {
         // Don't fetch system config in server mode
-        if (window.serverModeManager?.isEnabled()) {
+        if (serverModeManager.isEnabled()) {
             return { services: [] };
         }
         

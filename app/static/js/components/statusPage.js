@@ -1,19 +1,20 @@
+import { compose } from '../mixins/compose.js';
+import { lifecycleMixin } from '../mixins/lifecycleMixin.js';
 import { saveStateMixin } from '../mixins/saveStateMixin.js';
 import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
+import { serviceLogsMixin } from '../mixins/serviceLogsMixin.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
 import { serviceManager } from '../managers/serviceManager.js';
 import { systemConfigManager } from '../managers/systemConfigManager.js';
 import { getSystemRefreshInterval } from '../utils/systemUtils.js';
 import { apiUrl, getJsonShared } from '../utils/apiUtils.js';
 
 export function statusPage() {
-    return {
-        ...saveStateMixin(),
-        ...serviceActionMixin(),
+    return compose(lifecycleMixin(), saveStateMixin(), serviceActionMixin(), serviceLogsMixin(), {
         systemInfo: null,
         loading: true,
         refreshing: false,
         lastUpdated: null,
-        refreshInterval: null,
         refreshIntervalSeconds: 30, // Default value, will be loaded from config
         // Systemd services properties
         services: [],
@@ -51,31 +52,10 @@ export function statusPage() {
         radiotrackingService: null,
         // Available services (for checking if service configs exist)
         availableServices: [],
-        // Set by destroy(); stops a still-running initStatus() from starting the refresh timer
-        destroyed: false,
-        onServicesUpdate: null,
-
-        // Called by Alpine when the status tab is left (x-if removes it)
-        destroy() {
-            this.destroyed = true;
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-                this.refreshInterval = null;
-            }
-            if (this.onServicesUpdate) {
-                serviceManager.unsubscribe(this.onServicesUpdate);
-                this.onServicesUpdate = null;
-            }
-            // Also stops leaflet-locate's position watch
-            if (this.geolocationMap) {
-                this.geolocationMap.remove();
-                this.geolocationMap = null;
-            }
-        },
 
         async initStatus() {
             // Don't initialize in server mode
-            if (window.serverModeManager?.isEnabled()) {
+            if (serverModeManager.isEnabled()) {
                 return;
             }
             
@@ -87,19 +67,17 @@ export function statusPage() {
             await this.refreshStatus();
             await this.loadServices();
             // Subscribe to service updates to refresh service status
-            this.onServicesUpdate = () => {
+            const onServicesUpdate = () => {
                 this.updateSoundscapepipeService();
                 this.updateRadiotrackingService();
             };
-            serviceManager.subscribe(this.onServicesUpdate);
+            serviceManager.subscribe(onServicesUpdate);
+            this.onDestroy(() => serviceManager.unsubscribe(onServicesUpdate));
             // Load geolocation
             await this.loadGeolocation();
-            // The tab may have been left while the data above was loading
-            if (this.destroyed) {
-                return;
-            }
             // Auto-refresh using configured interval when status tab is active
-            this.refreshInterval = setInterval(() => {
+            // (not started if the tab was left while the data above was loading)
+            this.every(this.refreshIntervalSeconds * 1000, () => {
                 // Only refresh if status tab is active
                 const currentHash = window.location.hash.slice(1);
                 if (currentHash === 'status' || (currentHash === '' && this.activeConfig === 'status')) {
@@ -107,7 +85,7 @@ export function statusPage() {
                     this.refreshStatus();
                     this.loadServices();
                 }
-            }, this.refreshIntervalSeconds * 1000);
+            });
         },
 
         async refreshStatus() {
@@ -295,26 +273,6 @@ export function statusPage() {
             }
         },
 
-        streamLogs(serviceName) {
-            // Show the log modal
-            const modal = new bootstrap.Modal(document.getElementById('logModal'));
-            // Get the log viewer instance and start streaming
-            const logViewerEl = document.getElementById('logModal');
-            if (logViewerEl && logViewerEl._x_dataStack) {
-                const logViewerInstance = logViewerEl._x_dataStack[0];
-                logViewerInstance.startStreaming(serviceName);
-            }
-            modal.show();
-            
-            // Scroll to bottom after modal is shown and content is rendered
-            setTimeout(() => {
-                const container = document.getElementById('logContainer');
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }, 250);
-        },
-
         streamAllLogs() {
             // Stream all system logs
             this.streamLogs('all');
@@ -446,6 +404,13 @@ export function statusPage() {
                 scrollWheelZoom: true,
                 doubleClickZoom: true,
                 boxZoom: true
+            });
+            // Also stops leaflet-locate's position watch
+            this.onDestroy(() => {
+                if (this.geolocationMap) {
+                    this.geolocationMap.remove();
+                    this.geolocationMap = null;
+                }
             });
 
             // Satellite imagery from Mapbox if tsconfig.yml has a token
@@ -602,8 +567,8 @@ export function statusPage() {
             try {
                 // Build URL with config_group parameter if in server mode
                 let url = '/api/available-services';
-                if (window.serverModeManager?.isEnabled() && window.serverModeManager?.getCurrentConfigGroup()) {
-                    url += `?config_group=${encodeURIComponent(window.serverModeManager.getCurrentConfigGroup())}`;
+                if (serverModeManager.isEnabled() && serverModeManager.getCurrentConfigGroup()) {
+                    url += `?config_group=${encodeURIComponent(serverModeManager.getCurrentConfigGroup())}`;
                 }
                 
                 const response = await getJsonShared(apiUrl(url));
@@ -636,7 +601,7 @@ export function statusPage() {
 
             this.soundscapepipeLoading = true;
             try {
-                const url = window.serverModeManager?.buildApiUrl('/api/soundscapepipe') || apiUrl('/api/soundscapepipe');
+                const url = serverModeManager.buildApiUrl('/api/soundscapepipe');
                 const response = await fetch(url);
                 if (response.ok) {
                     this.soundscapepipeConfig = await response.json();
@@ -669,7 +634,7 @@ export function statusPage() {
 
             this.radiotrackingLoading = true;
             try {
-                const url = window.serverModeManager?.buildApiUrl('/api/radiotracking') || apiUrl('/api/radiotracking');
+                const url = serverModeManager.buildApiUrl('/api/radiotracking');
                 const response = await fetch(url);
                 if (response.ok) {
                     this.radiotrackingConfig = await response.json();
@@ -720,6 +685,5 @@ export function statusPage() {
             }
             return Object.keys(this.soundscapepipeConfig.groups);
         }
-    }
+    });
 }
-

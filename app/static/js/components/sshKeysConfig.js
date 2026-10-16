@@ -1,33 +1,20 @@
-import { apiUrl } from '../utils/apiUtils.js';
-import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
-import { serviceManager } from '../managers/serviceManager.js';
-import { getSystemRefreshInterval } from '../utils/systemUtils.js';
-import { triggerDeployment, formatDeploymentMessage } from '../utils/deploymentUtils.js';
+import { compose } from '../mixins/compose.js';
+import { configPageMixin } from '../mixins/configPageMixin.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
+import { deployIfServerMode } from '../utils/deploymentUtils.js';
 
 export function sshKeysConfig() {
-    return {
-        ...serviceActionMixin(),
+    return compose(configPageMixin({
+        service: 'ssh',
+        title: 'SSH Keys - Success',
+        errorTitle: 'SSH Keys - Error',
+        refreshOn: ['settings'],
+    }), {
         keys: [],
         newKey: '',
         githubUsername: '',
         launchpadUsername: '',
         loading: false,
-        // Service status tracking
-        serviceStatus: {
-            active: false,
-            enabled: false,
-            status: 'unknown',
-            uptime: 'N/A'
-        },
-        serviceStatusLoading: false,
-        refreshInterval: null, // For periodic service status refresh
-        actionLoading: false,
-
-        // Server mode helper
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
-        },
-
         // Sorted keys: server keys first, then user keys
         get sortedKeys() {
             const serverKeys = this.keys.filter(key => key.source === 'server');
@@ -35,73 +22,14 @@ export function sshKeysConfig() {
             return [...serverKeys, ...userKeys];
         },
 
-        async init() {
-            // Small delay to prevent simultaneous API calls during page load
-            await new Promise(resolve => setTimeout(resolve, 50));
-            
+        async loadData() {
             await this.loadKeys();
-            await this.setupPeriodicRefresh();
-            
-            // Listen for config group changes in server mode
-            window.addEventListener('config-group-changed', async () => {
-                await this.loadKeys();
-            });
-        },
-
-        async setupPeriodicRefresh() {
-            // Get the refresh interval from system config
-            const refreshIntervalSeconds = await getSystemRefreshInterval();
-            
-            // Set up periodic refresh for service status
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-            }
-            
-            // destroy() may have run while this was still loading (tab left)
-            if (this.destroyed) return;
-            this.refreshInterval = setInterval(() => {
-                // Only refresh if settings tab is active and not in server mode
-                const currentHash = window.location.hash.slice(1);
-                const mainTab = currentHash.split('/')[0];
-                if (mainTab === 'settings' && !this.serverMode) {
-                    this.loadServiceStatus();
-                }
-            }, refreshIntervalSeconds * 1000);
-        },
-
-        destroy() {
-            this.destroyed = true;
-            // Clean up interval when component is destroyed
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-                this.refreshInterval = null;
-            }
-        },
-
-        async loadServiceStatus() {
-            this.serviceStatusLoading = true;
-            try {
-                const services = await serviceManager.getServices();
-                const sshService = services.find(service => service.name === 'ssh');
-                if (sshService) {
-                    this.serviceStatus = {
-                        active: sshService.active,
-                        enabled: sshService.enabled,
-                        status: sshService.status,
-                        uptime: sshService.uptime || 'N/A'
-                    };
-                }
-            } catch (error) {
-                console.error('Failed to load service status:', error);
-            } finally {
-                this.serviceStatusLoading = false;
-            }
         },
 
         async loadKeys() {
             try {
                 // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys') || '/api/authorized-keys';
+                const url = serverModeManager.buildApiUrl('/api/authorized-keys');
                 const response = await fetch(url);
                 
                 if (!response.ok) {
@@ -139,7 +67,7 @@ export function sshKeysConfig() {
 
             try {
                 // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys') || '/api/authorized-keys';
+                const url = serverModeManager.buildApiUrl('/api/authorized-keys');
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -162,7 +90,7 @@ export function sshKeysConfig() {
                 this.showMessage('SSH key added and saved successfully', 'success');
                 
                 // Trigger deployment in server mode
-                await this.triggerDeploymentIfServerMode();
+                await deployIfServerMode();
             } catch (error) {
                 this.showMessage(error.message || 'Failed to add SSH key', 'error');
             } finally {
@@ -190,7 +118,7 @@ export function sshKeysConfig() {
             try {
                 // Build API URL with config_group parameter if in server mode
                 // Use buildApiUrl with the full path including the index
-                const url = window.serverModeManager?.buildApiUrl(`/api/authorized-keys/${index}`) || `/api/authorized-keys/${index}`;
+                const url = serverModeManager.buildApiUrl(`/api/authorized-keys/${index}`);
                 
                 const response = await fetch(url, {
                     method: 'DELETE'
@@ -206,7 +134,7 @@ export function sshKeysConfig() {
                 this.showMessage('SSH key removed successfully', 'success');
                 
                 // Trigger deployment in server mode
-                await this.triggerDeploymentIfServerMode();
+                await deployIfServerMode();
             } catch (error) {
                 this.showMessage(error.message || 'Failed to remove SSH key', 'error');
             } finally {
@@ -234,8 +162,7 @@ export function sshKeysConfig() {
 
             try {
                 // Build API URL with config_group parameter if in server mode
-                const url = window.serverModeManager?.buildApiUrl('/api/authorized-keys/import') 
-                            || '/api/authorized-keys/import';
+                const url = serverModeManager.buildApiUrl('/api/authorized-keys/import');
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -260,7 +187,7 @@ export function sshKeysConfig() {
                 this.showMessage(data.message || 'SSH keys imported successfully', 'success');
                 
                 // Trigger deployment in server mode
-                await this.triggerDeploymentIfServerMode();
+                await deployIfServerMode();
             } catch (error) {
                 this.showMessage(error.message || `Failed to import SSH keys from ${platform}`, 'error');
             } finally {
@@ -268,65 +195,5 @@ export function sshKeysConfig() {
             }
         },
 
-        showMessage(msg, type = 'success') {
-            // serviceActionMixin passes isError as a boolean instead of a type
-            if (typeof type === 'boolean') {
-                type = type ? 'error' : 'success';
-            }
-            // Use global toast manager
-            if (window.toastManager) {
-                const title = type === 'success' ? 'SSH Keys - Success' : 
-                             type === 'error' ? 'SSH Keys - Error' : 'SSH Keys';
-                window.toastManager.show(msg, type, { title });
-            }
-        },
-
-        async triggerDeploymentIfServerMode() {
-            // Only trigger deployment in server mode
-            if (!this.serverMode) {
-                return;
-            }
-
-            const configGroup = window.serverModeManager?.getCurrentConfigGroup();
-            if (!configGroup) {
-                console.warn('No config group available for deployment');
-                return;
-            }
-
-            try {
-                const deploymentResult = await triggerDeployment(configGroup);
-                const deploymentMessage = formatDeploymentMessage(deploymentResult);
-                
-                if (window.toastManager) {
-                    window.toastManager.success(deploymentMessage);
-                }
-            } catch (deployError) {
-                console.error('Deployment error:', deployError);
-                if (window.toastManager) {
-                    window.toastManager.error(`Deployment failed: ${deployError.message}`);
-                }
-            }
-        },
-
-        streamLogs(serviceName) {
-            // Show the log modal
-            const modal = new bootstrap.Modal(document.getElementById('logModal'));
-            // Get the log viewer instance and start streaming
-            const logViewerEl = document.getElementById('logModal');
-            if (logViewerEl && logViewerEl._x_dataStack) {
-                const logViewerInstance = logViewerEl._x_dataStack[0];
-                logViewerInstance.startStreaming(serviceName);
-            }
-            modal.show();
-            
-            // Scroll to bottom after modal is shown and content is rendered
-            setTimeout(() => {
-                const container = document.getElementById('logContainer');
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }, 250);
-        }
-    };
+    });
 }
-

@@ -1,17 +1,10 @@
 // Main entry point - imports all components and exposes them for Alpine.js
 
 // Import managers (shared singletons)
-import { systemConfigManager } from './managers/systemConfigManager.js';
-import { serviceManager } from './managers/serviceManager.js';
 import { serverModeManager } from './managers/serverModeManager.js';
 
 // Import utilities
-import { getSystemRefreshInterval } from './utils/systemUtils.js';
 import { parseTimeString, updateTimeString } from './utils/timeUtils.js';
-import { apiUrl, getBaseUrl } from './utils/apiUtils.js';
-
-// Import mixins
-import { saveStateMixin } from './mixins/saveStateMixin.js';
 
 // Import components
 import { configManager } from './components/configManager.js';
@@ -45,18 +38,12 @@ window.statusPage = statusPage;
 window.logViewer = logViewer;
 window.shellViewer = shellViewer;
 
-// Expose managers globally (they may be accessed from components)
-window.systemConfigManager = systemConfigManager;
-window.serviceManager = serviceManager;
+// Expose what templates use: the server mode manager (config group links in the navbar)
 window.serverModeManager = serverModeManager;
 
 // Expose utility functions that may be called from templates
-window.getSystemRefreshInterval = getSystemRefreshInterval;
 window.parseTimeString = parseTimeString;
 window.updateTimeString = updateTimeString;
-window.saveStateMixin = saveStateMixin;
-window.apiUrl = apiUrl;
-window.getBaseUrl = getBaseUrl;
 
 // Signal that modules are ready for Alpine.js
 window.appModulesReady = true;

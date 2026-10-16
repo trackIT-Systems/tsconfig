@@ -1,4 +1,5 @@
 // Save state management mixin
+import { serverModeManager } from '../managers/serverModeManager.js';
 import { triggerDeployment, formatDeploymentMessage } from '../utils/deploymentUtils.js';
 
 export function saveStateMixin() {
@@ -40,7 +41,7 @@ export function saveStateMixin() {
                 await configSaveFunction();
                 this.setSaveState('saved');
                 // In server mode, show a toast (tracker mode components show their own messages)
-                if (window.serverModeManager?.isEnabled() && window.toastManager) {
+                if (serverModeManager.isEnabled() && window.toastManager) {
                     window.toastManager.success('Configuration saved successfully');
                 }
             } catch (error) {
@@ -65,7 +66,7 @@ export function saveStateMixin() {
         async handleDeployConfig(configGroupId) {
             console.log('[Deploy] Starting deploy-only process');
             console.log('[Deploy] Config group ID:', configGroupId);
-            console.log('[Deploy] Server mode:', window.serverModeManager?.isEnabled());
+            console.log('[Deploy] Server mode:', serverModeManager.isEnabled());
             
             if (!configGroupId) {
                 console.error('[Deploy] No config group ID provided');

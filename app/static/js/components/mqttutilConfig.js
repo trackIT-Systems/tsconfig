@@ -1,7 +1,6 @@
-import { saveStateMixin } from '../mixins/saveStateMixin.js';
-import { serviceActionMixin } from '../mixins/serviceActionMixin.js';
-import { serviceManager } from '../managers/serviceManager.js';
-import { apiUrl } from '../utils/apiUtils.js';
+import { compose } from '../mixins/compose.js';
+import { configPageMixin } from '../mixins/configPageMixin.js';
+import { serverModeManager } from '../managers/serverModeManager.js';
 
 const DEFAULT_DEFAULTS = {
     scheduling_interval: '1m',
@@ -171,70 +170,22 @@ function uiToApi(defaults, tasks) {
 }
 
 export function mqttutilConfig() {
-    return {
-        ...saveStateMixin(),
-        ...serviceActionMixin(),
-
+    return compose(configPageMixin({
+        service: 'mqttutil',
+        apiPath: '/api/mqttutil',
+        title: 'Reporting Configuration',
+        failureText: 'Failed to save mqttutil configuration',
+        refreshOn: ['settings', 'reporting'],
+        refreshSeconds: 30,
+        initDelayMs: 100,
+    }), {
         defaults: { ...DEFAULT_DEFAULTS, requiresText: '' },
         tasks: [],
         configLoaded: false,
-        serviceStatus: {
-            active: false,
-            enabled: false,
-            status: 'unknown',
-            uptime: 'N/A',
-        },
-        refreshInterval: null,
-        actionLoading: false,
-
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
-        },
-
-        async init() {
-            await new Promise((resolve) => setTimeout(resolve, 100));
+        async loadData() {
             await this.loadConfig();
             if (!this.serverMode) {
                 this.loadServiceStatus();
-            }
-
-            // destroy() may have run while this was still loading (tab left)
-            if (this.destroyed) return;
-            this.refreshInterval = setInterval(() => {
-                const currentHash = window.location.hash.slice(1);
-                const parts = currentHash.split('/');
-                if (parts[0] === 'settings' && parts[1] === 'reporting' && !this.serverMode) {
-                    this.loadServiceStatus();
-                }
-            }, 30000);
-
-            window.addEventListener('config-group-changed', async () => {
-                await this.loadConfig();
-            });
-        },
-
-        destroy() {
-            this.destroyed = true;
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-                this.refreshInterval = null;
-            }
-        },
-
-        async loadServiceStatus() {
-            try {
-                const services = await serviceManager.getServices();
-                const mqttutilService = services.find((service) => service.name === 'mqttutil');
-                if (mqttutilService) {
-                    this.serviceStatus = {
-                        active: mqttutilService.active,
-                        enabled: mqttutilService.enabled,
-                        status: mqttutilService.status,
-                        uptime: mqttutilService.uptime || 'N/A',
-                    };
-                }
-            } catch (error) {
-                console.error('Failed to load mqttutil service status:', error);
             }
         },
 
@@ -244,7 +195,7 @@ export function mqttutilConfig() {
 
         async loadConfig() {
             try {
-                const url = window.serverModeManager?.buildApiUrl('/api/mqttutil') || '/api/mqttutil';
+                const url = serverModeManager.buildApiUrl('/api/mqttutil');
                 const response = await fetch(url);
                 if (response.status === 404) {
                     this.defaults = {
@@ -291,104 +242,5 @@ export function mqttutilConfig() {
             return uiToApi(this.defaults, this.tasks);
         },
 
-        async saveConfig() {
-            const configSaveFunction = async () => {
-                const url = window.serverModeManager?.buildApiUrl('/api/mqttutil') || '/api/mqttutil';
-                const payload = this.buildPayload();
-
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    let errorMessage = error.detail?.message || 'Failed to save mqttutil configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                const data = await response.json();
-                if (!this.serverMode) {
-                    this.showMessage(data.message, false);
-                }
-            };
-
-            // Save only; deployment is triggered separately via deployConfig()
-            await this.handleSaveConfig(configSaveFunction);
-        },
-
-        async deployConfig() {
-            const configGroup = window.serverModeManager?.getCurrentConfigGroup();
-            await this.handleDeployConfig(configGroup);
-        },
-
-        async saveAndRestartService() {
-            const configSaveFunction = async () => {
-                const url = window.serverModeManager?.buildApiUrl('/api/mqttutil') || '/api/mqttutil';
-                const payload = this.buildPayload();
-
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    let errorMessage = error.detail?.message || 'Failed to save mqttutil configuration';
-                    if (error.detail?.errors) {
-                        errorMessage += '\nValidation errors: ' + error.detail.errors.join(', ');
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                const data = await response.json();
-                this.showMessage(data.message, false);
-            };
-
-            const restartFunction = async () => {
-                const response = await fetch(apiUrl('/api/systemd/action'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        service: 'mqttutil',
-                        action: 'restart',
-                    }),
-                });
-
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.detail || 'Failed to restart mqttutil service');
-                }
-
-                this.showMessage(`Configuration saved and ${data.message}`, false);
-
-                if (!this.serverMode) {
-                    setTimeout(async () => {
-                        await this.loadServiceStatus();
-                    }, 2000);
-                }
-            };
-
-            await this.handleSaveAndRestartConfig(configSaveFunction, restartFunction);
-        },
-
-        showMessage(message, isError) {
-            if (window.toastManager) {
-                const type = isError ? 'error' : 'success';
-                const title = isError ? 'Reporting Configuration Error' : 'Reporting Configuration';
-                window.toastManager.show(message, type, { title });
-            }
-
-            window.dispatchEvent(
-                new CustomEvent('show-message', {
-                    detail: { message, isError },
-                })
-            );
-        },
-    };
+    });
 }

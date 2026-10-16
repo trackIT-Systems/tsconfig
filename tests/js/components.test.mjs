@@ -1,0 +1,55 @@
+// Every component module loads and builds its Alpine data object, with the
+// members the templates use. Catches a broken import or a bad composition
+// that would otherwise only show in the browser.
+import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
+import { test } from 'node:test';
+import { installBrowser } from './helpers.mjs';
+
+const COMPONENTS = new URL('../../app/static/js/components/', import.meta.url);
+
+// component file -> members its templates and the mixins rely on
+const EXPECTED = {
+    configUpload: ['serverMode', 'showMessage', 'uploadConfig'],
+    configManager: ['init', 'activeConfig'],
+    logViewer: ['startStreaming'],
+    mqttutilConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
+    networkConfig: ['serverMode', 'dispatchMessage', 'showMessage', 'streamLogs', 'init', 'destroy', 'every', 'listen'],
+    radiotrackingConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
+    resetConfig: ['serverMode', 'showMessage', 'executeReset'],
+    scheduleConfig: ['serverMode', 'expertMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
+    shellViewer: [],
+    soundscapepipeConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
+    sshKeysConfig: ['serverMode', 'sortedKeys', 'serviceStatus', 'streamLogs', 'destroy', 'loadKeys', 'addKey'],
+    statusPage: ['initStatus', 'streamLogs', 'streamAllLogs', 'destroy', 'performAction'],
+    tsupdateConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
+    userconfConfig: ['serverMode', 'showMessage', 'setPassword'],
+};
+
+test('the list above covers every component', () => {
+    const files = readdirSync(COMPONENTS).filter(name => name.endsWith('.js')).map(name => name.slice(0, -3));
+    assert.deepEqual(files.sort(), Object.keys(EXPECTED).sort());
+});
+
+for (const [name, members] of Object.entries(EXPECTED)) {
+    test(`${name} builds and has what the templates use`, async t => {
+        const browser = installBrowser();
+        t.after(browser.restore);
+        const module = await import(new URL(`${name}.js`, COMPONENTS));
+        const component = module[name]();
+        for (const member of members) {
+            assert.ok(member in component, `${name} lacks ${member}`);
+        }
+    });
+}
+
+test('serverMode is a live getter on the pages that use it', async t => {
+    const browser = installBrowser();
+    t.after(browser.restore);
+    const { serverModeManager } = await import('../../app/static/js/managers/serverModeManager.js');
+    const { scheduleConfig } = await import(new URL('scheduleConfig.js', COMPONENTS));
+    const component = scheduleConfig();
+    assert.equal(component.serverMode, false);
+    serverModeManager.enabled = true;
+    assert.equal(component.serverMode, true);
+});

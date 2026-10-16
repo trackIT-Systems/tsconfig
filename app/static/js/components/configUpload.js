@@ -1,7 +1,10 @@
+import { compose } from '../mixins/compose.js';
+import { serverModeMixin } from '../mixins/serverModeMixin.js';
+import { toastMixin } from '../mixins/toastMixin.js';
 import { apiUrl } from '../utils/apiUtils.js';
 
 export function configUpload() {
-    return {
+    return compose(serverModeMixin(), toastMixin('Config Upload - Success', 'Config Upload - Error'), {
         selectedFile: null,
         uploading: false,
         uploadSuccess: false,
@@ -10,11 +13,6 @@ export function configUpload() {
             pedantic: false,
             restartServices: false,
             reboot: false
-        },
-
-        // Server mode helper
-        get serverMode() {
-            return window.serverModeManager?.isEnabled() || false;
         },
 
         init() {
@@ -115,17 +113,5 @@ export function configUpload() {
             }
         },
 
-        showMessage(msg, type = 'success') {
-            // Use global toast manager
-            if (window.toastManager) {
-                const title = type === 'success' ? 'Config Upload - Success' : 
-                             type === 'error' ? 'Config Upload - Error' : 'Config Upload';
-                window.toastManager.show(msg, type, { title });
-            } else {
-                // Fallback to console if toast manager not available
-                console.log(`[Config Upload ${type.toUpperCase()}] ${msg}`);
-            }
-        }
-    };
+    });
 }
-
