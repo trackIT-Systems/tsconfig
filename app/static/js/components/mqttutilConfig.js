@@ -211,7 +211,7 @@ export function mqttutilConfig() {
             });
         },
 
-        cleanup() {
+        destroy() {
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
                 this.refreshInterval = null;

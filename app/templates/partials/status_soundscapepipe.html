@@ -105,7 +105,7 @@
                                                 }, 100);
                                             }
                                         },
-                                        cleanup() {
+                                        destroy() {
                                             if (this.pauseTimer) {
                                                 clearTimeout(this.pauseTimer);
                                                 this.pauseTimer = null;
@@ -113,8 +113,7 @@
                                             this.stopStreamChecking();
                                         }
                                     }"
-                                    x-init="checkStreamAvailability(true, true); startStreamChecking()"
-                                    x-destroy="cleanup()">
+                                    x-init="checkStreamAvailability(true, true); startStreamChecking()">
                                     <div class="mb-3">
                                         <audio 
                                             x-ref="audioPlayer"

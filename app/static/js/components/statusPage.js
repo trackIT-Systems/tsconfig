@@ -51,6 +51,27 @@ export function statusPage() {
         radiotrackingService: null,
         // Available services (for checking if service configs exist)
         availableServices: [],
+        // Set by destroy(); stops a still-running initStatus() from starting the refresh timer
+        destroyed: false,
+        onServicesUpdate: null,
+
+        // Called by Alpine when the status tab is left (x-if removes it)
+        destroy() {
+            this.destroyed = true;
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+            }
+            if (this.onServicesUpdate) {
+                serviceManager.unsubscribe(this.onServicesUpdate);
+                this.onServicesUpdate = null;
+            }
+            // Also stops leaflet-locate's position watch
+            if (this.geolocationMap) {
+                this.geolocationMap.remove();
+                this.geolocationMap = null;
+            }
+        },
 
         async initStatus() {
             // Don't initialize in server mode
@@ -73,12 +94,17 @@ export function statusPage() {
                 await this.loadRadiotrackingConfig();
             }
             // Subscribe to service updates to refresh service status
-            serviceManager.subscribe(() => {
+            this.onServicesUpdate = () => {
                 this.updateSoundscapepipeService();
                 this.updateRadiotrackingService();
-            });
+            };
+            serviceManager.subscribe(this.onServicesUpdate);
             // Load geolocation
             await this.loadGeolocation();
+            // The tab may have been left while the data above was loading
+            if (this.destroyed) {
+                return;
+            }
             // Auto-refresh using configured interval when status tab is active
             this.refreshInterval = setInterval(() => {
                 // Only refresh if status tab is active

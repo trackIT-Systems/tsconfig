@@ -67,7 +67,7 @@ export function sshKeysConfig() {
             }, refreshIntervalSeconds * 1000);
         },
 
-        cleanup() {
+        destroy() {
             // Clean up interval when component is destroyed
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);

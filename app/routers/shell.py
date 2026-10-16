@@ -1,8 +1,10 @@
+import asyncio
+import codecs
 import json
 import os
 import pty
 import pwd
-import select
+import signal
 from typing import Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -116,21 +118,36 @@ class PtyProcess:
             except (OSError, BrokenPipeError):
                 self.running = False
 
-    def read(self, timeout: float = 0.1) -> str:
-        """Read data from the pty with timeout."""
-        if self.fd is None or not self.running:
-            return ""
+    async def output(self):
+        """Yield the shell's output as text until the terminal closes.
 
+        The pty is watched by the event loop (add_reader) instead of polled, so
+        an idle shell costs nothing and never blocks other requests. Reading the
+        master end fails with EIO once the shell and everything it started have
+        closed the terminal, which ends the iteration."""
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        fd = self.fd
+
+        def on_readable():
+            try:
+                data = os.read(fd, 4096)
+            except OSError:
+                data = b""
+            if not data:
+                loop.remove_reader(fd)
+            queue.put_nowait(data)
+
+        # Multi-byte characters can be split across reads
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        loop.add_reader(fd, on_readable)
         try:
-            # Use select to check if data is available
-            ready, _, _ = select.select([self.fd], [], [], timeout)
-            if ready:
-                data = os.read(self.fd, 1024)
-                return data.decode("utf-8", errors="replace")
-        except (OSError, BrokenPipeError):
-            self.running = False
-
-        return ""
+            while data := await queue.get():
+                text = decoder.decode(data)
+                if text:
+                    yield text
+        finally:
+            loop.remove_reader(fd)
 
     def is_alive(self) -> bool:
         """Check if the process is still running."""
@@ -178,28 +195,45 @@ class PtyProcess:
 
                 # Send SIGWINCH to notify the child process
                 if self.pid:
-                    os.kill(self.pid, 28)  # SIGWINCH
+                    os.kill(self.pid, signal.SIGWINCH)
 
             except (OSError, ImportError) as e:
                 logger.warning(f"Failed to resize terminal: {e}")
 
-    def terminate(self):
-        """Terminate the pty process."""
+    async def wait(self, timeout: float) -> bool:
+        """Wait up to `timeout` seconds for the shell to exit (and reap it)."""
+        for _ in range(max(1, int(timeout / 0.05))):
+            if not self.is_alive():
+                return True
+            await asyncio.sleep(0.05)
+        return not self.is_alive()
+
+    async def terminate(self):
+        """Hang up the terminal like a closed ssh session and reap the shell.
+
+        SIGHUP lets the shell and its jobs exit cleanly; SIGKILL follows only
+        if it doesn't. Either way the child is waited for, so it does not stay
+        behind as a zombie."""
         if self.fd is not None:
             try:
                 os.close(self.fd)
             except OSError:
                 pass
+            self.fd = None
 
-        if self.pid is not None:
+        if self.pid is not None and self.running:
             try:
-                os.kill(self.pid, 9)  # SIGKILL
-            except (OSError, ProcessLookupError):
+                os.kill(self.pid, signal.SIGHUP)
+            except ProcessLookupError:
                 pass
+            if not await self.wait(timeout=1.0):
+                try:
+                    os.kill(self.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                await self.wait(timeout=1.0)
 
         self.running = False
-        self.pid = None
-        self.fd = None
 
 
 # Global dictionary to store active shell sessions
@@ -219,20 +253,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     await websocket.accept()
 
-    # Create or get existing session
-    if session_id not in active_sessions:
-        pty_process = PtyProcess()
-        if not pty_process.start():
-            await websocket.send_text(json.dumps({"type": "error", "data": "Failed to start shell session"}))
-            await websocket.close()
-            return
+    # The web UI picks a new session id for every connection. A second
+    # connection to a running session would compete for its output, so it is
+    # refused instead of attached.
+    if session_id in active_sessions:
+        await websocket.send_text(json.dumps({"type": "error", "data": "Shell session is already in use"}))
+        await websocket.close(code=1008)
+        return
 
-        active_sessions[session_id] = pty_process
-        logger.info(f"Shell session {session_id} started (shell: {pty_process.command})")
-    else:
-        pty_process = active_sessions[session_id]
+    pty_process = PtyProcess()
+    if not pty_process.start():
+        await websocket.send_text(json.dumps({"type": "error", "data": "Failed to start shell session"}))
+        await websocket.close()
+        return
 
-    logger.info(f"Shell session {session_id} connected")
+    active_sessions[session_id] = pty_process
+    logger.info(f"Shell session {session_id} started (shell: {pty_process.command})")
 
     # Send initial prompt
     await websocket.send_text(
@@ -244,89 +280,53 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         )
     )
 
+    async def read_from_pty():
+        async for text in pty_process.output():
+            await websocket.send_text(json.dumps({"type": "output", "data": text}))
+
+        # The terminal closed: the shell exited (or is about to)
+        await pty_process.wait(timeout=1.0)
+        exit_code = pty_process.exit_code
+        exit_message = "Shell process has exited"
+        if exit_code == 0:
+            exit_message = "Shell process exited normally"
+        elif exit_code is not None:
+            exit_message = f"Shell process exited with code {exit_code}"
+        try:
+            await websocket.send_text(json.dumps({"type": "exit", "data": exit_message, "exit_code": exit_code}))
+            await websocket.close(code=1000, reason="Shell process exited")
+        except Exception as e:
+            logger.warning(f"Error sending exit notification: {e}")
+
+    read_task = asyncio.create_task(read_from_pty())
     try:
-        # Start a background task to read from pty and send to websocket
-        async def read_from_pty():
-            consecutive_empty_reads = 0
-            max_empty_reads = 100  # If we get 100 consecutive empty reads, check if process died
-
-            while pty_process.is_alive():
-                data = pty_process.read(timeout=0.1)
-                if data:
-                    consecutive_empty_reads = 0
-                    await websocket.send_text(json.dumps({"type": "output", "data": data}))
-                else:
-                    consecutive_empty_reads += 1
-                    # If we haven't received data for a while, check if process is still alive
-                    if consecutive_empty_reads >= max_empty_reads:
-                        if not pty_process.is_alive():
-                            break
-                        consecutive_empty_reads = 0
-
-                await asyncio.sleep(0.01)  # Small delay to prevent busy waiting
-
-            # Process has died, send termination message and close connection
-            if not pty_process.is_alive():
-                try:
-                    exit_code = pty_process.exit_code if hasattr(pty_process, 'exit_code') else None
-                    exit_message = "Shell process has exited"
-                    if exit_code == 0:
-                        exit_message = "Shell process exited normally"
-                    elif exit_code is not None:
-                        exit_message = f"Shell process exited with code {exit_code}"
-                    
-                    await websocket.send_text(json.dumps({
-                        "type": "exit", 
-                        "data": exit_message,
-                        "exit_code": exit_code
-                    }))
-                    await websocket.close(code=1000, reason="Shell process exited")
-                except Exception as e:
-                    logger.warning(f"Error sending exit notification: {e}")
-
-        # Start the read task
-        import asyncio
-
-        read_task = asyncio.create_task(read_from_pty())
-
         # Handle incoming messages from websocket
         while True:
             try:
                 message = await websocket.receive_text()
                 data = json.loads(message)
-
-                if data.get("type") == "input":
-                    input_data = data.get("data", "")
-                    pty_process.write(input_data)
-                elif data.get("type") == "resize":
-                    # Handle terminal resize
-                    cols = data.get("cols", 80)
-                    rows = data.get("rows", 24)
-                    # Ensure cols and rows are valid integers
-                    if isinstance(cols, int) and isinstance(rows, int) and cols > 0 and rows > 0:
-                        pty_process.resize(cols, rows)
-
-            except WebSocketDisconnect:
-                break
             except json.JSONDecodeError:
                 # Invalid JSON, ignore
                 continue
-            except Exception as e:
-                logger.error(f"Error handling websocket message: {e}")
-                break
 
-        # Clean up
-        read_task.cancel()
+            if data.get("type") == "input":
+                pty_process.write(data.get("data", ""))
+            elif data.get("type") == "resize":
+                cols = data.get("cols", 80)
+                rows = data.get("rows", 24)
+                # Ensure cols and rows are valid integers
+                if isinstance(cols, int) and isinstance(rows, int) and cols > 0 and rows > 0:
+                    pty_process.resize(cols, rows)
 
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
+        # RuntimeError: receive after the reader closed the websocket
         logger.info(f"Shell session {session_id} disconnected")
     except Exception as e:
         logger.error(f"Error in shell session {session_id}: {e}")
     finally:
-        # Clean up session
-        if session_id in active_sessions:
-            pty_process = active_sessions[session_id]
-            if pty_process.is_alive():
-                pty_process.terminate()
-            del active_sessions[session_id]
-            logger.info(f"Shell session {session_id} cleaned up")
+        # Stop reading before the pty is closed, then hang up and reap the shell
+        read_task.cancel()
+        await asyncio.gather(read_task, return_exceptions=True)
+        await pty_process.terminate()
+        active_sessions.pop(session_id, None)
+        logger.info(f"Shell session {session_id} cleaned up")

@@ -6,7 +6,12 @@ blanket sudo, would defeat the entire privilege-separation point of running
 as pi in the first place.
 """
 
+import asyncio
+import os
+import time
 from unittest.mock import patch
+
+import pytest
 
 from app.routers.shell import PtyProcess, get_user_home, get_user_shell
 
@@ -108,3 +113,100 @@ class TestGetUserHome:
     def test_falls_back_to_root_if_the_user_is_unknown(self):
         with patch("pwd.getpwuid", side_effect=KeyError("no such uid")):
             assert get_user_home() == "/"
+
+
+def _is_reaped(pid: int) -> bool:
+    """A reaped child is gone entirely; a zombie would still be waitable."""
+    try:
+        os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        return True
+    return False
+
+
+def _event_loop_stalls(duration: float) -> float:
+    """Return the longest gap between ticks of a 10 ms sleep loop."""
+
+    async def measure():
+        worst = 0.0
+        end = time.monotonic() + duration
+        while time.monotonic() < end:
+            start = time.monotonic()
+            await asyncio.sleep(0.01)
+            worst = max(worst, time.monotonic() - start)
+        return worst
+
+    return measure()
+
+
+class TestPtyProcessLifecycle:
+    """Real pty with /bin/sh: output must not block the event loop, and the
+    shell must be reaped instead of staying behind as a zombie."""
+
+    @pytest.mark.asyncio
+    async def test_output_yields_what_the_shell_prints(self):
+        process = PtyProcess(command="/bin/sh")
+        assert process.start()
+        try:
+            process.write("echo hello-$((40+2))\n")
+            received = ""
+            output = process.output()
+            while "hello-42" not in received:
+                received += await asyncio.wait_for(output.__anext__(), timeout=5)
+            await output.aclose()
+        finally:
+            await process.terminate()
+
+    @pytest.mark.asyncio
+    async def test_idle_shell_does_not_block_the_event_loop(self):
+        process = PtyProcess(command="/bin/sh")
+        assert process.start()
+
+        async def drain():
+            async for _ in process.output():
+                pass
+
+        reader = asyncio.create_task(drain())
+        try:
+            assert await _event_loop_stalls(0.5) < 0.05
+        finally:
+            reader.cancel()
+            await asyncio.gather(reader, return_exceptions=True)
+            await process.terminate()
+
+    @pytest.mark.asyncio
+    async def test_output_ends_and_exit_code_is_reported_when_the_shell_exits(self):
+        process = PtyProcess(command="/bin/sh")
+        assert process.start()
+        process.write("exit 3\n")
+
+        async def drain():
+            async for _ in process.output():
+                pass
+
+        await asyncio.wait_for(drain(), timeout=5)
+        assert await process.wait(timeout=2)
+        assert process.exit_code == 3
+        await process.terminate()
+
+    @pytest.mark.asyncio
+    async def test_terminate_reaps_the_shell(self):
+        process = PtyProcess(command="/bin/sh")
+        assert process.start()
+        pid = process.pid
+        await process.terminate()
+        assert _is_reaped(pid)
+
+    @pytest.mark.asyncio
+    async def test_terminate_kills_a_shell_that_ignores_hangup(self):
+        process = PtyProcess(command="/bin/sh")
+        assert process.start()
+        process.write("trap '' HUP; echo ready\n")
+        output = process.output()
+        received = ""
+        while "ready" not in received.replace("echo ready", ""):
+            received += await asyncio.wait_for(output.__anext__(), timeout=5)
+        await output.aclose()
+        pid = process.pid
+        await process.terminate()
+        assert _is_reaped(pid)

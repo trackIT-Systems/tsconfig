@@ -20,7 +20,7 @@
 <div x-show="activeConfig === 'soundscapepipe'" x-cloak>
     <div class="row">
         <div class="col-12">
-            <div class="card" x-data="soundscapepipeConfig()" x-init="init()" x-destroy="cleanup()">
+            <div class="card" x-data="soundscapepipeConfig()">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center">
                         <!-- Service status elements - hidden in server mode -->
@@ -344,7 +344,7 @@
                                              }, 100);
                                          }
                                      },
-                                     cleanup() {
+                                     destroy() {
                                          if (this.pauseTimer) {
                                              clearTimeout(this.pauseTimer);
                                              this.pauseTimer = null;
@@ -352,8 +352,7 @@
                                          this.stopStreamChecking();
                                      }
                                  }"
-                                 x-init="checkStreamAvailability(true); startStreamChecking()"
-                                 x-destroy="cleanup()">
+                                 x-init="checkStreamAvailability(true); startStreamChecking()">
                                 <div class="col-12">
                                     <div class="bg-light rounded-2 p-3 mb-3">
                                         <div class="d-flex align-items-center justify-content-between mb-3">

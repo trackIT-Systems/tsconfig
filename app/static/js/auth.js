@@ -155,7 +155,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Global fetch interceptor for automatic token refresh on 401 errors
 (function() {
     const originalFetch = window.fetch;
-    const requestsInRetry = new WeakSet();
 
     window.fetch = async function(...args) {
         let response = await originalFetch(...args);
@@ -171,18 +170,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             return response;
         }
 
-        // If we get a 401 and user is authenticated, try to refresh and retry
-        if (response.status === 401 && authManager.isAuthenticated() && !requestsInRetry.has(args[0])) {
+        // If we get a 401 and user is authenticated, try to refresh and retry once.
+        // The retry goes through originalFetch, so it never comes back here.
+        if (response.status === 401 && authManager.isAuthenticated()) {
             // Don't intercept auth endpoints - they handle their own flow
             const url = typeof args[0] === 'string' ? args[0] : args[0].url;
             if (url && url.includes('/auth/')) {
                 return response;
             }
 
-            
-            // Mark this request to prevent infinite retry loops
-            requestsInRetry.add(args[0]);
-            
             try {
                 // Attempt to refresh the token
                 const refreshed = await authManager.refreshToken();
@@ -193,9 +189,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (error) {
                 console.error('Error during token refresh retry:', error);
-            } finally {
-                // Clean up the retry marker after a delay
-                setTimeout(() => requestsInRetry.delete(args[0]), 5000);
             }
         }
         

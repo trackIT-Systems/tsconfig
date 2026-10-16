@@ -119,7 +119,7 @@ export function soundscapepipeConfig() {
             });
         },
 
-        cleanup() {
+        destroy() {
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
                 this.refreshInterval = null;

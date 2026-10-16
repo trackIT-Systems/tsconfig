@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import anyio
 import psutil
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -21,6 +22,35 @@ from app.utils.privileged import (
 )
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
+
+
+class DisconnectAwareStreamingResponse(StreamingResponse):
+    """StreamingResponse that stops as soon as the client disconnects.
+
+    Starlette only watches for a disconnect on ASGI spec < 2.4 and otherwise
+    expects writing to a closed connection to fail, but uvicorn (spec 2.4)
+    drops such writes silently. An endless stream such as `journalctl -f`
+    would then run forever. This watches receive() for http.disconnect and
+    cancels the stream, which runs the generator's cleanup."""
+
+    async def __call__(self, scope, receive, send):
+        async with anyio.create_task_group() as task_group:
+
+            async def stream():
+                await self.stream_response(send)
+                task_group.cancel_scope.cancel()
+
+            async def watch_disconnect():
+                while (await receive())["type"] != "http.disconnect":
+                    pass
+                task_group.cancel_scope.cancel()
+
+            task_group.start_soon(stream)
+            task_group.start_soon(watch_disconnect)
+
+        if self.background is not None:
+            await self.background()
+
 
 # Empty default services configuration - no services loaded by default
 DEFAULT_SERVICES_CONFIG = {"services": []}
@@ -434,14 +464,15 @@ async def stream_service_logs(
         except Exception as e:
             yield f"data: Error streaming logs: {str(e)}\n\n"
         finally:
+            # Runs when journalctl ends and when the stream is cancelled
+            # because the client went away
             if process and process.returncode is None:
                 try:
                     process.terminate()
-                    await process.wait()
-                except Exception:
+                except ProcessLookupError:
                     pass
 
-    return StreamingResponse(
+    return DisconnectAwareStreamingResponse(
         generate_logs(),
         media_type="text/plain",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Content-Type": "text/event-stream"},

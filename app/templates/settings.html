@@ -121,7 +121,7 @@
             <div class="tab-content">
                 <!-- Schedule Tab -->
                 <div x-show="systemTab === 'schedule'">
-                    <div class="card" x-data="scheduleConfig()" x-init="init()" x-destroy="cleanup()">
+                    <div class="card" x-data="scheduleConfig()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <!-- Service status elements - hidden in server mode -->
@@ -558,7 +558,7 @@
 
                 <!-- Access Tab (SSH keys + operator account password) -->
                 <div x-show="systemTab === 'sshkeys' && expertMode">
-                    <div class="card" x-data="sshKeysConfig()" x-init="init()" x-destroy="cleanup()">
+                    <div class="card" x-data="sshKeysConfig()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <!-- Service status elements - hidden in server mode -->
@@ -925,7 +925,7 @@
 
                 <!-- Updates Tab -->
                 <div x-show="systemTab === 'updates'">
-                    <div class="card" x-data="tsupdateConfig()" x-init="init()" x-destroy="cleanup()">
+                    <div class="card" x-data="tsupdateConfig()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <!-- Service status elements - hidden in server mode -->
@@ -1406,7 +1406,7 @@
 
                 <!-- Reporting Tab (mqttutil) -->
                 <div x-show="systemTab === 'reporting' && expertMode">
-                    <div class="card" x-data="mqttutilConfig()" x-init="init()" x-destroy="cleanup()">
+                    <div class="card" x-data="mqttutilConfig()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <template x-if="!serverMode">
@@ -1726,7 +1726,7 @@
                 <!-- Network Tab -->
                 <template x-if="!serverMode">
                     <div x-show="systemTab === 'network'">
-                        <div class="card" x-data="networkConfig()" x-init="init()" x-destroy="cleanup()">
+                        <div class="card" x-data="networkConfig()">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <h5 class="card-title mb-0 me-2">NetworkManager</h5>
@@ -2459,7 +2459,7 @@
                 <!-- Reset Tab -->
                 <template x-if="expertMode && !serverMode">
                     <div x-show="systemTab === 'reset'">
-                        <div class="card" x-data="resetConfig()" x-init="init()">
+                        <div class="card" x-data="resetConfig()">
                             <div class="card-header">
                                 <h5 class="card-title mb-0">
                                     <i class="fas fa-undo me-2"></i>
@@ -2545,7 +2545,7 @@
                 <!-- Config Upload Tab -->
                 <template x-if="!serverMode">
                     <div x-show="systemTab === 'configupload'">
-                        <div class="card" x-data="configUpload()" x-init="init()">
+                        <div class="card" x-data="configUpload()">
                         <div class="card-header">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-file-archive me-2"></i>

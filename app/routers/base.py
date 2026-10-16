@@ -172,7 +172,6 @@ class BaseConfigRouter:
                         "message": f"Failed to save {self.prefix} configuration",
                         "error": str(e),
                         "type": type(e).__name__,
-                        "traceback": traceback.format_exc(),
                     },
                 )
 
@@ -186,7 +185,6 @@ class BaseConfigRouter:
                 "message": f"Failed to update {self.prefix} configuration",
                 "error": str(e),
                 "type": type(e).__name__,
-                "traceback": traceback.format_exc(),
             }
             raise HTTPException(status_code=500, detail=error_detail)
 

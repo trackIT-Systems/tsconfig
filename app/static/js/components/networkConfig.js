@@ -146,7 +146,7 @@ export function networkConfig() {
             await this.startAutoRefresh();
         },
         
-        cleanup() {
+        destroy() {
             this.stopAutoRefresh();
             this._initialized = false;
         },

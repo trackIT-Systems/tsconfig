@@ -101,7 +101,7 @@ export function scheduleConfig() {
             }, refreshIntervalSeconds * 1000);
         },
 
-        cleanup() {
+        destroy() {
             // Clean up intervals when component is destroyed
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
