@@ -19,6 +19,7 @@ from app import __version__
 from app.auth.middleware import AuthenticationMiddleware
 from app.auth.oidc_config import oidc_config
 from app.config_loader import config_loader
+from app.configs import support
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.geolocation import GeolocationConfig
 from app.configs.mqttutil import MqttUtilConfig
@@ -646,6 +647,7 @@ def _get_consolidated_disk_usage():
     summary="Get list of available configuration services",
     description="""
 Returns a list of services that have configuration files available in the system.
+In tracker mode, a service also needs its systemd unit on the device.
 This determines which configuration tabs are displayed in the web interface.
 
 Available services may include:
@@ -718,6 +720,13 @@ async def get_available_services(config_group: str | None = None):
             available_services.append("mqttutil")
     except Exception:
         logger.debug("Could not check the mqttutil configuration", exc_info=True)
+
+    # On a tracker, a config file alone does not make a service: one copied
+    # from another kind of device (soundscapepipe.yml on a radiotracking
+    # image) must not show a tab for a service that is not installed.
+    if not config_loader.is_server_mode():
+        unsupported = await support.unsupported_config_types(available_services)
+        available_services = [service for service in available_services if service not in unsupported]
 
     return {"available_services": available_services}
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config_loader import config_loader
+from app.configs import support
 from app.identity import OPERATOR_HOME
 from app.logging_config import get_logger, setup_logging
 from app.routers.configs import (
@@ -212,6 +213,13 @@ async def process_zip_upload(
             f"No recognized configuration files found in zip. "
             f"Supported files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}"
         )
+        sys.exit(1)
+
+    # A bundle for another kind of device is rejected as a whole, not partly applied
+    files_by_type = {RECOGNIZED_CONFIG_FILES[filename]: filename for filename in recognized_files}
+    unsupported = await support.unsupported_config_types(files_by_type)
+    if unsupported:
+        log.error(support.unsupported_message(unsupported, files_by_type) + ". No changes were made.")
         sys.exit(1)
 
     log.info(f"Found {len(recognized_files)} recognized configuration file(s)")

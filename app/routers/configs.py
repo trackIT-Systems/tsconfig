@@ -6,6 +6,7 @@ import contextlib
 import socket
 import zipfile
 from ast import literal_eval
+from collections.abc import Iterable
 from configparser import ConfigParser
 from datetime import UTC, datetime, timedelta
 from email.utils import formatdate
@@ -19,7 +20,7 @@ from fastapi import Path as PathParam
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config_loader import config_loader
-from app.configs import registry
+from app.configs import registry, support
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.cmdline import CmdlineConfig
 from app.configs.geolocation import GeolocationConfig
@@ -384,7 +385,7 @@ async def list_configs():
     files_metadata = []
     most_recent_mtime_timestamp = None
 
-    for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
+    for filename, config_type in (await supported_config_files()).items():
         try:
             config_instance = get_config_instance(config_type)
 
@@ -512,6 +513,7 @@ async def upload_config(
             detail=f"Unsupported configuration file: {file.filename}. "
             f"Supported files are: {', '.join(filename_to_type.keys())}",
         )
+    await reject_unsupported_config_files([filename_lower])
 
     # Validate mtime and parse if needed
     upload_mtime = parse_mtime_and_validate(mtime, force)
@@ -641,6 +643,31 @@ async def upload_config(
 # keep working.
 RECOGNIZED_CONFIG_FILES = registry.RECOGNIZED_CONFIG_FILES
 SERVICE_MAPPING = registry.SERVICE_MAPPING
+
+
+async def supported_config_files() -> dict[str, str]:
+    """RECOGNIZED_CONFIG_FILES without the files whose service this device lacks
+    (see app.configs.support). Listing and downloading use it, so a stale file
+    of a missing service is not offered and a downloaded bundle can be
+    uploaded again."""
+    unsupported = await support.unsupported_config_types(RECOGNIZED_CONFIG_FILES.values())
+    return {
+        filename: config_type
+        for filename, config_type in RECOGNIZED_CONFIG_FILES.items()
+        if config_type not in unsupported
+    }
+
+
+async def reject_unsupported_config_files(filenames: Iterable[str]) -> None:
+    """Raise 400 if any of `filenames` configures a service this device lacks,
+    e.g. a soundscapepipe.yml in a bundle uploaded to a radiotracking device."""
+    files_by_type = {RECOGNIZED_CONFIG_FILES[filename]: filename for filename in filenames}
+    unsupported = await support.unsupported_config_types(files_by_type)
+    if unsupported:
+        raise HTTPException(
+            status_code=400,
+            detail=support.unsupported_message(unsupported, files_by_type) + ". No changes were made.",
+        )
 
 
 def get_config_instance(config_type: str):
@@ -913,6 +940,15 @@ async def _apply_config_zip_from_path(
             f"Supported files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}"
         )
 
+    # Unlike an upload, a reset must not fail as a whole: skip what this
+    # device cannot use and apply the rest.
+    files_by_type = {RECOGNIZED_CONFIG_FILES[filename]: filename for filename in recognized_files}
+    unsupported = await support.unsupported_config_types(files_by_type)
+    if unsupported:
+        logger.warning(support.unsupported_message(unsupported, files_by_type) + ", skipping")
+        for config_type in unsupported:
+            del recognized_files[files_by_type[config_type]]
+
     parsed_configs = {}
     config_instances = {}
     for filename, content in recognized_files.items():
@@ -1098,6 +1134,9 @@ async def upload_config_zip(
             detail=f"No recognized configuration files found in zip. "
             f"Supported files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}",
         )
+
+    # A bundle for another kind of device is rejected as a whole, not partly applied
+    await reject_unsupported_config_files(recognized_files)
 
     # Parse and validate all recognized files
     validation_results = {}
@@ -1509,7 +1548,7 @@ async def head_config(
     )
 
 
-def _check_existing_config_files():
+async def _check_existing_config_files():
     """Check which config files exist and get metadata.
 
     Returns:
@@ -1529,7 +1568,7 @@ def _check_existing_config_files():
     most_recent_mtime = None
     total_size = 0
 
-    for config_type in RECOGNIZED_CONFIG_FILES.values():
+    for config_type in (await supported_config_files()).values():
         try:
             config_instance = get_config_instance(config_type)
 
@@ -1579,7 +1618,7 @@ async def download_config_zip():
     existing_files = {}
     most_recent_mtime = None
 
-    for filename, config_type in RECOGNIZED_CONFIG_FILES.items():
+    for filename, config_type in (await supported_config_files()).items():
         try:
             config_instance = get_config_instance(config_type)
 
@@ -1670,7 +1709,7 @@ async def head_config_zip():
     Returns:
         Headers only (no body) with Last-Modified header for zip archive
     """
-    file_count, most_recent_mtime, _total_size = _check_existing_config_files()
+    file_count, most_recent_mtime, _total_size = await _check_existing_config_files()
 
     # Get hostname for filename
     hostname = socket.gethostname()
