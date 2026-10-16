@@ -15,7 +15,7 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from hashlib import sha256
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 from starlette.requests import HTTPConnection
 from starlette.responses import Response
@@ -92,6 +92,25 @@ def is_trusted_local(conn: HTTPConnection) -> bool:
     return not any(h in conn.headers for h in _PROXY_HEADERS)
 
 
+def is_cross_origin(conn: HTTPConnection) -> bool:
+    """True when a browser sent this request from a page of another site.
+
+    Browsers send Origin with every POST/PUT/PATCH/DELETE (fetch and forms) and
+    every WebSocket handshake. It must name the host the request was sent to,
+    which Caddy passes through unchanged as Host. The scheme is not compared,
+    so the same device over HTTP and HTTPS counts as one. Requests without
+    Origin do not come from a web page (curl, mqttutil, the BLE gateway).
+    """
+    origin = conn.headers.get("origin")
+    if origin is None:
+        return False
+    try:
+        netloc = urlsplit(origin).netloc
+    except ValueError:
+        return True
+    return not netloc or netloc.lower() != conn.headers.get("host", "").lower()
+
+
 def has_valid_session(conn: HTTPConnection) -> int | None:
     for name in (SECURE_SESSION_COOKIE, SESSION_COOKIE):
         issued = verify_session_token(conn.cookies.get(name))
@@ -126,7 +145,10 @@ def delete_session_cookies(response: Response) -> None:
 
 
 def is_authorized(conn: HTTPConnection) -> bool:
-    """Whether a tracker-mode request/websocket may proceed."""
+    """Whether a tracker-mode websocket may proceed (it carries no CSRF token,
+    so the handshake must also come from tsconfig's own pages)."""
+    if is_cross_origin(conn):
+        return False
     return is_trusted_local(conn) or has_valid_session(conn) is not None
 
 

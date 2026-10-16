@@ -17,6 +17,8 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - New `hotspot.nmconnection` bundle member for the access-point profile. A bundle's `[connection]` section and `ssid` are ignored (the on-disk ones win), the profile is written root-only (0600), loaded into NetworkManager, and rolled back if NetworkManager rejects it. The profile is never served through the API and cannot be deleted through `delete-config`. New privileged op `stat-config` (existence and mtime only) lets the "bundle is newer" check work for it despite the root-only directory
 - Failed config saves no longer send the Python traceback to the client (it is still logged)
 - A login over HTTPS (`X-Forwarded-Proto: https` from the reverse proxy) gets the `Secure` session cookie `__Host-tsconfig_session`, which browsers never send over plain HTTP; logins over HTTP keep `tsconfig_session`. Either cookie is accepted, and logout clears both
+- Mountpoints on the status page are rendered as text, not HTML: a mount path containing markup was inserted unescaped. Their Filebrowser links encode the path
+- Tracker mode refuses state-changing requests (POST, PUT, PATCH, DELETE) and web shell connections whose `Origin` names another site (403), in addition to the `SameSite=Lax` session cookie. Requests without `Origin` (curl, mqttutil, the BLE gateway) are not affected; the same device over HTTP and HTTPS counts as one origin
 
 ### Added
 

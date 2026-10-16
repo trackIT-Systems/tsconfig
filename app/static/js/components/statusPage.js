@@ -374,31 +374,25 @@ export function statusPage() {
             }
         },
 
-        // Function to format mountpoints with links for /mnt paths
-        formatMountpointsWithLinks(mountpoints) {
-            if (!mountpoints || mountpoints.length === 0) return '';
-            
-            const formattedMountpoints = mountpoints.map(mp => {
-                if (mp.startsWith('/mnt/')) {
-                    // Extract the path after /mnt/ and create a link that opens in new tab
-                    const pathAfterMnt = mp.substring(5); // Remove '/mnt/' prefix
-                    if (pathAfterMnt) {
-                        return `<a href="/data/files/${pathAfterMnt}/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
-                    }
-                } else if (mp === '/data') {
-                    // Link /data mountpoint directly to filebrowser root
-                    return `<a href="/data/files/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
-                } else if (mp.startsWith('/data/')) {
-                    // Extract the path after /data/ and create a link
-                    const pathAfterData = mp.substring(6); // Remove '/data/' prefix
-                    if (pathAfterData) {
-                        return `<a href="/data/files/${pathAfterData}/" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${mp} <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a>`;
+        // Mountpoints with a Filebrowser link where it can show them: /data and
+        // its subdirectories, and /mnt/<x> (served as /data/files/<x>). The
+        // template renders paths with x-text, never as HTML.
+        mountpointLinks(mountpoints) {
+            const browsable = (mp) => {
+                if (mp === '/data') return '';
+                for (const prefix of ['/data/', '/mnt/']) {
+                    if (mp.startsWith(prefix) && mp.length > prefix.length) {
+                        return mp.substring(prefix.length);
                     }
                 }
-                return mp;
+                return null;
+            };
+            return (mountpoints || []).map(mp => {
+                const path = browsable(mp);
+                if (path === null) return { path: mp, href: null };
+                const encoded = path.split('/').map(encodeURIComponent).join('/');
+                return { path: mp, href: path ? `/data/files/${encoded}/` : '/data/files/' };
             });
-            
-            return formattedMountpoints.join(', ');
         },
 
         async loadGeolocation() {

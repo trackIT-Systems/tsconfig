@@ -121,7 +121,7 @@
                                             <div class="d-flex justify-content-between">
                                                 <span class="small">
                                                     <span x-text="disk.device"></span> 
-                                                    (<span x-html="formatMountpointsWithLinks(disk.mountpoints || [disk.mountpoint])"></span>)
+                                                    (<template x-for="(mp, mpIndex) in mountpointLinks(disk.mountpoints || [disk.mountpoint])" :key="mp.path"><span><span x-show="mpIndex > 0">, </span><template x-if="mp.href"><a :href="mp.href" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span x-text="mp.path"></span> <i class="fas fa-external-link-alt fa-xs" title="Opens in new tab"></i></a></template><template x-if="!mp.href"><span x-text="mp.path"></span></template></span></template>)
                                                 </span>
                                                 <span x-text="`${disk.percent.toFixed(1)}%`" class="small"></span>
                                             </div>

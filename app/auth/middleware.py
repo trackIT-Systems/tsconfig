@@ -15,6 +15,7 @@ from app.auth.pam_auth import LOGIN_USERS, authenticate_operator
 from app.auth.session import (
     client_source,
     has_valid_session,
+    is_cross_origin,
     is_trusted_local,
     login_retry_after,
     parse_basic_auth,
@@ -36,6 +37,11 @@ templates = Jinja2Templates(directory="app/templates")
 # header to /auth/check together with the original URI, and only for requests
 # under this prefix is Basic accepted.
 DAV_PATH_PREFIX = "/data/dav"
+
+# Methods that change state. A browser sends their requests from another site's
+# page with the session cookie only if SameSite allows it; checking Origin as
+# well does not depend on that.
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 BASIC_CHALLENGE = {"WWW-Authenticate": 'Basic realm="tsOS"'}
 
 
@@ -157,6 +163,15 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_tracker(self, request: Request, call_next: Callable) -> Response:
         """Tracker mode: operator session cookie or trusted local request."""
+        if request.method in UNSAFE_METHODS and is_cross_origin(request):
+            logger.warning(
+                f"Refused cross-origin {request.method} {request.url.path} from {request.headers.get('origin')!r}"
+            )
+            return Response(
+                content='{"detail":"Cross-origin request refused"}',
+                status_code=403,
+                media_type="application/json",
+            )
         if self._is_tracker_public_path(request.url.path) or is_trusted_local(request):
             return await call_next(request)
 

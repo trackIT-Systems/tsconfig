@@ -36,6 +36,10 @@ def make_app():
     async def secret():
         return {"ok": True}
 
+    @app.post("/api/change")
+    async def change():
+        return {"changed": True}
+
     @app.websocket("/ws/probe")
     async def ws_probe(websocket: WebSocket):
         if not is_authorized(websocket):
@@ -107,6 +111,62 @@ class TestGate:
     def test_fresh_cookie_is_not_reissued(self, remote):
         r = remote.get("/api/secret", cookies=session_cookie())
         assert "set-cookie" not in r.headers
+
+
+class TestCrossOrigin:
+    """State-changing requests and websockets from another site's page are refused."""
+
+    def test_post_from_another_site_is_refused_even_with_a_session(self, remote):
+        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "http://evil.example"})
+        assert r.status_code == 403
+
+    def test_post_from_the_device_page_passes(self, remote):
+        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "http://testserver"})
+        assert r.status_code == 200
+
+    def test_the_same_device_over_https_counts_as_same_origin(self, remote):
+        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "https://testserver"})
+        assert r.status_code == 200
+
+    def test_another_port_is_another_origin(self, remote):
+        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": "http://testserver:8080"})
+        assert r.status_code == 403
+
+    @pytest.mark.parametrize("origin", ["null", "", "not a url"])
+    def test_opaque_or_malformed_origin_is_refused(self, remote, origin):
+        r = remote.post("/api/change", cookies=session_cookie(), headers={"Origin": origin})
+        assert r.status_code == 403
+
+    def test_request_without_origin_is_not_from_a_page_and_passes(self, remote):
+        assert remote.post("/api/change", cookies=session_cookie()).status_code == 200
+
+    def test_reads_are_not_checked(self, remote):
+        r = remote.get("/api/secret", cookies=session_cookie(), headers={"Origin": "http://evil.example"})
+        assert r.status_code == 200
+
+    def test_the_login_form_cannot_be_posted_from_another_site(self, remote):
+        r = remote.post("/auth/login", data={"password": "x"}, headers={"Origin": "http://evil.example"})
+        assert r.status_code == 403
+
+    def test_a_page_cannot_use_the_trusted_local_path_either(self, local):
+        r = local.post("/api/change", headers={"Origin": "http://evil.example"})
+        assert r.status_code == 403
+
+    def test_websocket_from_another_site_is_refused(self, remote):
+        with (
+            pytest.raises(WebSocketDisconnect),
+            remote.websocket_connect(
+                "/ws/probe",
+                headers={"Origin": "http://evil.example", "Cookie": f"{SESSION_COOKIE}={create_session_token()}"},
+            ) as ws,
+        ):
+            ws.receive_text()
+
+    def test_websocket_from_the_device_page_is_accepted(self, remote):
+        with remote.websocket_connect(
+            "/ws/probe", headers={"Origin": "http://testserver", "Cookie": f"{SESSION_COOKIE}={create_session_token()}"}
+        ) as ws:
+            assert ws.receive_text() == "hello"
 
 
 class TestAuthCheck:
