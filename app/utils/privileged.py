@@ -55,6 +55,10 @@ import json
 import os
 from typing import Any
 
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 PRIVILEGED_WRAPPER = "/usr/local/sbin/tsconfig-privileged"
 
 # Generous but bounded - these are local process calls (systemctl, or a
@@ -70,6 +74,10 @@ DEFAULT_TIMEOUT = 30.0
 # directly; this constant only keeps tsconfig's own HTTP surface curated,
 # the same way it always has been.
 ALLOWED_SYSTEMCTL_VERBS = frozenset({"start", "stop", "restart", "reload"})
+
+# The event loop only keeps weak references to tasks, so a scheduled reboot
+# is held here until it has run.
+_background_tasks: set[asyncio.Task] = set()
 
 
 class PrivilegedCallError(Exception):
@@ -103,8 +111,15 @@ async def _run_subprocess(argv: list[str], stdin_bytes: bytes | None, timeout: f
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(input=stdin_bytes), timeout=timeout)
     except TimeoutError as e:
-        process.kill()
-        await process.wait()
+        try:
+            process.kill()
+        except (ProcessLookupError, PermissionError):
+            # Already gone, or pkexec has exec'd the root process, which pi may
+            # not signal. That one ends itself (app.privileged.cli's
+            # TIME_LIMIT_SECONDS), and asyncio reaps it then.
+            pass
+        else:
+            await process.wait()
         raise PrivilegedCallError("privileged operation timed out") from e
 
     return process.returncode, stdout, stderr
@@ -231,9 +246,18 @@ async def schedule_reboot(delay: int = 10, timeout: float = DEFAULT_TIMEOUT) -> 
 
     async def _reboot_after_delay() -> None:
         await asyncio.sleep(delay)
-        await asyncio.create_subprocess_exec("/usr/bin/systemctl", "reboot")
+        logger.info("Rebooting")
+        try:
+            returncode, _stdout, stderr = await _run_subprocess(["/usr/bin/systemctl", "reboot"], None, timeout)
+        except PrivilegedCallError:
+            logger.exception("Reboot failed")
+            return
+        if returncode != 0:
+            logger.error(f"Reboot failed: {stderr.decode('utf-8', errors='replace').strip()}")
 
-    asyncio.create_task(_reboot_after_delay())
+    task = asyncio.create_task(_reboot_after_delay())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return {"scheduled": True, "delay_seconds": delay}
 
 

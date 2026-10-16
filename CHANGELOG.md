@@ -59,6 +59,8 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - Web UI components were initialized twice (Alpine calls `init()` itself, and the templates called it again via `x-init`), which doubled requests and timers. Their cleanup was wired to a non-existent `x-destroy` directive and never ran, so every tab switch left another set of polling timers behind (after 6 switches, 137 instead of 36 requests per 25 s on the status page). Cleanup is now Alpine's `destroy()`, and the status page also stops its timer, service subscription and map
 - Server mode: the token refresh on a `401` threw a `TypeError` (a URL string added to a `WeakSet`) instead of refreshing and retrying the request
 - Server mode: OIDC login and token refresh no longer turn their own errors into `500`. An unavailable OIDC handler answers `503`, and a user who lost access gets `403 Access denied` on refresh instead of a server error
+- Privileged operations that time out report the timeout. Once `pkexec` has made the process root, `pi` cannot kill it, so the timeout surfaced as a `PermissionError` and the stuck process ran on. The root process now ends itself after 60 s (longer than the caller's 30 s)
+- A scheduled reboot can no longer be lost: its task was only weakly referenced by the event loop and could be garbage-collected before it ran. A failing `systemctl reboot` is now logged
 
 ## [2026.7.1] - 2026-07-14
 

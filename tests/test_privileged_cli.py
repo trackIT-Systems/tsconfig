@@ -61,6 +61,32 @@ class TestUnexpectedExceptionHandling:
         assert "some internal detail" in stderr
 
 
+class TestTimeLimit:
+    def test_op_running_past_the_time_limit_is_reported_as_timed_out(self, monkeypatch, capsys):
+        import signal
+        import time
+
+        def stuck(*args, **kwargs):
+            time.sleep(5)
+
+        monkeypatch.setattr(cli, "TIME_LIMIT_SECONDS", 1)
+        monkeypatch.setattr(ops, "wipe_overlay", stuck)
+        started = time.monotonic()
+        exit_code, payload, _stderr = _run(monkeypatch, capsys, ["wipe-overlay"])
+        assert time.monotonic() - started < 3
+        assert exit_code == 1
+        assert payload == {"success": False, "error": "privileged operation timed out"}
+        assert signal.alarm(0) == 0  # no alarm left behind
+
+    def test_successful_op_leaves_no_alarm_behind(self, monkeypatch, capsys):
+        import signal
+
+        monkeypatch.setattr(ops, "wipe_overlay", lambda: {"wiped": True})
+        exit_code, _payload, _stderr = _run(monkeypatch, capsys, ["wipe-overlay"])
+        assert exit_code == 0
+        assert signal.alarm(0) == 0
+
+
 class TestDeleteConfigDispatch:
     def test_success(self, monkeypatch, capsys, tmp_path):
         target = tmp_path / "wireguard.conf"

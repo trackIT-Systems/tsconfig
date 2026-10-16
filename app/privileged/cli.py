@@ -39,10 +39,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 from typing import Any
 
 from app.privileged import ops
+
+# Once pkexec has made this process root, the caller (pi) can no longer kill
+# it, so it limits its own run time. Longer than the caller's timeout
+# (app.utils.privileged.DEFAULT_TIMEOUT, 30 s), so an op the caller still
+# waits for is never cut off.
+TIME_LIMIT_SECONDS = 60
+
+
+def _time_limit_exceeded(signum, frame):
+    raise ops.PrivilegedOpError("privileged operation timed out")
 
 
 def _read_json_stdin() -> dict[str, Any]:
@@ -139,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    signal.signal(signal.SIGALRM, _time_limit_exceeded)
+    signal.alarm(TIME_LIMIT_SECONDS)
     try:
         stdin_data = _read_json_stdin() if args.op in _STDIN_JSON_OPS else None
         result = dispatch_op(args, stdin_data)
@@ -158,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
         traceback.print_exc(file=sys.stderr)
         _print_error("internal error")
         return 1
+    finally:
+        signal.alarm(0)
 
 
 if __name__ == "__main__":

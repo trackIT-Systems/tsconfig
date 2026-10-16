@@ -100,6 +100,26 @@ class TestRunPrivilegedOp:
         ):
             await run_privileged_op("wipe-overlay", timeout=0.01)
 
+    async def test_timeout_of_a_root_process_pi_cannot_kill_still_raises_call_error(self):
+        # pkexec execs the root process in place; killing it as pi fails with
+        # EPERM, which must not replace the timeout error (the process ends
+        # itself through app.privileged.cli's time limit).
+        class RootProcess(FakeProcess):
+            async def communicate(self, input=None):
+                await asyncio.sleep(10)
+
+            def kill(self):
+                raise PermissionError(1, "Operation not permitted")
+
+            async def wait(self):
+                raise AssertionError("must not wait for a process it could not kill")
+
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=RootProcess(0, b""))),
+            pytest.raises(PrivilegedCallError, match="timed out"),
+        ):
+            await run_privileged_op("wipe-overlay", timeout=0.01)
+
 
 @pytest.mark.asyncio
 class TestRunPrivilegedOpAlreadyRootBypass:
@@ -197,3 +217,22 @@ class TestScheduleReboot:
         await asyncio.sleep(0)  # let the loop deliver the cancellation before teardown
         argv = mock_exec.call_args.args
         assert argv == ("pkcheck", "--action-id", "org.freedesktop.login1.reboot", "--process", str(os.getpid()))
+
+    async def test_scheduled_reboot_is_kept_alive_until_it_ran(self):
+        from app.utils import privileged
+
+        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=FakeProcess(0, b""))) as mock_exec:
+            await schedule_reboot(delay=0)
+            assert len(privileged._background_tasks) == 1
+            await asyncio.gather(*privileged._background_tasks)
+        assert privileged._background_tasks == set()
+        assert mock_exec.call_args.args == ("/usr/bin/systemctl", "reboot")
+
+    async def test_failed_reboot_is_logged(self, caplog):
+        from app.utils import privileged
+
+        processes = [FakeProcess(0, b""), FakeProcess(1, b"", b"Access denied")]
+        with patch("asyncio.create_subprocess_exec", new=AsyncMock(side_effect=processes)):
+            await schedule_reboot(delay=0)
+            await asyncio.gather(*privileged._background_tasks)
+        assert "Reboot failed: Access denied" in caplog.text
