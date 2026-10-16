@@ -5,7 +5,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.config_loader import config_loader
-from app.configs import BaseConfig
+from app.configs import BaseConfig, support
+from app.configs.registry import CONFIG_TYPES
 from app.utils.privileged import PrivilegedCallError, write_config
 
 
@@ -18,8 +19,6 @@ class BaseConfigRouter:
         # it to be a real entry in app.configs.registry.CONFIG_TYPES - fail
         # at startup rather than with a confusing rejection from the
         # privileged CLI the first time someone saves this config.
-        from app.configs.registry import CONFIG_TYPES
-
         if prefix not in CONFIG_TYPES:
             raise ValueError(
                 f"BaseConfigRouter prefix '{prefix}' has no matching entry in "
@@ -152,6 +151,15 @@ class BaseConfigRouter:
                     # than calling cfg_instance.save() directly here - that
                     # would just fail with PermissionError as pi.
                     logger.debug("Tracker mode, saving via privileged op")
+                    # Same rule as for uploads: no config for a service that
+                    # is not installed on this device
+                    unsupported = await support.unsupported_config_types([self.prefix])
+                    if unsupported:
+                        files_by_type = {self.prefix: CONFIG_TYPES[self.prefix]["basename"]}
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"message": support.unsupported_message(unsupported, files_by_type)},
+                        )
                     try:
                         await write_config(self.prefix, config_dict)
                     except PrivilegedCallError as e:

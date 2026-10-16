@@ -910,7 +910,7 @@ async def get_network_connectivity():
         )
 
 
-def _get_available_services_for_template(config_group: str | None = None) -> list:
+async def _get_available_services_for_template(config_group: str | None = None) -> list:
     """Helper function to get available services for template rendering.
 
     Returns a list of service names that have configuration files available.
@@ -940,6 +940,11 @@ def _get_available_services_for_template(config_group: str | None = None) -> lis
     except Exception:
         logger.debug("Could not check the soundscapepipe configuration", exc_info=True)
 
+    # As in get_available_services: on a tracker the service must be installed
+    if not config_loader.is_server_mode():
+        unsupported = await support.unsupported_config_types(available_services)
+        available_services = [service for service in available_services if service not in unsupported]
+
     return available_services
 
 
@@ -968,7 +973,7 @@ async def home(request: Request, config_group: str | None = None):
             )
 
     # Get available services for conditional rendering
-    available_services = _get_available_services_for_template(config_group)
+    available_services = await _get_available_services_for_template(config_group)
 
     return templates.TemplateResponse(
         request,

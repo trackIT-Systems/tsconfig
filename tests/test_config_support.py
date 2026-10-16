@@ -13,7 +13,9 @@ from fastapi import HTTPException, UploadFile
 
 from app import cli, main
 from app.configs import support
+from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.routers import configs
+from app.routers.base import BaseConfigRouter
 
 SCHEDULE = "button_delay: '00:01'\nschedule: []\n"
 
@@ -138,3 +140,30 @@ class TestListingHidesUnsupportedConfigs:
             result = await main.get_available_services()
         assert "radiotracking" in result["available_services"]
         assert "soundscapepipe" not in result["available_services"]
+
+
+@pytest.mark.asyncio
+class TestSettingsPagesRejectUnsupportedConfigs:
+    async def test_saving_the_config_of_a_missing_service_is_rejected(self, monkeypatch, missing_units):
+        missing_units.add("soundscapepipe")
+        router = BaseConfigRouter(SoundscapepipeConfig, "soundscapepipe", "tag")
+        monkeypatch.setattr(router.config_instance, "validate", lambda config: [])
+        with (
+            patch("app.routers.base.config_loader.is_server_mode", return_value=False),
+            patch("app.routers.base.write_config", new=AsyncMock()) as mock_write,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await router.update_config_helper({"lat": 1})
+        assert exc_info.value.status_code == 400
+        assert "soundscapepipe.yml" in exc_info.value.detail["message"]
+        mock_write.assert_not_called()
+
+    async def test_the_page_leaves_out_tabs_of_missing_services(self, tmp_path, missing_units):
+        missing_units.add("soundscapepipe")
+        (tmp_path / "radiotracking.ini").write_text("[optional arguments]\n")
+        (tmp_path / "soundscapepipe.yml").write_text("lat: 1\n")
+        with (
+            patch.object(main.config_loader, "is_server_mode", return_value=False),
+            patch.object(main.config_loader, "get_config_dir", return_value=tmp_path),
+        ):
+            assert await main._get_available_services_for_template() == ["radiotracking"]
