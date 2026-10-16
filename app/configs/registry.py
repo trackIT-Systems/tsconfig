@@ -87,9 +87,9 @@ def get_privileged_config_instance(config_type: str) -> BaseConfig:
 
     This always targets the boot-partition location for a given type (e.g.
     authorized_keys is always instantiated with is_config_upload=True here).
-    The router's own get_config_instance() still exists separately for the
-    non-privileged authorized_keys case (writing to /home/pi/.ssh, which pi
-    owns directly and never goes through the privileged path).
+    The non-privileged authorized_keys case (the SSH keys page writing
+    /home/pi/.ssh/authorized_keys, which pi owns directly) is
+    app.routers.authorized_keys, which never goes through the privileged path.
 
     Raises:
         ValueError: If config_type is not a recognized type.

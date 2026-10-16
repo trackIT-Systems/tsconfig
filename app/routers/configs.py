@@ -652,8 +652,8 @@ def get_config_instance(config_type: str):
 
     Returns:
         Config instance for the specified type. For "authorized_keys" that is
-        /boot/firmware/authorized_keys (copied to ~/.ssh/authorized_keys2 at
-        boot), on upload and on download alike - not the operator's own
+        /boot/firmware/authorized_keys (which sshd reads in place for pi), on
+        upload and on download alike - not the operator's own
         ~/.ssh/authorized_keys, which the SSH keys page edits.
     """
     if config_type == "authorized_keys":
@@ -1116,8 +1116,8 @@ async def upload_config_zip(
             # Parse the file
             parsed_config = parse_config_file(filename, content)
 
-            # No special handling needed for authorized_keys - it writes to /boot/firmware/authorized_keys
-            # which is then synced to authorized_keys2 by systemd. User keys remain separate.
+            # No special handling needed for authorized_keys - it writes to /boot/firmware/authorized_keys,
+            # which sshd reads in place. User keys remain separate.
 
             parsed_configs[filename] = parsed_config
 

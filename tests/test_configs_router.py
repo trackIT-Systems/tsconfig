@@ -192,8 +192,8 @@ class TestUploadConfigZip:
 
 
 def test_bundle_authorized_keys_is_the_boot_partition_file_for_download_and_upload():
-    # The bundle member is /boot/firmware/authorized_keys (copied to
-    # ~/.ssh/authorized_keys2 at boot), so a downloaded bundle uploads back
+    # The bundle member is /boot/firmware/authorized_keys (read by sshd in
+    # place for pi), so a downloaded bundle uploads back
     # unchanged. The operator's own ~/.ssh/authorized_keys is not part of it.
     with patch.object(configs.config_loader, "is_server_mode", return_value=False):
         assert configs.get_config_instance("authorized_keys").config_file == Path("/boot/firmware/authorized_keys")

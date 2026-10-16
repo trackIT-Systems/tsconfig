@@ -7,14 +7,18 @@ from typing import Any
 from app.configs import BaseConfig
 from app.identity import OPERATOR_HOME
 
+# Server keys: config bundles and the SD card put them here, and sshd reads the
+# file in place for the operator account (tsOS-base's
+# etc/ssh/sshd_config.d/20-tsos-authorized-keys.conf).
+BOOT_AUTHORIZED_KEYS = Path("/boot/firmware/authorized_keys")
+
 
 class AuthorizedKeysConfig(BaseConfig):
     """Authorized keys configuration management.
 
-    In tracker mode, manages keys in three locations:
+    In tracker mode, manages keys in two locations, both used by sshd:
     - /home/pi/.ssh/authorized_keys - User keys (read/write via UI)
-    - /home/pi/.ssh/authorized_keys2 - Server keys (read-only, synced from /boot/firmware)
-    - /boot/firmware/authorized_keys - Server keys source (write-only, for config upload)
+    - /boot/firmware/authorized_keys - Server keys (read-only in the UI, written by config upload)
 
     In server mode, manages keys in the config group directory.
     """
@@ -38,8 +42,8 @@ class AuthorizedKeysConfig(BaseConfig):
         """Return the primary configuration file path."""
         if self._is_tracker_mode:
             if self._is_config_upload:
-                # Config upload writes to /boot/firmware/authorized_keys
-                return Path("/boot/firmware/authorized_keys")
+                # Config upload writes the server keys on the boot partition
+                return BOOT_AUTHORIZED_KEYS
             else:
                 # Regular UI operations use user keys file
                 return OPERATOR_HOME / ".ssh" / "authorized_keys"
@@ -55,7 +59,7 @@ class AuthorizedKeysConfig(BaseConfig):
     @property
     def server_keys_file(self) -> Path:
         """Return the server keys file path (tracker mode only)."""
-        return OPERATOR_HOME / ".ssh" / "authorized_keys2"
+        return BOOT_AUTHORIZED_KEYS
 
     def _ensure_directory_with_permissions(self, file_path: Path) -> None:
         """Ensure the parent directory exists with proper SSH permissions.
@@ -149,7 +153,7 @@ class AuthorizedKeysConfig(BaseConfig):
 
         In tracker mode (non-config-upload), loads from both:
         - User keys: /home/pi/.ssh/authorized_keys (source: "user")
-        - Server keys: /home/pi/.ssh/authorized_keys2 (source: "server")
+        - Server keys: /boot/firmware/authorized_keys (source: "server")
 
         In config upload mode or server mode, loads from single file.
 

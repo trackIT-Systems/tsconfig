@@ -44,6 +44,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - Restrict 'maintenance' schedule entries to fixed clock times (HH:MM) and disable astronomical relative references
 - Allow selecting and retaining 'No output device' (disabled) in the Soundscapepipe UI even when no output hardware is detected or list of devices is empty. The Expert Mode field is left blank when disabled, resolving to 'none' in memory and completely omitted from `soundscapepipe.yml` on disk (Issue #5)
 - The operator account name and home directory (`pi`, `/home/pi`) are defined once in `app/identity.py` instead of being repeated across the code; no behaviour change.
+- Server SSH keys on the SSH keys page come from `/boot/firmware/authorized_keys`, which sshd now reads in place for `pi` (tsOS-base), instead of the `~/.ssh/authorized_keys2` copy. Keys from a bundle upload show up immediately
 
 ### Fixed
 
