@@ -55,7 +55,7 @@ class ConfigLoader:
                         self._config_cache = yaml.safe_load(f) or {}
                 else:
                     self._config_cache = {}
-            except Exception:
+            except (OSError, yaml.YAMLError, UnicodeDecodeError):
                 self._config_cache = {}
         return self._config_cache
 

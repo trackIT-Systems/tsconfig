@@ -25,9 +25,11 @@ class FakeAction:
 class TestServiceAction:
     @pytest.mark.parametrize("action", ["enable", "disable", "mask"])
     async def test_persistent_actions_rejected_before_systemctl(self, action):
-        with patch.object(systemd, "systemctl_action", new=AsyncMock()) as mock_action:
-            with pytest.raises(HTTPException) as exc_info:
-                await systemd.service_action(FakeAction(action, "tsconfig"))
+        with (
+            patch.object(systemd, "systemctl_action", new=AsyncMock()) as mock_action,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await systemd.service_action(FakeAction(action, "tsconfig"))
         assert exc_info.value.status_code == 400
         mock_action.assert_not_called()
 
@@ -44,9 +46,11 @@ class TestServiceAction:
         mock_action.assert_called_once_with("tsconfig", action)
 
     async def test_unconfigured_service_rejected(self):
-        with patch.object(systemd, "get_configured_services", return_value=[]):
-            with pytest.raises(HTTPException) as exc_info:
-                await systemd.service_action(FakeAction("restart", "sshd"))
+        with (
+            patch.object(systemd, "get_configured_services", return_value=[]),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await systemd.service_action(FakeAction("restart", "sshd"))
         assert exc_info.value.status_code == 400
 
     async def test_denied_action_surfaces_as_500(self):
@@ -54,9 +58,9 @@ class TestServiceAction:
         with (
             patch.object(systemd, "get_configured_services", return_value=[fake_service]),
             patch.object(systemd, "systemctl_action", new=AsyncMock(return_value=(False, "not allowed by polkit"))),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                await systemd.service_action(FakeAction("restart", "sshd"))
+            await systemd.service_action(FakeAction("restart", "sshd"))
         assert exc_info.value.status_code == 500
         assert "not allowed" in exc_info.value.detail
 
@@ -69,7 +73,9 @@ class TestRebootEndpoint:
         assert result == {"message": "System reboot initiated"}
 
     async def test_failure_surfaces_as_500(self):
-        with patch.object(systemd, "schedule_reboot", new=AsyncMock(side_effect=PrivilegedCallError("denied"))):
-            with pytest.raises(HTTPException) as exc_info:
-                await systemd.reboot_system()
+        with (
+            patch.object(systemd, "schedule_reboot", new=AsyncMock(side_effect=PrivilegedCallError("denied"))),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await systemd.reboot_system()
         assert exc_info.value.status_code == 500

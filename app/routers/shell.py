@@ -38,7 +38,7 @@ def get_user_shell() -> str:
         # Last resort
         return "/bin/sh"
 
-    except Exception as e:
+    except (KeyError, OSError) as e:  # KeyError: uid has no passwd entry
         logger.warning(f"Failed to detect user shell: {e}, falling back to /bin/bash")
         return "/bin/bash"
 
@@ -50,7 +50,7 @@ def get_user_home() -> str:
         home = pwd.getpwuid(os.getuid()).pw_dir
         if home and os.path.isdir(home):
             return home
-    except Exception as e:
+    except (KeyError, OSError) as e:  # KeyError: uid has no passwd entry
         logger.warning(f"Failed to detect the user's home directory: {e}")
     return "/"
 
@@ -105,7 +105,7 @@ class PtyProcess:
                 self.running = True
                 return True
 
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to start pty process: {e}")
             return False
 
@@ -295,7 +295,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             await websocket.send_text(json.dumps({"type": "exit", "data": exit_message, "exit_code": exit_code}))
             await websocket.close(code=1000, reason="Shell process exited")
         except Exception as e:
-            logger.warning(f"Error sending exit notification: {e}")
+            # Usually the browser is already gone
+            logger.debug(f"Error sending exit notification: {e}", exc_info=True)
 
     read_task = asyncio.create_task(read_from_pty())
     try:
@@ -320,8 +321,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     except (WebSocketDisconnect, RuntimeError):
         # RuntimeError: receive after the reader closed the websocket
         logger.info(f"Shell session {session_id} disconnected")
-    except Exception as e:
-        logger.error(f"Error in shell session {session_id}: {e}")
+    except Exception:
+        logger.exception(f"Error in shell session {session_id}")
     finally:
         # Stop reading before the pty is closed, then hang up and reap the shell
         read_task.cancel()

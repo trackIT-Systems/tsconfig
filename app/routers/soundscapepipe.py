@@ -1,5 +1,6 @@
 """Soundscapepipe configuration endpoints."""
 
+import asyncio
 import json
 import os
 import subprocess
@@ -63,12 +64,12 @@ def is_system_default_device(device_name: str) -> bool:
             return True
 
     # Special case for HDMI devices - check if it's a generic HDMI output
-    if "hdmi" in name_lower and ("hw:" in name_lower or "alsa" in name_lower):
-        # Allow specific HDMI devices with meaningful names, filter generic ones
-        if name_lower.strip().endswith("hdmi") or "hdmi 0" in name_lower or "hdmi 1" in name_lower:
-            return True
-
-    return False
+    # Allow specific HDMI devices with meaningful names, filter generic ones
+    return (
+        "hdmi" in name_lower
+        and ("hw:" in name_lower or "alsa" in name_lower)
+        and (name_lower.strip().endswith("hdmi") or "hdmi 0" in name_lower or "hdmi 1" in name_lower)
+    )
 
 
 class SpeciesGroup(BaseModel):
@@ -165,7 +166,7 @@ def _load_audio_devices_config() -> dict[str, Any]:
             return yaml.safe_load(f) or {"input": [], "output": []}
     except FileNotFoundError:
         return {"input": [], "output": []}
-    except Exception as e:
+    except (OSError, ValueError, yaml.YAMLError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to load audio devices config: {e!s}")
 
 
@@ -177,7 +178,7 @@ def _load_model_files_config() -> dict[str, Any]:
             return yaml.safe_load(f) or {"birdedge": [], "yolobat": [], "audioprotopnet": []}
     except FileNotFoundError:
         return {"birdedge": [], "yolobat": [], "audioprotopnet": []}
-    except Exception as e:
+    except (OSError, ValueError, yaml.YAMLError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model files config: {e!s}")
 
 
@@ -212,7 +213,7 @@ def _parse_alsa_cards() -> list[dict[str, Any]]:
                         "full_name": match.group(3).strip(),
                     }
                     cards.append(card_info)
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
         logger.warning(f"Could not read /proc/asound/cards: {e}")
 
     return cards
@@ -304,8 +305,8 @@ def _query_alsa_devices() -> dict[str, Any]:
                 }
                 output_devices.append(device_info)
 
-    except Exception as e:
-        logger.error(f"Error querying ALSA devices: {e}")
+    except Exception:
+        logger.exception("Error querying ALSA devices")
 
     return {
         "input": input_devices,
@@ -451,6 +452,7 @@ async def get_audio_devices(refresh: bool = True) -> dict[str, Any]:
             "config_validated": True,
         }
     except Exception as e:
+        logger.debug("Failed to query audio devices", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to query audio devices: {e!s}")
 
 
@@ -537,6 +539,11 @@ async def get_lure_files() -> dict[str, Any]:
 @router.get("/species")
 async def get_species() -> dict[str, Any]:
     """Get available species information from detection models."""
+    return await asyncio.to_thread(_load_species_data)
+
+
+def _load_species_data() -> dict[str, Any]:
+    """Load the species lists of all detection models (blocking file reads)."""
     species_data = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
 
     # Load BirdEdge species with multi-language support
@@ -704,6 +711,16 @@ async def get_species() -> dict[str, Any]:
     return species_data
 
 
+def _read_yaml_file(path: str) -> Any:
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _read_json_file(path: str) -> Any:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 @router.get("/yolobat-labels")
 async def get_yolobat_labels(model_path: str) -> dict[str, Any]:
     """Get available labels for a specific YoloBat model from its metadata.yaml file."""
@@ -725,11 +742,10 @@ async def get_yolobat_labels(model_path: str) -> dict[str, Any]:
 
         # Load and parse the metadata.yaml file
         try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                metadata = yaml.safe_load(f)
+            metadata = await asyncio.to_thread(_read_yaml_file, metadata_path)
         except yaml.YAMLError as e:
             raise HTTPException(status_code=500, detail=f"Failed to parse metadata.yaml: {e!s}")
-        except Exception as e:
+        except (OSError, ValueError) as e:
             raise HTTPException(status_code=500, detail=f"Failed to read metadata.yaml: {e!s}")
 
         # Extract labels from metadata
@@ -781,8 +797,7 @@ async def get_yolobat_labels(model_path: str) -> dict[str, Any]:
             # Load species mapping (abbreviation -> species data)
             yolobat_species_path = os.path.join(os.path.dirname(__file__), "..", "data", "yolobat_species.json")
             if os.path.exists(yolobat_species_path):
-                with open(yolobat_species_path, "r", encoding="utf-8") as f:
-                    yolobat_species_mapping = json.load(f)
+                yolobat_species_mapping = await asyncio.to_thread(_read_json_file, yolobat_species_path)
         except (OSError, json.JSONDecodeError):
             # If loading fails, continue with empty mapping
             pass
@@ -831,4 +846,5 @@ async def get_yolobat_labels(model_path: str) -> dict[str, Any]:
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
+        logger.debug("Failed to load YoloBat labels", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to load YoloBat labels: {e!s}")

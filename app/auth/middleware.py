@@ -196,10 +196,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return False
         # Check for fetch requests (they typically have Accept: */* or specific types)
         # If no Accept header or Accept: */*, treat as API to avoid CORS issues
-        if not accept or accept.strip() in ["*/*", "*"]:
-            return False
         # Default to browser for other cases (like Accept: image/*, etc.)
-        return True
+        return bool(accept) and accept.strip() not in ("*/*", "*")
 
     async def _get_token_from_request(self, request: Request) -> str | None:
         """Extract authentication token from request (header or cookie)."""
@@ -372,7 +370,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                             else:
                                 logger.warning(f"User authorization failed after token refresh: {error_msg}")
                 except Exception as refresh_error:
-                    logger.warning(f"Token refresh failed in middleware: {refresh_error}")
+                    logger.warning(f"Token refresh failed in middleware: {refresh_error}", exc_info=True)
                     # Fall through to normal error handling
 
             # Refresh failed or no refresh token available - redirect/return error

@@ -64,9 +64,11 @@ class TestProcessZipUpload:
 
     async def test_save_failure_exits(self, tmp_path, capsys):
         zip_path = _make_zip(tmp_path, {"schedule.yml": "button_delay: '00:01'\nschedule: []\n"})
-        with patch.object(cli.priv, "write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))):
-            with pytest.raises(SystemExit) as exc_info:
-                await cli.process_zip_upload(zip_path, force=True)
+        with (
+            patch.object(cli.priv, "write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            await cli.process_zip_upload(zip_path, force=True)
         assert exc_info.value.code == 1
 
 

@@ -207,7 +207,7 @@ def _run_nmcli(args: list[str], timeout: float = _NMCLI_TIMEOUT) -> dict[str, An
     property.
     """
     try:
-        result = subprocess.run(["nmcli"] + args, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(["nmcli"] + args, capture_output=True, text=True, timeout=timeout, check=False)
     except FileNotFoundError as e:
         raise PrivilegedOpError(f"nmcli not available: {e}") from e
     except subprocess.TimeoutExpired as e:

@@ -8,7 +8,7 @@ import types
 import pytest
 
 from app.bluetooth.protocol import RequestParser
-from tests.test_ble_auth import DEVICE, OTHER, FakeService, chars, make_write_char  # noqa: F401 (fixtures)
+from tests.ble_helpers import DEVICE, OTHER, make_write_char
 
 classify = RequestParser.classify_json
 

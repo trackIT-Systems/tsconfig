@@ -23,14 +23,16 @@ def _upload_file(filename: str, content: bytes) -> UploadFile:
 @pytest.mark.asyncio
 class TestUploadConfigSingleFile:
     async def test_server_mode_rejected(self):
-        with patch.object(configs.config_loader, "is_server_mode", return_value=True):
-            with pytest.raises(HTTPException) as exc_info:
-                await configs.upload_config(
-                    file=_upload_file("wireguard.conf", b"[Interface]\n"),
-                    restart_service=False,
-                    mtime="2025-01-01T00:00:00",
-                    force=True,
-                )
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=True),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await configs.upload_config(
+                file=_upload_file("wireguard.conf", b"[Interface]\n"),
+                restart_service=False,
+                mtime="2025-01-01T00:00:00",
+                force=True,
+            )
         assert exc_info.value.status_code == 403
 
     async def test_valid_upload_calls_privileged_write_with_epoch_mtime(self):
@@ -71,14 +73,14 @@ class TestUploadConfigSingleFile:
         with (
             patch.object(configs.config_loader, "is_server_mode", return_value=False),
             patch.object(configs.priv, "write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                await configs.upload_config(
-                    file=_upload_file("wireguard.conf", content),
-                    restart_service=False,
-                    mtime="2025-01-01T00:00:00",
-                    force=True,
-                )
+            await configs.upload_config(
+                file=_upload_file("wireguard.conf", content),
+                restart_service=False,
+                mtime="2025-01-01T00:00:00",
+                force=True,
+            )
         assert exc_info.value.status_code == 500
 
 
@@ -156,15 +158,17 @@ class TestUploadConfigZip:
         return buf.getvalue()
 
     async def test_server_mode_rejected(self):
-        with patch.object(configs.config_loader, "is_server_mode", return_value=True):
-            with pytest.raises(HTTPException) as exc_info:
-                await configs.upload_config_zip(
-                    file=_upload_file("config.zip", self._zip_bytes({"schedule.yml": "x"})),
-                    restart_services=False,
-                    pedantic=False,
-                    force=True,
-                    reboot="allow",
-                )
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=True),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await configs.upload_config_zip(
+                file=_upload_file("config.zip", self._zip_bytes({"schedule.yml": "x"})),
+                restart_services=False,
+                pedantic=False,
+                force=True,
+                reboot="allow",
+            )
         assert exc_info.value.status_code == 403
 
     async def test_valid_zip_saves_via_privileged_write(self):

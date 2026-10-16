@@ -84,7 +84,7 @@ async def deploy_config(
                         or f"Deployment failed with status {response.status_code}"
                     )
                     logger.error(f"Deployment API error (status {response.status_code}): {error_data}")
-                except Exception as parse_error:
+                except (ValueError, AttributeError) as parse_error:  # not JSON / not a JSON object
                     error_message = f"Deployment failed with status {response.status_code}"
                     logger.error(
                         f"Deployment API error (status {response.status_code}), failed to parse response: {parse_error}"
@@ -108,4 +108,5 @@ async def deploy_config(
         raise
     except Exception as e:
         # Catch any other unexpected errors
+        logger.debug("Unexpected error during deployment", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Unexpected error during deployment: {e!s}")

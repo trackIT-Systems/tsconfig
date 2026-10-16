@@ -112,10 +112,10 @@ def main():
     max_retries = 10  # 10 seconds with 1-second intervals
     retry_interval = 1
 
+    import httpx
+
     for attempt in range(max_retries):
         try:
-            import httpx
-
             with httpx.Client(timeout=5.0) as client:
                 response = client.get(f"{args.api_url}/api/server-mode")
                 if response.status_code == 200:
@@ -123,7 +123,7 @@ def main():
                     break
                 else:
                     logger.warning(f"API returned status code: {response.status_code}")
-        except Exception as e:
+        except (httpx.HTTPError, httpx.InvalidURL) as e:
             if attempt < max_retries - 1:
                 logger.debug(f"✗ Cannot reach API (attempt {attempt + 1}/{max_retries}): {e}")
                 logger.debug(f"Retrying in {retry_interval} seconds...")

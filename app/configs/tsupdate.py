@@ -93,7 +93,7 @@ class TsupdateConfig(BaseConfig):
                     parsed = urlparse(github_url)
                     if not parsed.scheme or not parsed.netloc:
                         errors.append("github_url must be a valid URL")
-                except Exception:
+                except ValueError:
                     errors.append("github_url must be a valid URL")
 
         # Validate max_releases

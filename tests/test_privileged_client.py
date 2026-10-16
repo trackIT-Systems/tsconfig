@@ -64,21 +64,27 @@ class TestRunPrivilegedOp:
     async def test_op_level_failure_raises_with_its_message(self):
         payload = {"success": False, "error": "validation failed: bad content"}
         fake = FakeProcess(1, json.dumps(payload).encode())
-        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)):
-            with pytest.raises(PrivilegedCallError, match="validation failed: bad content"):
-                await run_privileged_op("write-config", ["wireguard"], stdin_json={"config": {}})
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)),
+            pytest.raises(PrivilegedCallError, match="validation failed: bad content"),
+        ):
+            await run_privileged_op("write-config", ["wireguard"], stdin_json={"config": {}})
 
     async def test_empty_stdout_uses_stderr_as_error(self):
         fake = FakeProcess(1, b"", b"Error executing command as another user: Not authorized")
-        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)):
-            with pytest.raises(PrivilegedCallError, match="Not authorized"):
-                await run_privileged_op("wipe-overlay")
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)),
+            pytest.raises(PrivilegedCallError, match="Not authorized"),
+        ):
+            await run_privileged_op("wipe-overlay")
 
     async def test_malformed_json_output_raises(self):
         fake = FakeProcess(0, b"not json at all")
-        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)):
-            with pytest.raises(PrivilegedCallError, match="malformed"):
-                await run_privileged_op("wipe-overlay")
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)),
+            pytest.raises(PrivilegedCallError, match="malformed"),
+        ):
+            await run_privileged_op("wipe-overlay")
 
     async def test_timeout_kills_process_and_raises(self):
         class HangingProcess(FakeProcess):
@@ -88,9 +94,11 @@ class TestRunPrivilegedOp:
                 await asyncio.sleep(10)
 
         fake = HangingProcess(0, b"")
-        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)):
-            with pytest.raises(PrivilegedCallError, match="timed out"):
-                await run_privileged_op("wipe-overlay", timeout=0.01)
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)),
+            pytest.raises(PrivilegedCallError, match="timed out"),
+        ):
+            await run_privileged_op("wipe-overlay", timeout=0.01)
 
 
 @pytest.mark.asyncio
@@ -170,9 +178,11 @@ class TestSystemctlAction:
 class TestScheduleReboot:
     async def test_denied_by_pkcheck_raises(self):
         fake = FakeProcess(1, b"", b"")
-        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)):
-            with pytest.raises(PrivilegedCallError, match="not authorized to reboot"):
-                await schedule_reboot()
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)),
+            pytest.raises(PrivilegedCallError, match="not authorized to reboot"),
+        ):
+            await schedule_reboot()
 
     async def test_authorized_schedules_a_task_and_returns_immediately(self):
         fake = FakeProcess(0, b"", b"")

@@ -48,7 +48,7 @@ class OIDCHandler:
             self.state_serializer.loads(state, max_age=max_age)
             return True
         except Exception as e:
-            logger.warning(f"State validation failed: {e}")
+            logger.warning(f"State validation failed: {e}", exc_info=True)
             return False
 
     def generate_pkce_pair(self) -> tuple[str, str]:
@@ -271,7 +271,7 @@ class OIDCHandler:
             logger.warning(f"Token validation failed: {e}")
             raise ValueError(f"Invalid token: {e}")
         except Exception as e:
-            logger.warning(f"Token validation failed: {e}")
+            logger.warning(f"Token validation failed: {e}", exc_info=True)
             raise ValueError(f"Token validation failed: {e}")
 
     def extract_user_claims(self, token_claims: dict[str, Any]) -> dict[str, Any]:

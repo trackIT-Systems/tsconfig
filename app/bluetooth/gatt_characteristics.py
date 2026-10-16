@@ -474,7 +474,8 @@ class WriteOnlyCharacteristic(Characteristic):
             buffer.clear()
             self.send_chunked_response(formatter.error(str(e), e.code, **e.extra), device)
         except Exception as e:
-            logger.error(f"Error writing to {self.uuid}: {e}")
+            # D-Bus method handler: any failure becomes an error response
+            logger.exception(f"Error writing to {self.uuid}")
             # Clear buffer on error
             buffer.clear()
             self.send_chunked_response(formatter.error(str(e)), device)

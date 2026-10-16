@@ -260,6 +260,6 @@ async def authenticate_operator(username: str, password: str) -> bool:
     except OSError as e:
         logger.error(f"Password check unavailable: {e}")
         return False
-    except Exception as e:  # never let a PAM/su problem become a 500 with details
-        logger.error(f"Password check error: {e}")
+    except Exception:  # never let a PAM/su problem become a 500 with details
+        logger.exception("Password check error")
         return False

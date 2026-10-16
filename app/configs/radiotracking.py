@@ -205,37 +205,37 @@ class RadioTrackingConfig(BaseConfig):
         try:
             if "optional arguments" in config:
                 OptionalArgumentsEntry(**config["optional arguments"])
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             errors.append(f"Invalid optional arguments: {e!s}")
 
         try:
             if "rtl-sdr" in config:
                 RTLSDREntry(**config["rtl-sdr"])
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             errors.append(f"Invalid RTL-SDR configuration: {e!s}")
 
         try:
             if "analysis" in config:
                 AnalysisEntry(**config["analysis"])
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             errors.append(f"Invalid analysis configuration: {e!s}")
 
         try:
             if "matching" in config:
                 MatchingEntry(**config["matching"])
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             errors.append(f"Invalid matching configuration: {e!s}")
 
         try:
             if "publish" in config:
                 PublishEntry(**config["publish"])
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             errors.append(f"Invalid publish configuration: {e!s}")
 
         try:
             if "dashboard" in config:
                 DashboardEntry(**config["dashboard"])
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             errors.append(f"Invalid dashboard configuration: {e!s}")
 
         return errors

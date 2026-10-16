@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 
 from app.config_loader import VERSIONED_CONFIG_FILES, config_loader
 from app.configs.authorized_keys import AuthorizedKeysConfig
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/authorized-keys", tags=["authorized_keys"])
 
@@ -63,6 +66,7 @@ async def get_authorized_keys(config_group: str | None = Query(None)) -> dict[st
         raise
     except Exception:
         # If file doesn't exist or other errors, return empty list
+        logger.debug("Failed to load authorized keys, returning empty list", exc_info=True)
         return {"keys": []}
 
 
@@ -134,6 +138,7 @@ async def add_authorized_key(key_data: SSHKeyAdd, config_group: str | None = Que
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to add SSH key", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add SSH key: {e!s}")
 
 
@@ -200,6 +205,7 @@ async def remove_authorized_key(key_index: int, config_group: str | None = Query
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to remove SSH key", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to remove SSH key: {e!s}")
 
 
@@ -289,6 +295,7 @@ async def update_authorized_keys(key_data: SSHKeyUpdate, config_group: str | Non
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to update SSH keys", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update SSH keys: {e!s}")
 
 
@@ -509,4 +516,5 @@ async def import_ssh_keys_from_platform(
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to import SSH keys", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to import SSH keys: {e!s}")

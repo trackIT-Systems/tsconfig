@@ -178,9 +178,8 @@ class TestSave:
         def reject(args):
             return SimpleNamespace(returncode=1, stdout="", stderr="Error: invalid profile")
 
-        with patch.object(HotspotConfig, "_nmcli", staticmethod(reject)):
-            with pytest.raises(RuntimeError, match="rejected"):
-                cfg.save({"content": SUPPLIED})
+        with patch.object(HotspotConfig, "_nmcli", staticmethod(reject)), pytest.raises(RuntimeError, match="rejected"):
+            cfg.save({"content": SUPPLIED})
         assert (tmp_path / "hotspot.nmconnection").read_text() == EXISTING
 
     def test_networkmanager_not_running_still_writes(self, cfg, tmp_path):

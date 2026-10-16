@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     except ops.PrivilegedOpError as e:
         _print_error(str(e))
         return 1
-    except Exception:
+    except Exception:  # noqa: BLE001 - top-level boundary; traceback goes to stderr below (no logger in the root CLI)
         # Never let an unexpected exception's message/traceback (which could
         # reference internal paths or state) reach the caller. Full detail
         # still goes to stderr, which lands in the journal for root/admin

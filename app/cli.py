@@ -145,13 +145,12 @@ async def process_zip_upload(
 
     # Read zip file content
     try:
-        with open(zip_path, "rb") as f:
-            content = f.read()
+        content = await asyncio.to_thread(Path(zip_path).read_bytes)
         zip_buffer = BytesIO(content)
     except FileNotFoundError:
         log.error(f"Zip file not found: {zip_path}")
         sys.exit(1)
-    except Exception as e:
+    except OSError as e:
         log.error(f"Failed to read file: {e!s}")
         sys.exit(1)
 
@@ -164,8 +163,11 @@ async def process_zip_upload(
     except zipfile.BadZipFile:
         log.error("Invalid zip file")
         sys.exit(1)
-    except Exception as e:
-        log.error(f"Failed to read zip file: {e!s}")
+    except Exception:
+        # testzip()/namelist() can raise far more than BadZipFile (encrypted
+        # members, unsupported compression, zlib errors, ...); any of them
+        # means the upload is unusable.
+        log.exception("Failed to read zip file")
         sys.exit(1)
 
     # Extract file timestamps from zip
@@ -259,7 +261,7 @@ async def process_zip_upload(
                 "errors": [f"Validation error: {e!s}"],
             }
             all_valid = False
-            log.error(f"Validation error for {filename}: {e!s}")
+            log.exception(f"Validation error for {filename}")
 
     # If not all files are valid, exit without saving
     if not all_valid:
@@ -358,7 +360,7 @@ async def process_zip_upload(
             log.info(f"Saved {filename}")
         except Exception as e:
             save_errors[filename] = str(e)
-            log.error(f"Failed to save {filename}: {e!s}")
+            log.exception(f"Failed to save {filename}")
 
     if save_errors:
         log.error(f"Failed to save some configuration files: {save_errors}")
@@ -598,8 +600,8 @@ def main():
         except KeyboardInterrupt:
             logger.warning("Upload interrupted by user")
             sys.exit(130)
-        except Exception as e:
-            logger.exception(f"Unexpected error: {e!s}")
+        except Exception:
+            logger.exception("Unexpected error")
             sys.exit(1)
     elif args.command == "system-reset":
         try:
@@ -613,8 +615,8 @@ def main():
         except KeyboardInterrupt:
             logger.warning("Reset interrupted by user")
             sys.exit(130)
-        except Exception as e:
-            logger.exception(f"Unexpected error: {e!s}")
+        except Exception:
+            logger.exception("Unexpected error")
             sys.exit(1)
     else:
         parser.print_help()

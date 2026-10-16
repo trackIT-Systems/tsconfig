@@ -44,9 +44,11 @@ class TestUpdateConfigHelper:
     async def test_validation_errors_returned_as_400_without_calling_privileged_write(self, monkeypatch):
         router = BaseConfigRouter(WireguardConfig, "wireguard", "tag")
         monkeypatch.setattr(router.config_instance, "validate", lambda config: ["bad content"])
-        with patch("app.routers.base.write_config", new=AsyncMock()) as mock_write:
-            with pytest.raises(HTTPException) as exc_info:
-                await router.update_config_helper({"content": "bad"})
+        with (
+            patch("app.routers.base.write_config", new=AsyncMock()) as mock_write,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await router.update_config_helper({"content": "bad"})
         assert exc_info.value.status_code == 400
         mock_write.assert_not_called()
 
@@ -56,7 +58,7 @@ class TestUpdateConfigHelper:
         with (
             patch("app.routers.base.config_loader.is_server_mode", return_value=False),
             patch("app.routers.base.write_config", new=AsyncMock(side_effect=PrivilegedCallError("denied"))),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                await router.update_config_helper({"content": "x"})
+            await router.update_config_helper({"content": "x"})
         assert exc_info.value.status_code == 500

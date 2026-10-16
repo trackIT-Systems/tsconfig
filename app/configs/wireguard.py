@@ -2,6 +2,7 @@
 
 import re
 from configparser import ConfigParser
+from configparser import Error as ConfigParserError
 from pathlib import Path
 from typing import Any
 
@@ -112,7 +113,7 @@ class WireguardConfig(BaseConfig):
             if "Peer" not in sections:
                 errors.append("Configuration must contain [Peer] section")
 
-        except Exception as e:
+        except ConfigParserError as e:
             errors.append(f"Invalid INI file format: {e!s}")
 
         return errors

@@ -26,13 +26,15 @@ class TestWriteConfig:
 
     def test_wireguard_hook_injection_rejected(self, tmp_path):
         target = tmp_path / "wireguard.conf"
-        with patch.object(WireguardConfig, "config_file", property(lambda self: target)):
-            with pytest.raises(ops.PrivilegedOpError, match="PostUp"):
-                ops.write_config(
-                    "wireguard",
-                    {"content": "[Interface]\nPostUp = evil\n[Peer]\nPublicKey=x\n"},
-                    None,
-                )
+        with (
+            patch.object(WireguardConfig, "config_file", property(lambda self: target)),
+            pytest.raises(ops.PrivilegedOpError, match="PostUp"),
+        ):
+            ops.write_config(
+                "wireguard",
+                {"content": "[Interface]\nPostUp = evil\n[Peer]\nPublicKey=x\n"},
+                None,
+            )
         assert not target.exists(), "rejected config must not be written"
 
     def test_valid_write_succeeds_and_sets_mtime(self, tmp_path):
@@ -96,9 +98,8 @@ class TestWipeOverlay:
 
     def test_missing_overlay_path_rejected(self, tmp_path):
         missing = tmp_path / "does-not-exist"
-        with patch.object(ops, "OVERLAY_PATH", missing):
-            with pytest.raises(ops.PrivilegedOpError, match="does not exist"):
-                ops.wipe_overlay()
+        with patch.object(ops, "OVERLAY_PATH", missing), pytest.raises(ops.PrivilegedOpError, match="does not exist"):
+            ops.wipe_overlay()
 
     def test_does_not_follow_directory_symlinks(self, tmp_path):
         real_target = tmp_path.parent / "sibling-marker-dir"

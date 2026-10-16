@@ -100,10 +100,12 @@ async def test_failed_privileged_lookup_falls_back_to_updatable():
 
 
 def test_single_file_download_is_forbidden_not_a_server_error():
-    with patch.object(configs, "get_config_instance", return_value=root_only_instance()):
-        with patch.object(configs.config_loader, "is_server_mode", return_value=False):
-            with pytest.raises(HTTPException) as err:
-                configs._validate_config_filename_and_get_instance("hotspot.nmconnection")
+    with (
+        patch.object(configs, "get_config_instance", return_value=root_only_instance()),
+        patch.object(configs.config_loader, "is_server_mode", return_value=False),
+        pytest.raises(HTTPException) as err,
+    ):
+        configs._validate_config_filename_and_get_instance("hotspot.nmconnection")
     assert err.value.status_code == 403
 
 

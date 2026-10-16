@@ -2,6 +2,7 @@
 
 import os
 import socket
+from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Query, Request, Response
@@ -113,7 +114,7 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error initiating OIDC login: {e}")
+        logger.exception("Error initiating OIDC login")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to initiate login: {e!s}",
@@ -306,8 +307,8 @@ async def callback(
     except HTTPException:
         # Re-raise HTTPExceptions (including our 403 from above)
         raise
-    except Exception as e:
-        logger.error(f"Unexpected error during authentication: {e}")
+    except Exception:
+        logger.exception("Unexpected error during authentication")
         raise HTTPException(
             status_code=500,
             detail="Authentication failed due to server error",
@@ -410,8 +411,8 @@ async def refresh_token(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Unexpected error during token refresh: {e}")
+    except Exception:
+        logger.exception("Unexpected error during token refresh")
         raise HTTPException(
             status_code=500,
             detail="Token refresh failed due to server error",
@@ -463,7 +464,7 @@ async def logout(
                 )
                 logger.info(f"Redirecting to OIDC logout with post_logout_redirect_uri: {post_logout_redirect}")
     except Exception as e:
-        logger.warning(f"Could not configure OIDC logout: {e}")
+        logger.warning(f"Could not configure OIDC logout: {e}", exc_info=True)
 
     # Clear authentication cookies
     response = RedirectResponse(url=logout_url, status_code=302)
@@ -546,7 +547,7 @@ async def frontchannel_logout(
     summary="Get current user information",
     description="Returns information about the currently authenticated user.",
 )
-async def userinfo(user: dict | None = Depends(get_current_user)):
+async def userinfo(user: Annotated[dict | None, Depends(get_current_user)]):
     """Get current user information."""
     # Only available in server mode
     if not config_loader.is_server_mode():
@@ -569,7 +570,7 @@ async def userinfo(user: dict | None = Depends(get_current_user)):
     summary="Get authentication status",
     description="Returns authentication configuration and status.",
 )
-async def auth_status(request: Request, user: dict | None = Depends(get_optional_user)):
+async def auth_status(request: Request, user: Annotated[dict | None, Depends(get_optional_user)]):
     """Get authentication status."""
     is_server_mode = config_loader.is_server_mode()
     is_configured = oidc_config.is_configured()

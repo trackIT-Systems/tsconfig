@@ -1,6 +1,8 @@
 """Configuration file upload and download endpoints."""
 
+import asyncio
 import calendar
+import contextlib
 import socket
 import zipfile
 from ast import literal_eval
@@ -9,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from email.utils import formatdate
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import yaml
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
@@ -113,7 +115,7 @@ def parse_mqttutil_ini(content: str) -> dict[str, Any]:
 
         return data
     except Exception as e:
-        raise ValueError(f"Failed to parse mqttutil.conf: {e!s}")
+        raise ValueError(f"Failed to parse mqttutil.conf: {e!s}") from e
 
 
 def parse_ini_file(content: str) -> dict[str, Any]:
@@ -143,7 +145,7 @@ def parse_ini_file(content: str) -> dict[str, Any]:
 
         return data
     except Exception as e:
-        raise ValueError(f"Failed to parse INI file: {e!s}")
+        raise ValueError(f"Failed to parse INI file: {e!s}") from e
 
 
 def parse_mtime_and_validate(mtime: str, force: bool) -> datetime:
@@ -348,12 +350,13 @@ def parse_yaml_file(content: str) -> dict[str, Any]:
         if data is None:
             raise ValueError("YAML file is empty")
         if not isinstance(data, dict):
-            raise ValueError("YAML file must contain a mapping/dictionary at root level")
+            # Re-wrapped as ValueError below, like every other failure here
+            raise TypeError("YAML file must contain a mapping/dictionary at root level")
         return data
-    except yaml.YAMLError as e:
-        raise ValueError(f"Failed to parse YAML file: {e!s}")
     except Exception as e:
-        raise ValueError(f"Failed to parse YAML file: {e!s}")
+        # safe_load raises more than YAMLError (e.g. ValueError for an invalid
+        # timestamp); callers treat any ValueError from here as a parse error.
+        raise ValueError(f"Failed to parse YAML file: {e!s}") from e
 
 
 @router.get("/")
@@ -401,6 +404,7 @@ async def list_configs():
                     most_recent_mtime_timestamp = file_stat.st_mtime
         except Exception:
             # Skip files that can't be accessed
+            logger.debug(f"Skipping {filename} in config listing", exc_info=True)
             continue
 
     # Build response
@@ -425,10 +429,11 @@ async def list_configs():
 
 @router.post("/update")
 async def upload_config(
-    file: UploadFile = File(..., description="Configuration file to upload"),
-    restart_service: bool = Form(False, description="Restart the respective service after upload"),
-    mtime: str = Form(..., description="File modification time in ISO format (e.g., 2025-10-17T08:59:50)"),
-    force: bool = Form(False, description="Force overwrite regardless of file modification time"),
+    *,
+    file: Annotated[UploadFile, File(description="Configuration file to upload")],
+    restart_service: Annotated[bool, Form(description="Restart the respective service after upload")] = False,
+    mtime: Annotated[str, Form(description="File modification time in ISO format (e.g., 2025-10-17T08:59:50)")],
+    force: Annotated[bool, Form(description="Force overwrite regardless of file modification time")] = False,
 ):
     """Upload and validate a configuration file.
 
@@ -481,6 +486,7 @@ async def upload_config(
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="File must be UTF-8 encoded text")
     except Exception as e:
+        logger.debug("Failed to read uploaded file", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Failed to read file: {e!s}")
 
     # Determine config type from filename
@@ -567,6 +573,7 @@ async def upload_config(
     except priv.PrivilegedCallError as e:
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e}")
     except Exception as e:
+        logger.debug("Failed to save configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e!s}")
 
     # Build success response
@@ -610,7 +617,7 @@ async def upload_config(
             await priv.schedule_reboot(delay=10)
             response_data["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt requires reboot)"
             response_data["reboot_initiated"] = True
-        except Exception as e:
+        except priv.PrivilegedCallError as e:
             response_data["message"] += f" (Warning: Failed to schedule reboot: {e!s})"
             response_data["reboot_initiated"] = False
     else:
@@ -877,8 +884,7 @@ async def _apply_config_zip_from_path(
     if not zip_path.exists():
         raise FileNotFoundError(f"Zip file not found: {zip_path}")
 
-    with open(zip_path, "rb") as f:
-        zip_buffer = BytesIO(f.read())
+    zip_buffer = BytesIO(await asyncio.to_thread(zip_path.read_bytes))
 
     try:
         with zipfile.ZipFile(zip_buffer, "r") as zip_file:
@@ -949,16 +955,18 @@ async def _apply_config_zip_from_path(
 
 @router.post(".zip")
 async def upload_config_zip(
-    file: UploadFile = File(..., description="Zip file containing configuration files"),
-    restart_services: bool = Form(False, description="Restart affected services after upload"),
-    pedantic: bool = Form(
-        False, description="Reject upload if unknown files are present or if any existing file is newer"
-    ),
-    force: bool = Form(False, description="Force overwrite regardless of file modification time"),
-    reboot: str = Form(
-        "allow",
-        description="Reboot policy: 'forbid' (no reboot), 'allow' (default, reboot if requested), 'force' (always reboot)",
-    ),
+    file: Annotated[UploadFile, File(description="Zip file containing configuration files")],
+    restart_services: Annotated[bool, Form(description="Restart affected services after upload")] = False,
+    pedantic: Annotated[
+        bool, Form(description="Reject upload if unknown files are present or if any existing file is newer")
+    ] = False,
+    force: Annotated[bool, Form(description="Force overwrite regardless of file modification time")] = False,
+    reboot: Annotated[
+        str,
+        Form(
+            description="Reboot policy: 'forbid' (no reboot), 'allow' (default, reboot if requested), 'force' (always reboot)",
+        ),
+    ] = "allow",
 ):
     """Upload and validate multiple configuration files from a zip archive.
 
@@ -1020,6 +1028,7 @@ async def upload_config_zip(
         content = await file.read()
         zip_buffer = BytesIO(content)
     except Exception as e:
+        logger.debug("Failed to read uploaded zip file", exc_info=True)
         raise HTTPException(
             status_code=400,
             detail=f"Failed to read file: {e!s}",
@@ -1037,6 +1046,9 @@ async def upload_config_zip(
             detail="Invalid zip file",
         )
     except Exception as e:
+        # testzip()/namelist() can raise far more than BadZipFile (encrypted
+        # members, unsupported compression, zlib errors, ...)
+        logger.debug("Failed to read uploaded zip file", exc_info=True)
         raise HTTPException(
             status_code=400,
             detail=f"Failed to read zip file: {e!s}",
@@ -1128,6 +1140,7 @@ async def upload_config_zip(
             }
             all_valid = False
         except Exception as e:
+            logger.debug(f"Validation error for {filename}", exc_info=True)
             validation_results[filename] = {
                 "valid": False,
                 "errors": [f"Validation error: {e!s}"],
@@ -1228,6 +1241,7 @@ async def upload_config_zip(
 
             saved_files.append(filename)
         except Exception as e:
+            logger.debug(f"Failed to save {filename}", exc_info=True)
             save_errors[filename] = str(e)
 
     if save_errors:
@@ -1323,7 +1337,7 @@ async def upload_config_zip(
                 await priv.schedule_reboot(delay=10)
                 response["message"] += ". System reboot scheduled in 10 seconds (forced)"
                 response["reboot_initiated"] = True
-            except Exception as e:
+            except priv.PrivilegedCallError as e:
                 response["message"] += f" (Warning: Failed to schedule reboot: {e!s})"
                 response["reboot_initiated"] = False
     elif reboot_lower == "allow" and cmdline_updated:
@@ -1339,7 +1353,7 @@ async def upload_config_zip(
                 await priv.schedule_reboot(delay=10)
                 response["message"] += ". System reboot scheduled in 10 seconds (cmdline.txt updated)"
                 response["reboot_initiated"] = True
-            except Exception as e:
+            except priv.PrivilegedCallError as e:
                 response["message"] += f" (Warning: Failed to schedule reboot: {e!s})"
                 response["reboot_initiated"] = False
     else:
@@ -1402,12 +1416,10 @@ def _validate_config_filename_and_get_instance(filename: str):
 
     # Prepare response headers with Last-Modified
     response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    try:
+    with contextlib.suppress(OSError):
         file_stat = config_instance.config_file.stat()
         http_date = formatdate(file_stat.st_mtime, usegmt=True)
         response_headers["Last-Modified"] = http_date
-    except Exception:
-        pass
 
     return config_instance, response_headers
 
@@ -1441,9 +1453,8 @@ async def download_config(
 
     # Read file content
     try:
-        with open(config_instance.config_file, "r") as f:
-            content = f.read()
-    except Exception as e:
+        content = await asyncio.to_thread(config_instance.config_file.read_text)
+    except (OSError, UnicodeDecodeError) as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to read configuration file: {e!s}",
@@ -1488,11 +1499,9 @@ async def head_config(
     config_instance, response_headers = _validate_config_filename_and_get_instance(filename)
 
     # Get file size for Content-Length header
-    try:
+    with contextlib.suppress(OSError):
         file_stat = config_instance.config_file.stat()
         response_headers["Content-Length"] = str(file_stat.st_size)
-    except Exception:
-        pass
 
     return Response(
         content="",
@@ -1535,6 +1544,7 @@ def _check_existing_config_files():
                     most_recent_mtime = file_stat.st_mtime
         except Exception:
             # Skip files that can't be accessed
+            logger.debug(f"Skipping {config_type} when checking config files", exc_info=True)
             continue
 
     # Check if any files were found
@@ -1576,8 +1586,7 @@ async def download_config_zip():
 
             if config_instance.config_file.exists():
                 # Read file content
-                with open(config_instance.config_file, "r") as f:
-                    content = f.read()
+                content = await asyncio.to_thread(config_instance.config_file.read_text)
 
                 # Get file mtime
                 file_stat = config_instance.config_file.stat()
@@ -1593,6 +1602,7 @@ async def download_config_zip():
                     most_recent_mtime = file_stat.st_mtime
         except Exception:
             # Skip files that can't be read
+            logger.debug(f"Skipping {filename} in config zip", exc_info=True)
             continue
 
     # Check if any files were found
@@ -1622,6 +1632,7 @@ async def download_config_zip():
                 # Write file to zip
                 zip_file.writestr(zip_info, file_data["content"])
     except Exception as e:
+        logger.debug("Failed to create config zip", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create zip file: {e!s}",

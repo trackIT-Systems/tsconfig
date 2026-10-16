@@ -463,6 +463,7 @@ async def parse_wifi_capabilities() -> WiFiCapabilities:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to parse WiFi capabilities", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to parse WiFi capabilities: {e!s}")
 
 
@@ -509,6 +510,7 @@ async def get_nmcli_connection_properties(connection_name: str, show_secrets: bo
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug(f"Failed to get properties from connection {connection_name}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Failed to get properties from connection {connection_name}: {e!s}"
         )
@@ -552,6 +554,7 @@ async def get_device_ipv4_address(device: str) -> str | None:
 
         return None
     except Exception:
+        logger.debug(f"Could not get IPv4 address of {device}", exc_info=True)
         return None
 
 
@@ -570,6 +573,7 @@ async def get_wifi_capabilities() -> WiFiCapabilities:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to get WiFi capabilities", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get WiFi capabilities: {e!s}")
 
 
@@ -609,6 +613,7 @@ async def wifi_scan(
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("WiFi scan failed", exc_info=True)
         raise HTTPException(status_code=500, detail=f"WiFi scan failed: {e!s}")
 
 
@@ -645,6 +650,7 @@ async def get_connections() -> list[ConnectionInfo]:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to list network connections", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to list network connections: {e!s}")
 
 
@@ -661,6 +667,7 @@ async def get_wifi_station_config() -> WiFiStationConfig:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to get WiFi station configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get WiFi station configuration: {e!s}")
 
 
@@ -711,6 +718,7 @@ async def update_wifi_station_config(update: WiFiStationUpdate) -> dict[str, Any
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to update WiFi station configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update WiFi station configuration: {e!s}")
 
 
@@ -763,6 +771,7 @@ async def get_hotspot_config() -> HotspotConfig:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to get hotspot configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get hotspot configuration: {e!s}")
 
 
@@ -841,7 +850,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> dict[str, Any]:
                 raise
             except Exception as e:
                 # If capabilities check fails, log but don't block the update
-                logger.warning(f"Could not validate WiFi capabilities: {e}")
+                logger.warning(f"Could not validate WiFi capabilities: {e}", exc_info=True)
 
         # Validate channel width if provided
         if update.channel_width is not None:
@@ -909,6 +918,7 @@ async def update_hotspot_config(update: HotspotUpdate) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to update hotspot configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update hotspot configuration: {e!s}")
 
 
@@ -934,6 +944,7 @@ async def get_cellular_config() -> CellularConfig:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to get cellular configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get cellular configuration: {e!s}")
 
 
@@ -1015,6 +1026,7 @@ async def update_cellular_config(update: CellularUpdate) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to update cellular configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update cellular configuration: {e!s}")
 
 
@@ -1062,6 +1074,7 @@ async def bring_connection_up(connection_name: str) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
+        logger.debug("Failed to bring connection up", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to bring connection up: {e!s}")
 
 
@@ -1205,7 +1218,7 @@ async def get_modem_info() -> ModemInfo | None:
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         # Log the error but don't raise - return None for graceful degradation
-        logger.error(f"Error getting modem information: {e!s}")
+        logger.exception("Error getting modem information")
         return None

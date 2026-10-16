@@ -149,20 +149,22 @@ class MqttUtilConfig(BaseConfig):
                 errors.append(f"Section '{section_name}' requires a non-empty 'func' string")
 
         scheduling_interval = fields.get("scheduling_interval")
-        if scheduling_interval is not None:
-            if not isinstance(scheduling_interval, str) or _interval_to_seconds(scheduling_interval) is None:
-                errors.append(
-                    f"Section '{section_name}' scheduling_interval must be a valid interval (e.g. '5s', '1m', '2h')"
-                )
+        if scheduling_interval is not None and (
+            not isinstance(scheduling_interval, str) or _interval_to_seconds(scheduling_interval) is None
+        ):
+            errors.append(
+                f"Section '{section_name}' scheduling_interval must be a valid interval (e.g. '5s', '1m', '2h')"
+            )
 
         topic_prefix = fields.get("topic_prefix")
         if topic_prefix is not None and not isinstance(topic_prefix, str):
             errors.append(f"Section '{section_name}' topic_prefix must be a string")
 
         requires = fields.get("requires")
-        if requires is not None:
-            if not isinstance(requires, list) or not all(isinstance(item, str) for item in requires):
-                errors.append(f"Section '{section_name}' requires must be a list of module name strings")
+        if requires is not None and (
+            not isinstance(requires, list) or not all(isinstance(item, str) for item in requires)
+        ):
+            errors.append(f"Section '{section_name}' requires must be a list of module name strings")
 
         qos = fields.get("qos")
         if qos is not None and (not isinstance(qos, int) or qos not in (0, 1, 2)):

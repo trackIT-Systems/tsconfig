@@ -12,6 +12,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.config_loader import config_loader
+from app.logging_config import get_logger
 from app.utils.privileged import (
     ALLOWED_SYSTEMCTL_VERBS,
     PrivilegedCallError,
@@ -19,6 +20,8 @@ from app.utils.privileged import (
     systemctl_action,
 )
 from app.utils.subprocess_async import run_subprocess_async
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
@@ -96,7 +99,7 @@ def get_services_config() -> ServicesConfigFile:
         if services_data:
             return ServicesConfigFile(services=services_data)
     except Exception:
-        pass
+        logger.debug("Invalid services configuration, using the default", exc_info=True)
     return ServicesConfigFile(**DEFAULT_SERVICES_CONFIG)
 
 
@@ -129,7 +132,7 @@ def format_uptime_from_seconds(total_seconds: float) -> str:
             return f"{minutes}m {seconds}s"
         else:
             return f"{seconds}s"
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return "N/A"
 
 
@@ -179,7 +182,7 @@ def calculate_service_uptime(properties: dict[str, str], active_state: str) -> s
         # Format duration using the shared formatting function
         return format_uptime_from_seconds(duration.total_seconds())
 
-    except Exception:
+    except (TypeError, ValueError, OverflowError, OSError):
         return None
 
 
@@ -193,7 +196,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             current_time = time.time()
             uptime_seconds = current_time - boot_time
             uptime_str = format_uptime_from_seconds(uptime_seconds)
-        except Exception:
+        except (psutil.Error, OSError):
             uptime_str = None
 
         return ServiceInfo(
@@ -291,6 +294,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             is_target=False,
         )
     except Exception as e:
+        logger.debug(f"Failed to get info for service {service_config.name}", exc_info=True)
         return ServiceInfo(
             name=service_config.name,
             description=f"Error: {e!s}",
@@ -379,6 +383,7 @@ async def get_system_config():
         refresh_interval = config_loader.get_status_refresh_interval()
         return {"status_refresh_interval": refresh_interval}
     except Exception as e:
+        logger.debug("Failed to get system configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get system configuration: {e!s}")
 
 
@@ -455,6 +460,7 @@ async def stream_service_logs(
                 yield f"data: {log_line}\n\n"
 
         except Exception as e:
+            logger.debug(f"Error streaming logs for {service_name}", exc_info=True)
             yield f"data: Error streaming logs: {e!s}\n\n"
         finally:
             # Runs when journalctl ends and when the stream is cancelled

@@ -21,9 +21,11 @@ class FakeRequest:
 @pytest.mark.asyncio
 class TestSystemReset:
     async def test_server_mode_rejected(self):
-        with patch.object(system_reset.config_loader, "is_server_mode", return_value=True):
-            with pytest.raises(HTTPException) as exc_info:
-                await system_reset.system_reset(FakeRequest())
+        with (
+            patch.object(system_reset.config_loader, "is_server_mode", return_value=True),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await system_reset.system_reset(FakeRequest())
         assert exc_info.value.status_code == 403
 
     async def test_wipe_overlay_calls_privileged_op_and_schedules_reboot(self):

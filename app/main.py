@@ -253,8 +253,8 @@ async def validate_oidc_config():
                     # Try to fetch discovery document to validate connection
                     await oidc_config.get_discovery_document()
                     logger.info("Successfully connected to OIDC provider")
-                except Exception as e:
-                    logger.error(f"Failed to connect to OIDC provider: {e}")
+                except Exception:
+                    logger.exception("Failed to connect to OIDC provider")
                     logger.warning("Server mode is enabled but OIDC provider is not accessible")
             else:
                 logger.error(f"OIDC configuration is invalid: {error}")
@@ -322,7 +322,7 @@ async def get_server_mode():
                             if (latest_dir / "mqttutil.conf").exists():
                                 dir_details[item.name]["config_files"].append("mqttutil.conf")
                 debug_info["directory_details"] = dir_details
-            except Exception as e:
+            except OSError as e:
                 debug_info["error"] = str(e)
 
     return {
@@ -497,6 +497,7 @@ async def get_system_status():
 
         return JSONResponse(content=system_info)
     except Exception as e:
+        logger.debug("Failed to get system status", exc_info=True)
         return JSONResponse(status_code=500, content={"error": f"Failed to get system status: {e!s}"})
 
 
@@ -537,7 +538,7 @@ async def _get_tsupdate_status():
         logger.debug(f"Failed to get tsupdate status: {e!s}")
         return None
     except Exception as e:
-        logger.debug(f"Unexpected error getting tsupdate status: {e!s}")
+        logger.debug(f"Unexpected error getting tsupdate status: {e!s}", exc_info=True)
         return None
 
 
@@ -657,7 +658,7 @@ async def get_available_services(config_group: str | None = None):
         if schedule_config.config_file.exists():
             available_services.append("schedule")
     except Exception:
-        pass
+        logger.debug("Could not check the schedule configuration", exc_info=True)
 
     # Check radiotracking configuration
     try:
@@ -665,7 +666,7 @@ async def get_available_services(config_group: str | None = None):
         if radiotracking_config.config_file.exists():
             available_services.append("radiotracking")
     except Exception:
-        pass
+        logger.debug("Could not check the radiotracking configuration", exc_info=True)
 
     # Check soundscapepipe configuration
     try:
@@ -673,7 +674,7 @@ async def get_available_services(config_group: str | None = None):
         if soundscapepipe_config.config_file.exists():
             available_services.append("soundscapepipe")
     except Exception:
-        pass
+        logger.debug("Could not check the soundscapepipe configuration", exc_info=True)
 
     # Check authorized_keys configuration
     try:
@@ -681,7 +682,7 @@ async def get_available_services(config_group: str | None = None):
         if authorized_keys_config.config_file.exists():
             available_services.append("authorized_keys")
     except Exception:
-        pass
+        logger.debug("Could not check the authorized_keys configuration", exc_info=True)
 
     # Check tsupdate configuration
     try:
@@ -689,7 +690,7 @@ async def get_available_services(config_group: str | None = None):
         if tsupdate_config.config_file.exists():
             available_services.append("tsupdate")
     except Exception:
-        pass
+        logger.debug("Could not check the tsupdate configuration", exc_info=True)
 
     # Check mqttutil configuration
     try:
@@ -697,7 +698,7 @@ async def get_available_services(config_group: str | None = None):
         if mqttutil_config.config_file.exists():
             available_services.append("mqttutil")
     except Exception:
-        pass
+        logger.debug("Could not check the mqttutil configuration", exc_info=True)
 
     return {"available_services": available_services}
 
@@ -758,11 +759,13 @@ async def get_timedatectl_status():
         except (TimeoutError, subprocess.TimeoutExpired):
             timedatectl_status["error"] = "timedatectl status command timed out"
         except Exception as e:
+            logger.debug("Error executing timedatectl status", exc_info=True)
             timedatectl_status["error"] = f"Error executing timedatectl status: {e!s}"
 
         return JSONResponse(content=timedatectl_status)
 
     except Exception as e:
+        logger.debug("Failed to get timedatectl status", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to get timedatectl status: {e!s}"},
@@ -866,11 +869,13 @@ async def get_network_connectivity():
         except (TimeoutError, subprocess.TimeoutExpired):
             network_connectivity_status["error"] = "nmcli networking connectivity command timed out"
         except Exception as e:
+            logger.debug("Error executing nmcli networking connectivity", exc_info=True)
             network_connectivity_status["error"] = f"Error executing nmcli networking connectivity: {e!s}"
 
         return JSONResponse(content=network_connectivity_status)
 
     except Exception as e:
+        logger.debug("Failed to get network connectivity status", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to get network connectivity status: {e!s}"},
@@ -897,7 +902,7 @@ def _get_available_services_for_template(config_group: str | None = None) -> lis
         if radiotracking_config.config_file.exists():
             available_services.append("radiotracking")
     except Exception:
-        pass
+        logger.debug("Could not check the radiotracking configuration", exc_info=True)
 
     # Check soundscapepipe configuration
     try:
@@ -905,7 +910,7 @@ def _get_available_services_for_template(config_group: str | None = None) -> lis
         if soundscapepipe_config.config_file.exists():
             available_services.append("soundscapepipe")
     except Exception:
-        pass
+        logger.debug("Could not check the soundscapepipe configuration", exc_info=True)
 
     return available_services
 

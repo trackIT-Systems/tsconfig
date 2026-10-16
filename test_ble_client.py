@@ -37,6 +37,7 @@ try:
     import cbor2
     from bleak import BleakClient, BleakScanner
     from bleak.backends.device import BLEDevice
+    from bleak.exc import BleakError
 except ImportError as e:
     # Only fail if not just showing help
     if "--help" not in sys.argv and "-h" not in sys.argv:
@@ -47,7 +48,11 @@ except ImportError as e:
     BleakClient = None
     BleakScanner = None
     BLEDevice = None
+    BleakError = None
     cbor2 = None
+
+# Errors a BLE operation can fail with: reported to the user, not raised
+BLE_ERRORS = (BleakError, OSError, TimeoutError)
 
 # GATT Service UUIDs
 SYSTEM_SERVICE_UUID = "00001000-7473-4f53-636f-6e6669672121"
@@ -150,7 +155,7 @@ async def write_large_data(client: BleakClient, char, data: str, mtu: int | None
         try:
             await client.write_gatt_char(char, data_bytes)
             return True
-        except Exception as e:
+        except BLE_ERRORS as e:
             print_error(f"Write failed: {e}")
             return False
 
@@ -173,7 +178,7 @@ async def write_large_data(client: BleakClient, char, data: str, mtu: int | None
         print_success(f"All {num_chunks} chunks written successfully")
         return True
 
-    except Exception as e:
+    except BLE_ERRORS as e:
         print_error(f"Chunked write failed on chunk {chunk_num}: {e}")
         return False
 
@@ -219,7 +224,7 @@ class ChunkedReader:
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     # Not complete yet, keep accumulating
                     pass
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             print_error(f"Error handling notification: {e}")
 
 
@@ -408,18 +413,18 @@ async def read_with_notifications(client: BleakClient, uuid: str, name: str, tim
                 print_error(f"Timeout waiting for {name} data (received {len(reader.buffer)}/{content_length} bytes)")
                 return None
 
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
             print_error(f"Invalid CBOR metadata: {e}")
             return None
 
-    except Exception as e:
+    except BLE_ERRORS as e:
         print_error(f"Failed to read {name}: {e}")
         return None
     finally:
         try:
             await client.stop_notify(char)
-        except:
-            pass
+        except BLE_ERRORS as e:
+            print_warning(f"Could not stop notifications: {e}")
 
 
 async def write_with_notifications(
@@ -473,14 +478,14 @@ async def write_with_notifications(
             print_info("No response received")
             return None
 
-    except Exception as e:
+    except BLE_ERRORS as e:
         print_error(f"Failed to write {name}: {e}")
         return None
     finally:
         try:
             await client.stop_notify(char)
-        except:
-            pass
+        except BLE_ERRORS as e:
+            print_warning(f"Could not stop notifications: {e}")
 
 
 async def retry_scan(scan_func, *args, retries: int = 3, delay: float = 1.0, return_single: bool = False, **kwargs):
@@ -605,7 +610,7 @@ async def test_systemd_service(client: BleakClient):
                     print(f"  ... and {len(services) - 5} more services")
             else:
                 print(format_json(data))
-        except:
+        except (json.JSONDecodeError, AttributeError, TypeError):
             print(format_json(data))
 
     # Show available write characteristics
@@ -660,7 +665,7 @@ async def test_write_operations(client: BleakClient, enabled: bool = False):
         print(format_json(response))
 
 
-async def upload_file(filepath: str) -> bytes | None:
+def upload_file(filepath: str) -> bytes | None:
     """Load and encode a file for upload.
 
     Args:
@@ -677,7 +682,7 @@ async def upload_file(filepath: str) -> bytes | None:
     except FileNotFoundError:
         print_error(f"File {filepath} not found")
         return None
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
         print_error(f"Failed to read {filepath}: {e}")
         return None
 
@@ -696,7 +701,7 @@ async def test_upload_service(client: BleakClient, enabled: bool = False, destru
         return
 
     # Load and encode file
-    content_b64 = await upload_file("configs/schedule.yml")
+    content_b64 = upload_file("configs/schedule.yml")
     if not content_b64:
         return
 
@@ -716,7 +721,7 @@ async def test_upload_service(client: BleakClient, enabled: bool = False, destru
         print(format_json(response))
 
 
-async def create_zip_upload(file_paths: list) -> str | None:
+def create_zip_upload(file_paths: list) -> str | None:
     """Create a zip file from multiple files and return base64-encoded content.
 
     Args:
@@ -737,14 +742,14 @@ async def create_zip_upload(file_paths: list) -> str | None:
                     print_success(f"Added {arcname} ({len(content)} bytes)")
                 except FileNotFoundError:
                     print_warning(f"File {file_path} not found, skipping")
-                except Exception as e:
+                except (OSError, UnicodeDecodeError) as e:
                     print_error(f"Failed to read {file_path}: {e}")
 
         zip_data = zip_buffer.getvalue()
         print_success(f"Created zip file ({len(zip_data)} bytes)")
         return base64.b64encode(zip_data).decode("ascii")
 
-    except Exception as e:
+    except (OSError, ValueError, zipfile.BadZipFile) as e:
         print_error(f"Failed to create zip file: {e}")
         return None
 
@@ -760,7 +765,7 @@ async def test_zip_upload(client: BleakClient, enabled: bool = False, destructiv
 
     # Create zip
     config_files = ["configs/radiotracking.ini", "configs/soundscapepipe.yml", "configs/schedule.yml"]
-    content_b64 = await create_zip_upload(config_files)
+    content_b64 = create_zip_upload(config_files)
     if not content_b64:
         return
 
@@ -932,7 +937,7 @@ async def main():
             if not args.write:
                 print_info("Use --write flag to test write operations")
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - top-level boundary: report any failure with troubleshooting hints
         print_error(f"Connection failed: {e}")
         troubleshooting = [
             "1. Verify BLE gateway: sudo systemctl status tsconfig-ble",

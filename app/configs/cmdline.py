@@ -16,11 +16,11 @@ class CmdlineConfig(BaseConfig):
     """
 
     # Parameters that can be updated via tsconfig
-    CONFIGURABLE_PARAMETERS = [
+    CONFIGURABLE_PARAMETERS = (
         "timezone",
         "systemd.hostname",
         "cfg80211.ieee80211_regdom",
-    ]
+    )
 
     def __init__(self, config_dir: Path | None = None):
         # Always use /boot/firmware regardless of config_dir

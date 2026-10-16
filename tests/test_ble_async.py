@@ -6,6 +6,7 @@ are chunked to the MTU of the connection they are for."""
 import asyncio
 import json
 import math
+from typing import ClassVar
 from unittest.mock import AsyncMock
 
 import cbor2
@@ -13,7 +14,7 @@ import pytest
 
 from app.bluetooth import executor as ble_executor
 from app.bluetooth.executor import SyncExecutor
-from tests.test_ble_auth import DEVICE, OTHER, FakeService, chars, make_write_char  # noqa: F401 (fixtures)
+from tests.ble_helpers import DEVICE, OTHER, FakeService, make_write_char
 
 
 class QueueExecutor:
@@ -168,7 +169,7 @@ class TestAsyncReads:
 
 
 class TestChunkingUsesTheConnectionsMtu:
-    PAYLOAD = {"data": "x" * 2600}  # about 2.6 kB of JSON
+    PAYLOAD: ClassVar[dict] = {"data": "x" * 2600}  # about 2.6 kB of JSON
 
     def run(self, chars, **options):
         char = chars.ReadOnlyCharacteristic(None, 1, "u", FakeService(), None, AsyncMock(return_value=self.PAYLOAD))

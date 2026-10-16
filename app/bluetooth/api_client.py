@@ -24,7 +24,8 @@ def _request_error(e: httpx.HTTPError) -> Exception:
     if isinstance(e, httpx.HTTPStatusError):
         try:
             detail = e.response.json().get("detail")
-        except Exception:
+        except (ValueError, AttributeError):
+            # Body is not JSON (JSONDecodeError is a ValueError) or not a JSON object
             detail = None
         if isinstance(detail, (list, dict)):
             detail = str(detail)
@@ -262,7 +263,7 @@ class TsConfigApiClient:
                 # Without a hint, text that happens to be valid base64 is taken as base64
                 try:
                     file_content = base64.b64decode(content, validate=True)
-                except Exception:
+                except ValueError:  # binascii.Error, or non-ASCII text
                     file_content = content.encode("utf-8")
             if mtime is None:
                 mtime = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")

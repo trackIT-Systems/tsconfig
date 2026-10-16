@@ -123,7 +123,7 @@ class BaseConfigRouter:
                                     new_file = versioned_dir / config_file
                                     shutil.copy2(old_file, new_file)
                                     logger.debug(f"Copied {config_file} from previous version")
-                                except Exception as e:
+                                except OSError as e:
                                     logger.warning(f"Failed to copy {config_file}: {e}")
                     else:
                         logger.debug("No previous version found, starting fresh")
@@ -164,8 +164,7 @@ class BaseConfigRouter:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Error saving configuration: {e}")
-                logger.error(traceback.format_exc())
+                logger.exception("Error saving configuration")
                 raise HTTPException(
                     status_code=500,
                     detail={
@@ -179,8 +178,7 @@ class BaseConfigRouter:
             raise
         except Exception as e:
             # Handle other errors
-            logger.error(f"Unexpected error in update_config_helper: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception("Unexpected error in update_config_helper")
             error_detail: dict[str, Any] = {
                 "message": f"Failed to update {self.prefix} configuration",
                 "error": str(e),

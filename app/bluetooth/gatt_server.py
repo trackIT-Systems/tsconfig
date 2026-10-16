@@ -72,6 +72,10 @@ class RejectedException(dbus.exceptions.DBusException):
     _dbus_error_name = "org.bluez.Error.Rejected"
 
 
+class AdapterNotFoundError(RuntimeError):
+    """No Bluetooth adapter is known to BlueZ (the supervisor retries later)."""
+
+
 class NoInputNoOutputAgent(dbus.service.Object):
     """BlueZ pairing agent for a device without display or keyboard.
 
@@ -350,7 +354,7 @@ class BleGattServer:
             D-Bus path of the adapter
 
         Raises:
-            Exception: If no adapter is found
+            AdapterNotFoundError: If no adapter is found
         """
         remote_om = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE_NAME, "/"), DBUS_OM_IFACE)
         objects = remote_om.GetManagedObjects()
@@ -360,7 +364,7 @@ class BleGattServer:
                 logger.debug(f"Found Bluetooth adapter: {path}")
                 return path
 
-        raise Exception("No Bluetooth adapter found")
+        raise AdapterNotFoundError("No Bluetooth adapter found")
 
     def setup(self):
         """Create what the gateway exports and subscribe to BlueZ events (nothing is registered yet)."""
@@ -404,7 +408,8 @@ class BleGattServer:
             serial_bytes = bytes.fromhex(serial_short)
             self.advertisement.set_service_data(TSOS_SERVICE_UUID_16BIT, serial_bytes)
             logger.debug(f"Advertising serial: {serial_short} ({len(serial_bytes)} bytes)")
-        except Exception as e:
+        except (ValueError, TypeError) as e:
+            # TypeError: no serial in /proc/cpuinfo (not a Raspberry Pi)
             logger.warning(f"Could not add serial to advertisement: {e}")
             # Continue without serial - device will still be discoverable
 
@@ -469,7 +474,7 @@ class BleGattServer:
         try:
             self.adapter_props.Set(ADAPTER_IFACE, "Pairable", dbus.Boolean(True))
             self.adapter_props.Set(ADAPTER_IFACE, "PairableTimeout", dbus.UInt32(0))
-        except Exception as e:
+        except dbus.exceptions.DBusException as e:
             logger.warning(f"Could not make the adapter pairable: {e}")
 
         try:
@@ -478,7 +483,7 @@ class BleGattServer:
             agent_manager.RequestDefaultAgent(AGENT_PATH)
             self.supervisor.agent_registered = True
             logger.info("Registered NoInputNoOutput pairing agent")
-        except Exception as e:
+        except dbus.exceptions.DBusException as e:
             if BLUEZ_ALREADY_EXISTS in str(e):
                 self.supervisor.agent_registered = True
                 return
@@ -585,16 +590,16 @@ class BleGattServer:
             try:
                 self.ad_manager.UnregisterAdvertisement(self.advertisement.get_path())
                 logger.debug("BLE advertisement unregistered")
-            except Exception as e:
-                logger.error(f"Error unregistering advertisement: {e}")
+            except Exception:
+                logger.exception("Error unregistering advertisement")
 
         # Unregister application
         if self.gatt_manager and self.application:
             try:
                 self.gatt_manager.UnregisterApplication(self.application.get_path())
                 logger.debug("GATT application unregistered")
-            except Exception as e:
-                logger.error(f"Error unregistering application: {e}")
+            except Exception:
+                logger.exception("Error unregistering application")
 
         # Close API client and stop the executor
         if self.executor:
@@ -602,7 +607,7 @@ class BleGattServer:
                 if self.api_client:
                     self.executor.run_blocking(self.api_client.close())
             except Exception as e:
-                logger.debug(f"Error closing API client: {e}")
+                logger.debug(f"Error closing API client: {e}", exc_info=True)
             self.executor.shutdown()
 
         # Quit mainloop

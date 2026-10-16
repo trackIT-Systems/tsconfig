@@ -239,7 +239,7 @@ class HotspotConfig(BaseConfig):
 
     @staticmethod
     def _nmcli(args: list[str]) -> subprocess.CompletedProcess:
-        return subprocess.run(["nmcli"] + args, capture_output=True, text=True, timeout=_NMCLI_TIMEOUT)
+        return subprocess.run(["nmcli"] + args, capture_output=True, text=True, timeout=_NMCLI_TIMEOUT, check=False)
 
     def _reload_into_networkmanager(self, path: Path, ignore_errors: bool = False) -> bool:
         """Load the profile into NetworkManager and re-activate the hotspot if
