@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: '24'
       # Node's own test runner: the shared component code needs no packages
-      - run: node --test tests/js/
+      - run: node --test 'tests/js/*.test.mjs'
 
   test:
     runs-on: ubuntu-latest

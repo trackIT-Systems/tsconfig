@@ -70,6 +70,6 @@ without a request in server mode.
 
 ## Tests
 
-`node --test tests/js/` (Node 22 or newer, no packages): the mixins against a fake browser
+`node --test 'tests/js/*.test.mjs'` (Node 22 or newer, no packages): the mixins against a fake browser
 (`tests/js/helpers.mjs`), what each page sends, and that every component builds. CI runs them in
 the `frontend` job.
