@@ -50,6 +50,8 @@ line-ending = "auto"
 dev = [
     "bleak>=2.1.1",
     "cbor2>=5.6.5",
+    # Starlette's TestClient uses httpx2 since 1.7 and warns when it falls back to httpx
+    "httpx2>=2.13.1",
 ]
 ble = [
     "dbus-python>=1.4.0",

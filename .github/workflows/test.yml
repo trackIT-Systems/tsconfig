@@ -1,0 +1,54 @@
+name: Lint and test
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned: ruff's default rule set changes between releases. Bump it
+      # together with the fixes for the new findings.
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: '0.16.10'
+          args: check
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: '0.16.10'
+          args: format --check
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # What the tsOS image runs: Debian's Python and library versions
+          - name: device
+            python: '3.13'
+            install: '-e ".[dev]" --group auth cbor2 -c .github/device-versions.txt'
+          # Current releases, to see upcoming breakage early
+          - name: latest
+            python: '3.14'
+            install: '-e ".[dev]" --group dev --group auth'
+    name: test (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ${{ matrix.install }}
+      - name: Test
+        run: python -m pytest -q
