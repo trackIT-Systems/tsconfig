@@ -9,6 +9,13 @@
         </div>
     </template>
 
+    <!-- Live Section - hidden in server mode: there is no local broker there -->
+    <template x-if="initialized && activeConfig === 'live' && !serverMode">
+        <div>
+            {% include 'live.html' %}
+        </div>
+    </template>
+
     <!-- System Settings Section -->
     <div x-show="activeConfig === 'settings' && isSettingsAvailable()" x-cloak>
         <template x-if="activeConfig === 'settings' && isSettingsAvailable()">

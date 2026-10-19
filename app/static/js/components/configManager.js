@@ -1,5 +1,6 @@
 import { apiUrl, getJsonShared } from '../utils/apiUtils.js';
 import { serverModeManager } from '../managers/serverModeManager.js';
+import { LIVE_TABS } from '../utils/liveSignals.js';
 
 export function configManager() {
     return {
@@ -61,6 +62,8 @@ export function configManager() {
                 this.activeConfig = 'settings';
             } else if (tabName === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe')) {
                 this.activeConfig = 'soundscapepipe';
+            } else if (tabName === 'live' && this.isLiveAvailable()) {
+                this.activeConfig = 'live';
             } else if (tabName === 'status' && !this.serverMode) {
                 this.activeConfig = 'status';
             } else {
@@ -129,6 +132,8 @@ export function configManager() {
                             }
                         }
                     }, 150);
+                } else if (value === 'live' && window.location.hash.startsWith('#live/')) {
+                    // Keep the tab of the live page (the page names it itself when it opens)
                 } else {
                     // For other tabs, just use the tab name
                     window.location.hash = value;
@@ -153,6 +158,7 @@ export function configManager() {
                 const hash = window.location.hash.slice(1);
                 const mainTab = hash.split('/')[0]; // Extract main tab
                 if (mainTab === 'status' || 
+                    (mainTab === 'live' && this.isLiveAvailable()) ||
                     (mainTab === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
                     (mainTab === 'settings' && this.isSettingsAvailable()) ||
                     (mainTab === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
@@ -174,6 +180,7 @@ export function configManager() {
                 const hash = window.location.hash.slice(1);
                 const mainTab = hash.split('/')[0]; // Extract main tab
                 if (mainTab === 'status' || 
+                    (mainTab === 'live' && this.isLiveAvailable()) ||
                     (mainTab === 'radiotracking' && this.isServiceAvailable('radiotracking')) ||
                     (mainTab === 'settings' && this.isSettingsAvailable()) ||
                     (mainTab === 'soundscapepipe' && this.isServiceAvailable('soundscapepipe'))) {
@@ -280,6 +287,12 @@ export function configManager() {
 
         isServiceAvailable(serviceName) {
             return this.availableServices.includes(serviceName);
+        },
+
+        isLiveAvailable() {
+            // The live dashboard reads the station's own broker, which a server has none of;
+            // it has a tab for each service that is available
+            return !this.serverMode && LIVE_TABS.some(tab => this.isServiceAvailable(tab.service));
         },
 
         isSettingsAvailable() {

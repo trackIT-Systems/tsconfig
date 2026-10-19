@@ -1,0 +1,42 @@
+<!-- Live Section: a tab for each service that is available -->
+<div x-data="liveTabs((service) => isServiceAvailable(service))">
+    <div class="row mb-3 align-items-end">
+        <div class="col">
+            <h2 class="mb-2">
+                <i class="fas fa-chart-line me-3"></i>Live
+            </h2>
+            <p class="text-muted mb-0">What the station publishes right now. Nothing is stored on the station: the charts show what arrives while you are on this page.</p>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small text-muted mb-1" for="liveViewWindow">Time window</label>
+            <select id="liveViewWindow" class="form-select form-select-sm"
+                    x-model.number="viewMs" @change="setView(viewMs)">
+                <template x-for="option in viewOptions" :key="option.ms">
+                    <option :value="option.ms" x-text="option.label" :selected="option.ms === viewMs"></option>
+                </template>
+            </select>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <template x-for="item in tabs" :key="item.id">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link"
+                        :class="{ 'active': tab === item.id }"
+                        @click="select(item.id)"
+                        type="button">
+                    <i class="fas me-1" :class="item.icon"></i>
+                    <span x-text="item.label"></span>
+                </button>
+            </li>
+        </template>
+    </ul>
+
+    <!-- Only the tab that is shown reads from the broker -->
+    <template x-if="tab === 'radiotracking'">
+        <div>
+            {% include 'partials/live_radiotracking.html' %}
+        </div>
+    </template>
+</div>

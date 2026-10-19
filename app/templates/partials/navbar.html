@@ -42,6 +42,14 @@
                         <i class="fas fa-tachometer-alt me-1"></i>Status
                     </a>
                 </li>
+                <li class="nav-item" x-show="isLiveAvailable()">
+                    <a class="nav-link" 
+                       href="#live" 
+                       @click.prevent="activeConfig = 'live'"
+                       :class="{ 'active': activeConfig === 'live', 'fw-bold': activeConfig === 'live' }">
+                        <i class="fas fa-chart-line me-1"></i>Live
+                    </a>
+                </li>
                 <li class="nav-item" x-show="isSettingsAvailable()">
                     <a class="nav-link" 
                        href="#settings" 
@@ -72,15 +80,6 @@
                        target="_blank" 
                        title="File Browser (External)">
                         <i class="fas fa-folder-open me-1"></i>Data
-                        <i class="fas fa-external-link-alt ms-1" style="font-size: 0.75em;"></i>
-                    </a>
-                </li>
-                <li class="nav-item" x-show="!serverMode && isServiceAvailable('radiotracking')">
-                    <a class="nav-link" 
-                       :href="(window.BASE_URL || '') + '/radiotracking/'" 
-                       target="_blank" 
-                       title="VHF Signals (External)">
-                        <i class="fas fa-chart-line me-1"></i>VHF Signals
                         <i class="fas fa-external-link-alt ms-1" style="font-size: 0.75em;"></i>
                     </a>
                 </li>

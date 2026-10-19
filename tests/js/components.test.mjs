@@ -12,6 +12,10 @@ const COMPONENTS = new URL('../../app/static/js/components/', import.meta.url);
 const EXPECTED = {
     configUpload: ['serverMode', 'showMessage', 'uploadConfig'],
     configManager: ['init', 'activeConfig'],
+    liveTabs: ['tabs', 'tab', 'select', 'setView', 'viewOptions', 'viewMs', 'init', 'destroy'],
+    liveSignalPower: ['serverMode', 'source', 'setSource', 'calibratedHint', 'unit', 'yLabel', 'status', 'init', 'destroy'],
+    liveFrequencyUsage: ['serverMode', 'yLabel', 'status', 'init', 'destroy'],
+    liveSignalDetail: ['serverMode', 'param', 'paramOptions', 'setParam', 'collecting', 'toggleCollect', 'status', 'init', 'destroy'],
     logViewer: ['startStreaming'],
     mqttutilConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
     networkConfig: ['serverMode', 'dispatchMessage', 'showMessage', 'streamLogs', 'init', 'destroy', 'every', 'listen'],

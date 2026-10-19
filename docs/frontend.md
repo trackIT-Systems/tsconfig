@@ -87,6 +87,101 @@ own scope: `x-data="geolocationMap(() => systemInfo?.os_release?.NAME)"`.
 A `<template x-if>` renders only its first element. Two buttons in one template show one button: the
 status page's Restart button was missing for that reason.
 
+## The live dashboard
+
+The **Live** tab (`live.html`, tracker mode, only if radiotracking is available: `isLiveAvailable()`)
+reads MQTT in the browser. There is no server-side part: tsconfig subscribes to nothing and stores
+nothing. The page connects to the local broker over WebSockets at `/mqtt` on its own host (`ws:` or
+`wss:` like the page). The broker only listens on loopback; tsOS-base's Caddy serves the path behind
+the login (see tsOS-base docs/security.md, "MQTT over WebSocket"), so the page needs no credentials
+of its own. A socket that is open stays connected after logout.
+
+The page is `liveTabs` (`components/liveTabs.js`): a tab for each entry of `LIVE_TABS`
+(`utils/liveSignals.js`: id, label, icon and the service whose availability enables it), in the URL
+as `#live/<tab>` like the settings page (`#live` becomes `#live/<first tab>`). Only the tab that is
+shown has its panels, so only it reads from the broker. **A new tab** is an entry in `LIVE_TABS`, a
+`partials/live_<id>.html` with its panels, and a line in `live.html` (`<template x-if="tab === '<id>'">`).
+The navbar's Live item and `isLiveAvailable()` follow `LIVE_TABS`: shown if any tab is available.
+The page's **Time window** selector (30 s, 1, 2 or 5 minutes, `VIEW_OPTIONS`) sets what every chart shows
+of what is held, at most all of it (`liveManager.prefs.viewMs`); it only changes what is shown, not
+what is kept, so a longer window brings the signals back. Panels copy it into their own `viewMs` at
+each tick, because Alpine cannot see the manager's.
+
+| Panel | Component | Reads | Plots |
+|---|---|---|---|
+| Signal Power | `liveSignalPower` | `matched` and `calibrated` | the power of each SDR (dBW or dBm, chosen) |
+| Frequency Usage | `liveFrequencyUsage` | `matched` | the frequency of the signal, one dot per signal |
+| Signal Detail | `liveSignalDetail` | `raw`, after Start | a value of the raw signal, chosen, one series per SDR |
+
+Each panel is a thin component (`partials/live_signal_power.html`, ...) over three shared parts:
+
+- **`liveManager`** (`managers/liveManager.js`) owns the one MQTT connection and, for each kind of
+  message (`matched`, `calibrated`, `raw`), an `EventWindow` with the signals of the last five minutes.
+  Panels `acquire(sources)` what they need and get a function to give it back; the connection opens
+  with the first and closes with the last, and a topic wanted by two panels is subscribed once. The
+  windows are module state, so what was read **survives a switch between matched and calibrated and
+  Stop**, and the window forgets what is older than five minutes. It does **not survive a panel going
+  away** (leaving the page or the tab): the time axis keeps moving, so signals held across a visit
+  would come back with a hole in them. A panel `discard`s the windows it drew when it is destroyed
+  (`liveWindows()`), unless another panel still reads them. Nothing is read in the background: with no
+  panel open there is no connection. Signal Power reads both `matched` and `calibrated` while it is shown, so switching
+  between them has no gap; the raw signals are many more, so Signal Detail only reads them after Start
+  (`liveManager.prefs.collectRaw` remembers that while the page is open). mqtt.js's `resubscribe` is
+  off: the manager subscribes to what is wanted on every `connect`, so after a reconnect it is what
+  is wanted by then.
+- **`EventWindow`** (`utils/liveSignals.js`) holds the signals in order of `Time` (messages can
+  arrive out of order, and uPlot needs ascending x). Signals are drawn at the message's own `Time`,
+  while the axis follows the browser's clock: the point is to see how far the detections are from the
+  wall clock. It keeps the last signal's delay (arrival minus `Time`, shown on the card, with a warning
+  beyond 5 s) and counts signals not drawn because their `Time` is more than the window behind or 10
+  minutes ahead of the browser (so a clock set years ahead cannot push the window away).
+- **`liveChartMixin`** (`mixins/liveChartMixin.js`) is what the charts share: the connection to the
+  manager, the once-a-second tick (trim, legend, vertical axis), the chart, the glide, the dots and the
+  tooltip. A panel only says what is its own: `liveSources()`, `eventWindow()`,
+  `forEachDot(event, add)` (`add(key, y)` per dot; the key picks the colour), `yLabel`, `yRange()`,
+  `formatY()`, `legendLabel()` and `tipRows()`.
+
+How the charts are drawn:
+
+- **Dots, drawn by us.** uPlot's own points have one size per series, so `drawDots()` draws them in a
+  `draw` hook (clipped to the plot area and to the time axis; one fill per series when there are many).
+  The diameter shows the duration (`dotSize()`): 6 px at 20 ms, proportional to it (40 ms is twice as
+  wide), limited to 3-24 px. uPlot gets no series (`legend` is the page's, in `live_chart.html`) and no
+  data; the vertical axis is fitted to the signals by the mixin (`fitY()`), and the tooltip finds the dot
+  under the cursor itself (`showTip()`).
+- **The vertical axes come from the radiotracking configuration**, which tsconfig already parses:
+  `liveManager.loadLimits()` reads `/api/radiotracking` when a panel opens (`radiotrackingLimits()`).
+  Matched power runs from `signal_threshold_dbw` to a static -30 dBW (`powerLimits()`); calibrated
+  power (dBm at the antenna port) is not bounded by the configuration and is fitted to the data.
+  Frequency runs from the centre frequency minus half the sample rate to plus half
+  (`frequencyLimits()`). In Signal Detail max and avg have the power axis, frequency the frequency
+  axis and duration `signal_min_duration_ms` to `signal_max_duration_ms` (`durationLimits()`); the
+  other dB values are fitted to the data and never span less than 10 dB (`spreadRange()`), and any
+  other value the station adds is fitted too. The limits are widened by 3% (`padRange()`) so a dot on
+  a limit is not cut in half; the dot size does not depend on the configuration (`dotSize()` is
+  static). Without the configuration every axis is fitted to the data (`powerRange()`,
+  `frequencyRange()`, `valueRange()`). Signals outside a fixed axis are clipped.
+- **A 24-hour time axis without a date.** This is live, and a date collided with the times.
+- **The time axis slides on every animation frame** (`glide()`, with uPlot's `pxAlign: 0` so nothing is
+  snapped to whole pixels; one pixel is about 0.4 s, so anything slower moves in visible steps). New
+  data is drawn once a second, not per message. Nothing is drawn while the page is hidden.
+- **A panel destroys itself when its element has left the page.** Alpine does not call `destroy()` on a
+  component that sits in an `x-if` inside another `x-if` when the outer one goes (here: the Live page
+  is left; the panels are in the tab's `x-if`, the tab in the page's). The panel would stay subscribed
+  and every visit would add another one, so Stop in Signal Detail could only give back one of several.
+  The mixin's `tick()` checks `$el.isConnected` and destroys the panel if it is gone (at most a second
+  late). Keep this in mind for any component that holds something outside the page (a connection, a
+  timer on `window`) and is nested like this.
+- **The broker connection, chart and signals stay out of Alpine's reactive data** (closure variables
+  and module state): Alpine would wrap the growing arrays in proxies.
+- **The station prefix is a wildcard** (`+/radiotracking/...`): it is the host name or radiotracking's
+  `station` setting, which the page does not know.
+- **Colours by SDR** (`colorFor()`): the SDR number picks the colour, the same on every chart; the first four are the compass directions of the antennas, 0 blue (north), 1 yellow (east), 2 red (south), 3 green (west). Red and green are hard to tell apart with some kinds of colour blindness; the legend names each SDR, and the tooltip too.
+- **JSON topics only.** No CBOR or CSV decoding.
+- The libraries are loaded when the tab is first opened, not with every page: mqtt.js 5.16.1
+  (`vendor/mqtt/js/mqtt.min.js`, global `mqtt`) and uPlot 1.6.32 (`vendor/uplot`), both MIT, taken
+  unchanged from the npm packages' `dist/` (`mqtt.min.js`, `uPlot.iife.min.js`, `uPlot.min.css`).
+
 ## Server mode
 
 `serverModeManager` is the one place that knows whether this is the server and which config group
@@ -97,5 +192,5 @@ without a request in server mode.
 ## Tests
 
 `node --test 'tests/js/*.test.mjs'` (Node 22 or newer, no packages): the mixins against a fake browser
-(`tests/js/helpers.mjs`), what each page sends, and that every component builds. CI runs them in
+(`tests/js/helpers.mjs`), what each page sends, and that every component builds. The live dashboard is tested against a fake broker and chart (`tests/js/live_signals.test.mjs` for what it does with the messages, `tests/js/live_panels.test.mjs` for the manager and the panels). CI runs them in
 the `frontend` job.

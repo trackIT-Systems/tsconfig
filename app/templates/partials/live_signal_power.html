@@ -1,0 +1,39 @@
+<!-- Signal Power -->
+<div class="row mb-4">
+    <div class="col" x-data="liveSignalPower()">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-signal me-2"></i>Signal Power
+                </h5>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Power source">
+                        <template x-for="(info, name) in sources" :key="name">
+                            <button type="button" class="btn"
+                                    :class="source === name ? 'btn-primary' : 'btn-outline-primary'"
+                                    @click="setSource(name)"
+                                    x-text="info.label"></button>
+                        </template>
+                    </div>
+                    {% include 'partials/live_status_badge.html' %}
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted" x-show="source === 'matched'">
+                    Power of the matched signals in dBW (uncalibrated), a dot per SDR.
+                    Dot size: duration (20 ms is the default size).
+                </p>
+                <p class="small text-muted" x-show="source === 'calibrated'" x-cloak>
+                    Power in dBm at the antenna port. SDRs that are not calibrated are not drawn.
+                    Dot size: duration (20 ms is the default size).
+                </p>
+                <div class="alert alert-info py-2" x-show="calibratedHint" x-cloak>
+                    <i class="fas fa-info-circle me-1"></i>
+                    Nothing received yet. This station may have no calibrated SDR.
+                </div>
+
+                {% include 'partials/live_chart.html' %}
+            </div>
+        </div>
+    </div>
+</div>

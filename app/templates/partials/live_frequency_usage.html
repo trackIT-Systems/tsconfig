@@ -1,0 +1,21 @@
+<!-- Frequency Usage -->
+<div class="row mb-4">
+    <div class="col" x-data="liveFrequencyUsage()">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-wave-square me-2"></i>Frequency Usage
+                </h5>
+                {% include 'partials/live_status_badge.html' %}
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    Frequency of the matched signals, a dot per signal.
+                    Dot size: duration (20 ms is the default size).
+                </p>
+
+                {% include 'partials/live_chart.html' %}
+            </div>
+        </div>
+    </div>
+</div>

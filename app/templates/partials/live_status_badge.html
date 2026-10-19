@@ -1,0 +1,8 @@
+<span class="badge"
+      :class="{
+          'bg-success': status === 'connected',
+          'bg-warning text-dark': status === 'connecting',
+          'bg-danger': status === 'offline' || status === 'failed',
+          'bg-secondary': status === 'idle'
+      }"
+      x-text="status"></span>
