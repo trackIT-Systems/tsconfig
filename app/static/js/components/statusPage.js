@@ -13,7 +13,7 @@ import { formatBytes, formatDateTime, formatUptime } from '../utils/format.js';
  *
  * The cards that load and show their own data are components of their own
  * inside this one's template: servicesList, radiotrackingSummary,
- * soundscapepipeSummary and geolocationMap. They follow the refresh: the
+ * soundscapepipeSummary, powerSummary and geolocationMap. They follow the refresh: the
  * systemd units through serviceManager, the configs through the
  * 'status-refreshed' event, which carries the available services.
  */

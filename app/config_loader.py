@@ -82,6 +82,12 @@ class ConfigLoader:
         system_config = config.get("system", {})
         return system_config.get("status_refresh_interval", 30)
 
+    def get_power_recent_s(self) -> int:
+        """Get how recent a charge controller's data must be to show it on the status page, in seconds."""
+        config = self.load_config()
+        system_config = config.get("system", {})
+        return system_config.get("power_recent_s", 300)
+
     def get_mapbox_token(self) -> str | None:
         """Get the Mapbox access token for the status page map, if configured.
 

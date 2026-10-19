@@ -25,6 +25,7 @@ const EXPECTED = {
     servicesList: ['services', 'servicesLoading', 'getFilteredServices', 'performAction', 'performStartStopAction', 'getServiceRestartState', 'getServiceStartStopState', 'streamLogs', 'streamAllLogs', 'loadServices', 'destroy'],
     geolocationMap: ['geolocation', 'loadGeolocation', 'initGeolocationMap', 'updateDistanceLine', 'getTrackerIcon', 'destroy'],
     radiotrackingSummary: ['radiotrackingConfig', 'radiotrackingLoading', 'destroy'],
+    powerSummary: ['title', 'powerDevice', 'powerBlock', 'powerReading', 'powerReadError', 'powerGroups', 'formatPowerValue', 'readNow', 'destroy'],
     soundscapepipeSummary: ['soundscapepipeConfig', 'soundscapepipeLoading', 'soundscapepipeService', 'getDetectorTasks', 'getRecordingGroups', 'destroy'],
     audioStreamPlayer: ['streamAvailable', 'checkingStream', 'audioConnected', 'checkStreamAvailability', 'handleAudioPause', 'handleAudioPlay', 'disconnectAudio', 'reconnectAudio', 'destroy'],
     tsupdateConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],

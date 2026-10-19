@@ -37,6 +37,7 @@ from app.routers import (
     deployment,
     mqttutil,
     network,
+    power,
     radiotracking,
     schedule,
     shell,
@@ -191,6 +192,7 @@ if not config_loader.is_server_mode():
     app.include_router(system_reset.router)
     app.include_router(shell.router)
     app.include_router(network.router)
+    app.include_router(power.router)
 
 
 # Mount static files (must be after all route definitions to avoid conflicts)

@@ -380,8 +380,10 @@ async def reboot_system():
 async def get_system_config():
     """Get the current system configuration."""
     try:
-        refresh_interval = config_loader.get_status_refresh_interval()
-        return {"status_refresh_interval": refresh_interval}
+        return {
+            "status_refresh_interval": config_loader.get_status_refresh_interval(),
+            "power_recent_s": config_loader.get_power_recent_s(),
+        }
     except Exception as e:
         logger.debug("Failed to get system configuration", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get system configuration: {e!s}")

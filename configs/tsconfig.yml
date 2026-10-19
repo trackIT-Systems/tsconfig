@@ -8,6 +8,7 @@ file_locations:
 # System settings
 system:
   status_refresh_interval: 5  # Default system status refresh interval in seconds
+  power_recent_s: 300  # Show a charge controller on the status page only if it was read within this many seconds
 
 # Map on the status page: satellite imagery from Mapbox with this public
 # (pk.) token, restricted to our URLs in the Mapbox account. Without a token

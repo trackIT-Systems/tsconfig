@@ -33,3 +33,17 @@ def test_a_device_config_without_map_section_uses_the_shipped_token(tmp_path):
     config_file.write_text("services: []\n")
     shipped = ConfigLoader(Path("configs/tsconfig.yml")).get_mapbox_token()
     assert ConfigLoader(config_file).get_mapbox_token() == shipped
+
+
+@pytest.mark.parametrize(
+    ("content", "seconds"),
+    [
+        ("system:\n  power_recent_s: 60\n", 60),
+        ("system:\n  status_refresh_interval: 5\n", 300),
+        ("services: []\n", 300),
+    ],
+)
+def test_power_recent_s_comes_from_tsconfig_yml(tmp_path, content, seconds):
+    config_file = tmp_path / "tsconfig.yml"
+    config_file.write_text(content)
+    assert ConfigLoader(config_file).get_power_recent_s() == seconds
