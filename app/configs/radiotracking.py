@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field, field_validator
 from app.configs import BaseConfig
 
 
+# Sections of radiotracking.ini that radiotracking no longer has. Files written before still contain them:
+# they are not shown or validated, and the next save leaves them out.
+REMOVED_SECTIONS = frozenset({"dashboard"})
+
+
 class RTLSDREntry(BaseModel):
     """RTL-SDR device configuration."""
 
@@ -63,15 +68,6 @@ class PublishEntry(BaseModel):
     mqtt: bool = True
     mqtt_host: str = "localhost"
     mqtt_port: int = Field(..., ge=1, le=65535)
-
-
-class DashboardEntry(BaseModel):
-    """Dashboard configuration."""
-
-    dashboard: bool = True
-    dashboard_host: str = "localhost"
-    dashboard_port: int = Field(..., ge=1, le=65535)
-    dashboard_signals: int = Field(..., gt=0)
 
 
 class OptionalArgumentsEntry(BaseModel):
@@ -173,6 +169,8 @@ class RadioTrackingConfig(BaseConfig):
 
             data = {}
             for section in config.sections():
+                if section in REMOVED_SECTIONS:
+                    continue
                 data[section] = {key: self._convert_value(value) for key, value in config[section].items()}
             return data
         except FileNotFoundError:
@@ -197,7 +195,7 @@ class RadioTrackingConfig(BaseConfig):
         errors = []
 
         # Validate required sections
-        required_sections = ["optional arguments", "rtl-sdr", "analysis", "matching", "publish", "dashboard"]
+        required_sections = ["optional arguments", "rtl-sdr", "analysis", "matching", "publish"]
         for section in required_sections:
             if section not in config:
                 errors.append(f"Missing required section: {section}")
@@ -232,11 +230,5 @@ class RadioTrackingConfig(BaseConfig):
                 PublishEntry(**config["publish"])
         except (ValueError, TypeError) as e:
             errors.append(f"Invalid publish configuration: {e!s}")
-
-        try:
-            if "dashboard" in config:
-                DashboardEntry(**config["dashboard"])
-        except (ValueError, TypeError) as e:
-            errors.append(f"Invalid dashboard configuration: {e!s}")
 
         return errors

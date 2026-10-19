@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from app.configs.radiotracking import (
     AnalysisEntry,
-    DashboardEntry,
     MatchingEntry,
     OptionalArgumentsEntry,
     PublishEntry,
@@ -23,7 +22,6 @@ class RadioTrackingConfigUpdate(BaseModel):
     analysis: AnalysisEntry
     matching: MatchingEntry
     publish: PublishEntry
-    dashboard: DashboardEntry
 
 
 # Create the router using the base class
@@ -52,7 +50,6 @@ async def update_radiotracking(
         "analysis": config.analysis.model_dump(),
         "matching": config.matching.model_dump(),
         "publish": config.publish.model_dump(),
-        "dashboard": config.dashboard.model_dump(),
     }
 
     # Create a temporary config object with the formatted data
@@ -75,7 +72,6 @@ async def validate_radiotracking(
         "analysis": config.analysis.model_dump(),
         "matching": config.matching.model_dump(),
         "publish": config.publish.model_dump(),
-        "dashboard": config.dashboard.model_dump(),
     }
 
     class TempConfig:

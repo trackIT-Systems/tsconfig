@@ -556,60 +556,6 @@
                         </div>
                     </div>
 
-                    <!-- Dashboard Section (Expert Mode) -->
-                    <div class="mb-4" x-show="expertMode" x-transition>
-                        <h6 class="border-bottom pb-2">
-                            <i class="fas fa-tachometer-alt text-muted me-2"></i>
-                            Dashboard
-                            <small class="text-muted ms-2">(Expert Mode)</small>
-                        </h6>
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="mb-3">
-                                    <label class="form-label">&nbsp;</label>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" 
-                                                type="checkbox" 
-                                                x-model="config['dashboard'].dashboard" 
-                                                id="dashboard">
-                                        <label class="form-check-label" for="dashboard">Enable Dashboard</label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="mb-3">
-                                    <label class="form-label">Host</label>
-                                    <input type="text" 
-                                            class="form-control" 
-                                            x-model="config['dashboard'].dashboard_host"
-                                            required>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="mb-3">
-                                    <label class="form-label">Port</label>
-                                    <input type="number" 
-                                            class="form-control" 
-                                            x-model.number="config['dashboard'].dashboard_port"
-                                            min="1"
-                                            max="65535"
-                                            required>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="mb-3">
-                                    <label class="form-label">Max Signals</label>
-                                    <input type="number" 
-                                            class="form-control" 
-                                            x-model.number="config['dashboard'].dashboard_signals"
-                                            min="1"
-                                            required>
-                                    <div class="form-text">Maximum number of signals to display</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Optional Arguments Section (Expert Mode) -->
                     <div class="mb-4" x-show="expertMode" x-transition>
                         <h6 class="border-bottom pb-2">

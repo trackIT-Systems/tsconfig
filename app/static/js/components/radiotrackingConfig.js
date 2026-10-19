@@ -49,12 +49,6 @@ export function radiotrackingConfig() {
                 export_config: true,
                 mqtt: false
             },
-            "dashboard": {
-                dashboard: false,
-                dashboard_host: "",
-                dashboard_port: 0,
-                dashboard_signals: 0
-            },
             "optional arguments": {
                 verbose: 0,
                 calibrate: false,
@@ -260,12 +254,6 @@ export function radiotrackingConfig() {
                     mqtt: this.config["publish"].mqtt,
                     mqtt_host: this.config["publish"].mqtt_host,
                     mqtt_port: this.config["publish"].mqtt_port
-                },
-                dashboard: {
-                    dashboard: this.config["dashboard"].dashboard,
-                    dashboard_host: this.config["dashboard"].dashboard_host,
-                    dashboard_port: this.config["dashboard"].dashboard_port,
-                    dashboard_signals: this.config["dashboard"].dashboard_signals
                 }
             };
         },

@@ -46,7 +46,7 @@ test('tsupdate: optional maintenance fields that are empty are left out', () => 
 test('radiotracking: the page\'s keys are mapped to the API\'s', () => {
     const component = radiotrackingConfig();
     const payload = component.buildPayload();
-    assert.deepEqual(Object.keys(payload), ['optional_arguments', 'rtl_sdr', 'analysis', 'matching', 'publish', 'dashboard']);
+    assert.deepEqual(Object.keys(payload), ['optional_arguments', 'rtl_sdr', 'analysis', 'matching', 'publish']);
     assert.deepEqual(payload.rtl_sdr.device, component.config['rtl-sdr'].device);
     assert.equal(payload.optional_arguments.config, '/boot/firmware/radiotracking.ini');
     assert.equal(payload.optional_arguments.station, null);

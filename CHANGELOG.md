@@ -60,6 +60,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Fixed
 
+- Radiotracking settings could not be saved: the page still had the Dashboard section (host, port, max signals), and its `required` fields were empty for a `radiotracking.ini` without `[dashboard]`. The browser blocked the submit silently, because the fields are hidden outside expert mode. The dashboard is gone from the page, the API (`/api/radiotracking` and `/validate` no longer take a `dashboard` object), the validation and the default `radiotracking.ini`. A `[dashboard]` section in an existing file is not shown or validated, and the next save leaves it out
 - The Updates page's Save sent the persist timeout and update countdown unconverted (only Save & Restart converted them from HH:MM), so changing them and pressing Save did not change the config
 - Soundscapepipe's Save & Restart skipped the sync of the lure task times that Save does
 - Pages no longer leave listeners behind when their tab is left: `config-group-changed` and the schedule page's `hashchange`/`popstate` handlers kept running for removed components
