@@ -25,7 +25,6 @@ from app.configs.geolocation import GeolocationConfig
 from app.configs.hotspot import HotspotConfig
 from app.configs.mosquitto_cert import MosquittoCertConfig
 from app.configs.mosquitto_conf import MosquittoConfConfig
-from app.configs.mqttutil import MqttUtilConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -52,7 +51,6 @@ CONFIG_TYPES: dict[str, dict[str, Any]] = {
     "mosquitto_conf": {"basename": "server.conf", "cls": MosquittoConfConfig, "kwargs": {}},
     "geolocation": {"basename": "geolocation", "cls": GeolocationConfig, "kwargs": {}},
     "tsupdate": {"basename": "tsupdate.yml", "cls": TsupdateConfig, "kwargs": {}},
-    "mqttutil": {"basename": "mqttutil.conf", "cls": MqttUtilConfig, "kwargs": {}},
     "userconf": {"basename": "userconf.txt", "cls": UserconfConfig, "kwargs": {}},
     "hotspot": {"basename": "hotspot.nmconnection", "cls": HotspotConfig, "kwargs": {}},
 }
@@ -67,6 +65,12 @@ NON_DELETABLE_CONFIG_TYPES = frozenset({"hotspot"})
 # privileged ops use the identical table).
 RECOGNIZED_CONFIG_FILES: dict[str, str] = {info["basename"]: config_type for config_type, info in CONFIG_TYPES.items()}
 
+# Files of services that no longer exist. Old config bundles still carry them;
+# they are skipped with a warning instead of being rejected as unknown.
+RETIRED_CONFIG_FILES: dict[str, str] = {
+    "mqttutil.conf": "mqttutil was replaced by tstelemetry, which is not configured on the boot partition",
+}
+
 # config type -> systemd unit to restart after a successful save. Also serves
 # as the source list for which units a config save is allowed to restart.
 SERVICE_MAPPING: dict[str, str] = {
@@ -77,7 +81,6 @@ SERVICE_MAPPING: dict[str, str] = {
     "mosquitto_cert": "mosquitto",
     "mosquitto_conf": "mosquitto",
     "tsupdate": "tsupdate",
-    "mqttutil": "mqttutil",
 }
 
 

@@ -1,5 +1,5 @@
 """Tests for app.routers.base.BaseConfigRouter - the shared PUT-config
-handler used by radiotracking/schedule/soundscapepipe/mqttutil/tsupdate.
+handler used by radiotracking/schedule/soundscapepipe/telemetry/tsupdate.
 Tracker-mode saves must go through the privileged write path, never call
 the config class's save() directly (which fails as pi against a root-owned
 boot partition).

@@ -19,7 +19,6 @@ VERSIONED_CONFIG_FILES: list[str] = [
     "schedule.yml",
     "soundscapepipe.yml",
     "authorized_keys",
-    "mqttutil.conf",
     "userconf.txt",
     "hotspot.nmconnection",
 ]
@@ -155,7 +154,6 @@ class ConfigLoader:
                         (latest_dir / "radiotracking.ini").exists()
                         or (latest_dir / "schedule.yml").exists()
                         or (latest_dir / "soundscapepipe.yml").exists()
-                        or (latest_dir / "mqttutil.conf").exists()
                     )
                     if has_config:
                         config_groups.append(item.name)

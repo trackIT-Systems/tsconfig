@@ -10,7 +10,6 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import psutil
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,7 +22,6 @@ from app.config_loader import config_loader
 from app.configs import support
 from app.configs.authorized_keys import AuthorizedKeysConfig
 from app.configs.geolocation import GeolocationConfig
-from app.configs.mqttutil import MqttUtilConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -35,15 +33,9 @@ from app.routers import (
     authorized_keys,
     configs,
     deployment,
-    mqttutil,
-    network,
-    power,
     radiotracking,
     schedule,
-    shell,
     soundscapepipe,
-    system_reset,
-    systemd,
     tsupdate,
     userconf,
 )
@@ -53,8 +45,12 @@ from app.utils.subprocess_async import run_subprocess_async
 setup_logging()
 logger = get_logger(__name__)
 
-# The first cpu_percent(interval=None) call only starts the measurement
-psutil.cpu_percent(interval=None)
+if not config_loader.is_server_mode():
+    # psutil is in the `tracker` extra; the first cpu_percent(interval=None)
+    # call only starts the measurement
+    import psutil
+
+    psutil.cpu_percent(interval=None)
 
 # Get base URL from environment variable (default to "/" for root)
 BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
@@ -105,10 +101,6 @@ tags_metadata = [
     {
         "name": "tsupdate",
         "description": "Tsupdate daemon configuration for automatic system updates.",
-    },
-    {
-        "name": "mqttutil",
-        "description": "MQTT system health reporting configuration (mqttutil.conf).",
     },
     {
         "name": "userconf",
@@ -181,13 +173,15 @@ app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
 app.include_router(configs.router)
 app.include_router(tsupdate.router)
-app.include_router(mqttutil.router)
 app.include_router(userconf.router)
 app.include_router(deployment.router)  # Deployment proxy (for server mode)
 
 # Only include system-specific routers in tracker mode (default mode)
-# These are disabled in server mode since they require direct hardware access
+# These are disabled in server mode since they require direct hardware access,
+# and only imported in tracker mode, since they need the `tracker` extra
 if not config_loader.is_server_mode():
+    from app.routers import network, power, shell, system_reset, systemd
+
     app.include_router(systemd.router)
     app.include_router(system_reset.router)
     app.include_router(shell.router)
@@ -294,8 +288,6 @@ async def get_server_mode():
                                 dir_details[item.name]["config_files"].append("schedule.yml")
                             if (latest_dir / "soundscapepipe.yml").exists():
                                 dir_details[item.name]["config_files"].append("soundscapepipe.yml")
-                            if (latest_dir / "mqttutil.conf").exists():
-                                dir_details[item.name]["config_files"].append("mqttutil.conf")
                 debug_info["directory_details"] = dir_details
             except OSError as e:
                 debug_info["error"] = str(e)
@@ -388,6 +380,8 @@ async def get_system_status():
             status_code=503,
             content={"error": "System status is not available in server mode"},
         )
+
+    import psutil
 
     try:
         # Get freedesktop OS release info
@@ -562,6 +556,8 @@ def _get_consolidated_disk_usage():
     """Get disk usage information with consolidated mountpoints per device."""
     import collections
 
+    import psutil
+
     # Group partitions by device
     device_groups = collections.defaultdict(list)
 
@@ -679,14 +675,6 @@ async def get_available_services(config_group: str | None = None):
             available_services.append("tsupdate")
     except Exception:
         logger.debug("Could not check the tsupdate configuration", exc_info=True)
-
-    # Check mqttutil configuration
-    try:
-        mqttutil_config = MqttUtilConfig(config_dir) if config_dir else MqttUtilConfig()
-        if mqttutil_config.config_file.exists():
-            available_services.append("mqttutil")
-    except Exception:
-        logger.debug("Could not check the mqttutil configuration", exc_info=True)
 
     # On a tracker, a config file alone does not make a service: one copied
     # from another kind of device (soundscapepipe.yml on a radiotracking

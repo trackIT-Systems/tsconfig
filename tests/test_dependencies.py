@@ -5,7 +5,9 @@ packages itself (tsOS-base.Pifile), so a module that is imported but not
 declared here is easy to miss until a device or a container lacks it."""
 
 import ast
+import os
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -15,10 +17,14 @@ ROOT = Path(__file__).resolve().parent.parent
 # import name -> distribution name, for those that differ
 DISTRIBUTION = {
     "yaml": "pyyaml",
-    "dateutil": "python-dateutil",
     "gi": "pygobject",
     "dbus": "dbus-python",
+    "paho": "paho-mqtt",
 }
+
+# tsOS packages the image installs next to tsconfig (not on PyPI). Only
+# telemetry collectors import them, and those skip themselves without them.
+TSOS_PACKAGES = {"vcgencmd", "tsschedule"}
 
 
 def normalize(name: str) -> str:
@@ -57,22 +63,43 @@ def test_every_imported_module_is_declared():
     missing = {
         module: sorted(files)
         for module, files in imported_modules().items()
-        if normalize(DISTRIBUTION.get(module, module)) not in declared_all
+        if normalize(DISTRIBUTION.get(module, module)) not in declared_all and module not in TSOS_PACKAGES
     }
     assert not missing, f"imported but not in pyproject.toml: {missing}"
 
 
-def test_the_tracker_needs_neither_the_server_nor_the_ble_extra():
-    """Modules of the extras are imported where they are used (OIDC, BLE) and
-    nowhere a tracker's web service loads at startup."""
-    core, extras = declared()
-    only_extra = extras - core
-    modules = imported_modules()
-    imported_by_web_service = {
-        module
-        for module, files in modules.items()
-        if normalize(DISTRIBUTION.get(module, module)) in only_extra
-        for file in files
-        if not file.startswith(("app/bluetooth/", "app/ble_gateway.py", "app/auth/oidc_handler.py"))
-    }
-    assert not imported_by_web_service, imported_by_web_service
+def extra_modules(*extras: str) -> set[str]:
+    """Top-level modules of the distributions in `extras`, minus those that core also provides"""
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    core, _ = declared()
+    dists = {normalize(dep) for extra in extras for dep in project["optional-dependencies"][extra]} - core
+    module_of = {normalize(dist): module for module, dist in DISTRIBUTION.items()}
+    return {module_of.get(dist, dist.replace("-", "_")) for dist in dists}
+
+
+def import_web_service(server_mode: bool, blocked: set[str]) -> subprocess.CompletedProcess:
+    """Import app.main in a fresh interpreter in which `blocked` cannot be imported."""
+    code = f"import sys\nfor m in {sorted(blocked)!r}:\n    sys.modules[m] = None\nimport app.main\n"
+    # Server mode reads its OIDC settings from DOMAIN at import
+    env = {**os.environ, "TSCONFIG_SERVER_MODE": "true" if server_mode else "", "DOMAIN": "tsconfig.example"}
+    return subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+
+
+def test_the_server_web_service_needs_neither_the_tracker_nor_the_ble_extra():
+    blocked = extra_modules("tracker", "ble") - extra_modules("server")
+    assert "psutil" in blocked and "paho" in blocked
+    result = import_web_service(server_mode=True, blocked=blocked)
+    assert result.returncode == 0, result.stderr
+
+
+def test_the_tracker_web_service_needs_neither_the_server_nor_the_ble_extra():
+    blocked = extra_modules("server", "ble") - extra_modules("tracker")
+    assert "authlib" in blocked and "gi" in blocked
+    result = import_web_service(server_mode=False, blocked=blocked)
+    assert result.returncode == 0, result.stderr
+
+
+def test_tsos_packages_are_only_imported_by_telemetry_collectors():
+    for module in TSOS_PACKAGES:
+        for file in imported_modules().get(module, ()):
+            assert file.startswith("app/telemetry/collectors/"), (module, file)

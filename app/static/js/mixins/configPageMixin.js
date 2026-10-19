@@ -26,7 +26,7 @@ import { toastMixin } from './toastMixin.js';
  * @param {string} options.title - toast title; failures use `errorTitle`
  * @param {string} [options.errorTitle] - default `${title} Error`
  * @param {string} options.failureText - error text if the API's answer has none
- * @param {string[]} options.refreshOn - hash path (e.g. ['settings', 'reporting']) on which the status is refreshed
+ * @param {string[]} options.refreshOn - hash path (e.g. ['settings']) on which the status is refreshed
  * @param {number} [options.refreshSeconds] - status refresh interval, default the system's status_refresh_interval
  * @param {number} [options.initDelayMs=50] - pause before init() loads, so tabs do not all request at once
  * @param {string} [options.savedMessage] - toast after Save, default the API's message

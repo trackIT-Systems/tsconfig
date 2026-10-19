@@ -45,11 +45,11 @@ jobs:
           # What the tsOS image runs: Debian's Python and library versions
           - name: device
             python: '3.13'
-            install: '-e ".[server]" --group dev -c .github/device-versions.txt'
+            install: '-e ".[tracker,server]" --group dev -c .github/device-versions.txt'
           # Current releases, to see upcoming breakage early
           - name: latest
             python: '3.14'
-            install: '-e ".[server]" --group dev --group testclient'
+            install: '-e ".[tracker,server]" --group dev --group testclient'
     name: test (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v7

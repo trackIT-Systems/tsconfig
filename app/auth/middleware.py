@@ -79,7 +79,7 @@ class AuthenticationMiddleware:
 
     In tracker mode: requires the operator's session cookie (PAM login of `pi`),
     except for requests made directly by a process on the device itself
-    (loopback without proxy headers - mqttutil, tsconfig-ble) and the public
+    (loopback without proxy headers - tsconfig-ble) and the public
     paths below
     In server mode: Validates JWT token for all non-public endpoints
 

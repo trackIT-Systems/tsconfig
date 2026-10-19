@@ -5,7 +5,6 @@ import calendar
 import contextlib
 import socket
 import zipfile
-from ast import literal_eval
 from collections.abc import Iterable
 from configparser import ConfigParser
 from datetime import UTC, datetime, timedelta
@@ -26,7 +25,6 @@ from app.configs.cmdline import CmdlineConfig
 from app.configs.geolocation import GeolocationConfig
 from app.configs.mosquitto_cert import MosquittoCertConfig
 from app.configs.mosquitto_conf import MosquittoConfConfig
-from app.configs.mqttutil import MqttUtilConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
@@ -85,38 +83,6 @@ def truncate_mtime_for_fat32(dt: datetime) -> datetime:
 # parameters used throughout), which runs `systemctl restart <unit>` as pi
 # directly, authorized by etc/polkit-1/rules.d/20-tsos-systemctl.rules
 # rather than sudo.
-
-
-def parse_mqttutil_ini(content: str) -> dict[str, Any]:
-    """Parse mqttutil.conf INI content with Python literal values.
-
-    Args:
-        content: String content of mqttutil.conf
-
-    Returns:
-        Dictionary with DEFAULT and task sections
-
-    Raises:
-        ValueError: If file cannot be parsed
-    """
-    try:
-        parser = ConfigParser()
-        parser.read_string(content)
-
-        if not parser.defaults() and not parser.sections():
-            raise ValueError("mqttutil.conf is empty or has no sections")
-
-        data: dict[str, Any] = {}
-        defaults = dict(parser.defaults())
-        if defaults:
-            data["DEFAULT"] = {key: literal_eval(value) for key, value in defaults.items()}
-
-        for section in parser.sections():
-            data[section] = {key: literal_eval(value) for key, value in parser[section].items()}
-
-        return data
-    except Exception as e:
-        raise ValueError(f"Failed to parse mqttutil.conf: {e!s}") from e
 
 
 def parse_ini_file(content: str) -> dict[str, Any]:
@@ -254,15 +220,12 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
         elif config_type == "tsupdate":
             parsed_config = parse_yaml_file(content_str)
             config_instance = TsupdateConfig()
-        elif config_type == "mqttutil":
-            parsed_config = parse_mqttutil_ini(content_str)
-            config_instance = MqttUtilConfig()
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported configuration file: {filename}. "
                 "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
-                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml, mqttutil.conf",
+                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml",
             )
 
         return config_instance, parsed_config
@@ -503,7 +466,6 @@ async def upload_config(
         "server.conf": "mosquitto_conf",
         "geolocation": "geolocation",
         "tsupdate.yml": "tsupdate",
-        "mqttutil.conf": "mqttutil",
     }
 
     config_type = filename_to_type.get(filename_lower)
@@ -838,8 +800,6 @@ def parse_config_file(filename: str, content: str) -> dict[str, Any]:
     """
     if filename.endswith(".ini"):
         return parse_ini_file(content)
-    elif filename == "mqttutil.conf":
-        return parse_mqttutil_ini(content)
     elif filename.endswith((".yml", ".yaml")):
         return parse_yaml_file(content)
     elif filename == "authorized_keys":
@@ -933,6 +893,8 @@ async def _apply_config_zip_from_path(
                     recognized_files[basename] = file_content
                 except UnicodeDecodeError:
                     raise ValueError(f"File '{basename}' must be UTF-8 encoded text")
+            elif basename in registry.RETIRED_CONFIG_FILES:
+                logger.warning(f"Skipping {basename}: {registry.RETIRED_CONFIG_FILES[basename]}")
 
     if not recognized_files:
         raise ValueError(
@@ -1114,6 +1076,8 @@ async def upload_config_zip(
                         status_code=400,
                         detail=f"File '{basename}' must be UTF-8 encoded text",
                     )
+            elif basename in registry.RETIRED_CONFIG_FILES:
+                logger.warning(f"Skipping {basename}: {registry.RETIRED_CONFIG_FILES[basename]}")
             else:
                 # Skip hidden files and common non-config files
                 if not basename.startswith(".") and basename.lower() not in ["readme.md", "readme.txt", "readme"]:

@@ -17,7 +17,6 @@ const EXPECTED = {
     liveFrequencyUsage: ['serverMode', 'yLabel', 'status', 'init', 'destroy'],
     liveSignalDetail: ['serverMode', 'param', 'paramOptions', 'setParam', 'collecting', 'toggleCollect', 'status', 'init', 'destroy'],
     logViewer: ['startStreaming'],
-    mqttutilConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
     networkConfig: ['serverMode', 'dispatchMessage', 'showMessage', 'streamLogs', 'init', 'destroy', 'every', 'listen'],
     radiotrackingConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
     resetConfig: ['serverMode', 'showMessage', 'executeReset'],

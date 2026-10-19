@@ -190,6 +190,24 @@ class TestUploadConfigZip:
         mock_write.assert_called_once()
         assert mock_write.call_args.args[0] == "schedule"
 
+    async def test_old_bundle_with_mqttutil_conf_is_accepted_even_when_pedantic(self):
+        zip_bytes = self._zip_bytes(
+            {"schedule.yml": "button_delay: '00:01'\nschedule: []\n", "mqttutil.conf": "[uptime]\nfunc = '1'\n"}
+        )
+        with (
+            patch.object(configs.config_loader, "is_server_mode", return_value=False),
+            patch.object(configs.priv, "write_config", new=AsyncMock(return_value={"save_result": None})) as mock_write,
+        ):
+            result = await configs.upload_config_zip(
+                file=_upload_file("config.zip", zip_bytes),
+                restart_services=False,
+                pedantic=True,
+                force=True,
+                reboot="allow",
+            )
+        assert result["success"] is True
+        assert [call.args[0] for call in mock_write.call_args_list] == ["schedule"]
+
 
 def test_bundle_authorized_keys_is_the_boot_partition_file_for_download_and_upload():
     # The bundle member is /boot/firmware/authorized_keys (read by sshd in

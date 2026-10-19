@@ -41,6 +41,10 @@ Dots are drawn at the signal's own `Time` on a sliding 24-hour axis, so a statio
 
 A separate service (`tsconfig-ble`) that exposes the API as GATT services, so smartphones and tablets can configure a station without any network: encrypted link plus the operator login, standard tools work (nRF Connect, LightBlue, gatttool), and the station advertises under its hostname. See [below](#bluetooth-low-energy-ble-gateway) and [docs/ble-protocol.md](docs/ble-protocol.md).
 
+### Telemetry daemon
+
+A second separate service, `tstelemetry` (`app/telemetry`), publishes the station's health: system, temperatures, disks, PMIC, throttling, clocks, voltages, WittyPi, network interfaces, modem, config files and release. Each reading goes out over MQTT as CSV, JSON and CBOR (`<host>/tsconfig/<collector>/<format>`) and into one CSV file per collector and day under `/data`. Each kind of data is an explicit collector module; `/etc/tsconfig/tstelemetry.yml` (installed with the image from `configs/tstelemetry.yml`, not operator-editable) only switches them on and off and sets intervals. Readings taken before the clock is synced are re-timed before they reach the files. `tstelemetry --once -v` prints one round. Topics and columns: [tsOS-base docs/telemetry.md](https://github.com/trackIT-Systems/tsOS-base/blob/main/docs/telemetry.md).
+
 ### Two modes
 
 In **tracker mode** (on a station) the login is the `pi` password, checked through PAM. In **server mode** it runs centrally, keeps configuration per group of stations to deploy to them, and logs in through OIDC.
@@ -61,11 +65,15 @@ In **tracker mode** (on a station) the login is the `pi` password, checked throu
 
 2. **Install dependencies**:
    ```bash
-   pdm install
+   pdm install -G tracker        # on a station (or for development)
+   pdm install -G server         # central server mode
    ```
-   Extras: `pdm install -G server` adds the OIDC libraries for server mode, `pdm install -G ble` the BLE
-   gateway's. Without PDM: `pip install -e .` (plus `".[server]"` or `".[ble]"`) and `pip install --group dev`
-   for the test tools. On a tsOS image everything comes from Debian packages (see `tsOS-base.Pifile`).
+   The core dependencies are what the web service needs in both modes. Extras: `tracker` adds system status,
+   the web shell and the telemetry daemon (psutil, websockets, cbor2, paho-mqtt), `server` the OIDC login
+   (authlib, itsdangerous), `ble` the BLE gateway (dbus-python, pygobject, cbor2). The tests need `tracker`
+   and `server` plus the `dev` group. Without PDM: `pip install -e ".[tracker]"` (or `".[server]"`,
+   `".[ble]"`) and `pip install --group dev`. On a tsOS image everything comes from Debian packages
+   (see `tsOS-base.Pifile`).
 
 3. **Run the application**:
    ```bash
@@ -137,7 +145,7 @@ The application can control systemd services through the web interface. The defa
 - **tsschedule** - tsschedule daemon for power management
 - **wg-quick@wireguard** - WireGuard VPN connection
 - **mosquitto** - MQTT broker for data communication
-- **mqttutil** - MQTT utility services
+- **tstelemetry** - device health over MQTT and into daily CSV files (`app/telemetry`, see below)
 
 Services are configured in `configs/systemd_services.yml`:
 
@@ -365,6 +373,8 @@ tsconfig/
 │   ├── routers/             # API endpoints (schedule, radiotracking, systemd, network, ...)
 │   ├── configs/             # Configuration schemas
 │   ├── ble_gateway.py       # BLE gateway
+│   ├── telemetry/           # tstelemetry daemon and its collectors
+│   ├── system/              # Readouts shared by the API and tstelemetry (modem)
 │   ├── templates/           # Jinja pages and partials
 │   └── static/              # Alpine.js frontend (see docs/frontend.md), vendored libraries
 ├── configs/                 # Default configuration files

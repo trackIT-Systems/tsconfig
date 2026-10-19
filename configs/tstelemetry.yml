@@ -1,0 +1,60 @@
+# tstelemetry, installed as /etc/tsconfig/tstelemetry.yml: what is published as <hostname>/tsconfig/<collector>/{csv,json,cbor}
+# and written to <files.path>/<hostname>/tsconfig/<collector>/<hostname>_<date>_<collector>.csv.
+# Every key is optional; a missing key (or file) means the default shown here.
+# Intervals are in seconds, aligned to the clock (60 = every full minute).
+broker:
+  host: 127.0.0.1
+  port: 1883
+# MQTT payload formats; an empty list publishes nothing over MQTT
+formats:
+- csv
+- json
+- cbor
+files:
+  enabled: true
+  path: /data
+collectors:
+  system:
+    enabled: true
+    interval: 60
+  thermal:
+    enabled: true
+    interval: 60
+  disk:
+    enabled: true
+    interval: 60
+    mounts:
+    - /
+    - /data
+  pmic:
+    enabled: true
+    interval: 60
+  throttled:
+    enabled: true
+    interval: 60
+  clocks:
+    enabled: true
+    interval: 60
+  voltages:
+    enabled: true
+    interval: 60
+  wittypi:
+    enabled: true
+    interval: 60
+  network:
+    enabled: true
+    interval: 600
+    interfaces:
+    - wireguard
+    - eth0
+    - wlan0
+    - wwan0
+  modem:
+    enabled: true
+    interval: 3600
+  configs:
+    enabled: true
+    interval: 3600
+  release:
+    enabled: true
+    interval: 3600

@@ -33,7 +33,7 @@ services:
     expert: false
   - name: chrony
     expert: true
-  - name: mqttutil
+  - name: tstelemetry
     expert: true 
   - name: mosquitto
     expert: true

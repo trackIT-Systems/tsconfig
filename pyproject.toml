@@ -6,33 +6,42 @@ authors = [
     {name = "Jonas Höchst", email = "hoechst@trackit.systems"},
     {name = "Artur Sterz", email = "sterz@trackit.systems"}
 ]
+# What the web service needs in both modes. Each mode adds its extra:
+# `tracker` on a station, `server` for central configuration; `ble` is the
+# BLE gateway, a separate service on a station. On a tsOS image everything
+# comes from Debian packages (tsOS-base.Pifile).
 dependencies = [
     "fastapi>=0.115.11",
     "starlette>=0.46.1",
     "pydantic>=2.10.6",
     "anyio>=4.8.0",
     "uvicorn[standard]>=0.32.0",
-    "websockets>=15.0.1",
     "jinja2>=3.1.6",
     "python-multipart>=0.0.20",
     "pyyaml>=6.0.2",
-    "python-dateutil>=2.9.0",
-    "psutil>=7.0.0",
     "httpx>=0.28.1",
 ]
 requires-python = ">=3.12"
 
 [project.scripts]
 tsconfig = "app.cli:main"
+tstelemetry = "app.telemetry.daemon:main"
 
 [project.optional-dependencies]
-# Server mode: OIDC login (imported lazily, so a tracker does not need them)
+# Tracker mode: system status and services (psutil), the web shell
+# (websockets), and the telemetry daemon tstelemetry (cbor2, paho-mqtt)
+tracker = [
+    "psutil>=7.0.0",
+    "websockets>=15.0.1",
+    "cbor2>=5.6.5",
+    "paho-mqtt>=2.0.0",
+]
+# Server mode: OIDC login
 server = [
     "authlib>=1.6.8",
     "itsdangerous>=2.2.0",
 ]
-# BLE gateway (python -m app.ble_gateway). On a tsOS image these come from
-# Debian packages (python3-dbus, python3-gi, python3-cbor2).
+# BLE gateway (python -m app.ble_gateway)
 ble = [
     "cbor2>=5.6.5",
     "dbus-python>=1.4.0",
@@ -58,7 +67,8 @@ line-length = 120
 line-ending = "auto"
 
 [dependency-groups]
-# What the tests need (the BLE tests fake dbus and gi, so no `ble` extra)
+# What the tests need on top of the `tracker` and `server` extras (the BLE
+# tests fake dbus and gi, so of the `ble` extra only cbor2)
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",

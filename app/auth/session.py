@@ -99,7 +99,7 @@ def is_cross_origin(conn: HTTPConnection) -> bool:
     every WebSocket handshake. It must name the host the request was sent to,
     which Caddy passes through unchanged as Host. The scheme is not compared,
     so the same device over HTTP and HTTPS counts as one. Requests without
-    Origin do not come from a web page (curl, mqttutil, the BLE gateway).
+    Origin do not come from a web page (curl, the BLE gateway).
     """
     origin = conn.headers.get("origin")
     if origin is None:

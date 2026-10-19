@@ -173,11 +173,11 @@ class TestSystemctlAction:
     async def test_success_execs_exact_argv_no_elevation(self, verb):
         fake = FakeProcess(0, b"", b"")
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=fake)) as mock_exec:
-            ok, err = await systemctl_action("mqttutil.service", verb)
+            ok, err = await systemctl_action("tstelemetry.service", verb)
         assert ok is True
         assert err is None
         argv = mock_exec.call_args.args
-        assert argv == ("/usr/bin/systemctl", verb, "mqttutil.service")
+        assert argv == ("/usr/bin/systemctl", verb, "tstelemetry.service")
 
     async def test_denied_by_polkit_reports_failure_not_exception(self):
         fake = FakeProcess(1, b"", b"Failed to restart unit: Access denied")
@@ -188,7 +188,7 @@ class TestSystemctlAction:
 
     async def test_unsupported_verb_rejected_before_any_subprocess_call(self):
         with patch("asyncio.create_subprocess_exec") as mock_exec:
-            ok, err = await systemctl_action("mqttutil.service", "enable")
+            ok, err = await systemctl_action("tstelemetry.service", "enable")
         assert ok is False
         assert "unsupported systemctl action" in err
         mock_exec.assert_not_called()
