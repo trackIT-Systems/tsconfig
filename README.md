@@ -1,61 +1,49 @@
-# tsOS Configuration Manager
+# tsconfig
 
-A comprehensive web-based configuration and system management interface for trackIT Systems sensor stations. This application provides a unified interface to configure and monitor various aspects of sensor station operations, including schedule management, radio tracking configuration, system monitoring, and service control.
+[![Lint and test](https://github.com/trackIT-Systems/tsconfig/actions/workflows/test.yml/badge.svg)](https://github.com/trackIT-Systems/tsconfig/actions/workflows/test.yml)
+[![Build and Push Docker Image](https://github.com/trackIT-Systems/tsconfig/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/trackIT-Systems/tsconfig/actions/workflows/docker-build-push.yml)
+![Python](https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Alpine.js](https://img.shields.io/badge/Alpine.js-8BC0D0?logo=alpinedotjs&logoColor=white)
+[![Last commit](https://img.shields.io/github/last-commit/trackIT-Systems/tsconfig)](https://github.com/trackIT-Systems/tsconfig/commits)
+[![Issues](https://img.shields.io/github/issues/trackIT-Systems/tsconfig)](https://github.com/trackIT-Systems/tsconfig/issues)
+[![tsOS-base](https://img.shields.io/badge/part%20of-tsOS--base-blue)](https://github.com/trackIT-Systems/tsOS-base)
 
-## Overview
+The web interface and API for configuring and monitoring trackIT Systems sensor stations. It runs on every station of the [tsOS-base](https://github.com/trackIT-Systems/tsOS-base) image, behind Caddy and a login with the `pi` account's password, and is the one place to set up a station, see how it is doing and watch its signals live. A Bluetooth Low Energy gateway offers the same API to a phone in the field.
 
-tsOS Configuration Manager is designed for trackIT Systems sensor stations running tsOS (trackIT Systems Operating System). It serves as the central configuration hub, providing intuitive web-based management for:
+## Contents
 
-- **Schedule Configuration** - Manage sensor station operation schedules with astronomical event support
-- **Radio Tracking Configuration** - Configure RTL-SDR based radio tracking systems  
-- **System Monitoring** - Real-time system status, resource monitoring, and health information
-- **Service Management** - Control and monitor systemd services
-- **System Control** - Perform system operations like rebooting
+[Features](#features) · [Installation](#installation) · [Configuration](#configuration) · [Usage](#usage) · [API](#api-reference) · [BLE gateway](#bluetooth-low-energy-ble-gateway) · [Development](#development) · [License](#license)
 
-## Key Features
+## Features
 
-### 🕒 Schedule Management
-- **Astronomical Events**: Schedule based on sunrise, sunset, dawn, dusk, solar noon/midnight
-- **Golden/Blue Hours**: Support for photographic golden hour and blue hour scheduling
-- **Time Offsets**: Add/subtract time from astronomical events
-- **Multiple Schedules**: Create overlapping schedule entries for complex timing requirements
-- **Interactive Map**: Visual location selection with geolocation support
-- **Force Mode**: Override all scheduling for continuous operation
+| Page | What it does |
+| --- | --- |
+| **Status** | CPU, memory, disk, temperature, load, network, power and location at a glance; start, stop and restart the station's systemd services and stream their logs; reboot |
+| **Live** | Signals of the radiotracking pipeline as they arrive, in the browser, with no server-side component (see below) |
+| **System Settings** | Network (Wi-Fi, LTE, WireGuard), time and location, users and SSH keys, MQTT, updates, and the other groups of the station's own configuration |
+| **Radio Tracking** | RTL-SDR devices, signal detection and matching, and where the results are published (MQTT, CSV); an expert mode shows the advanced options |
+| **Schedule** | Operation schedules from fixed times or astronomical events (sunrise, sunset, dawn, dusk, noon, golden and blue hour) with offsets, several overlapping entries, a map to pick the location and a force mode for continuous operation |
+| **Soundscape pipeline** | Configuration of the acoustic pipeline |
+| **Web shell** | A terminal in the browser, for those who need one |
 
-### 📡 Radio Tracking Configuration
-- **RTL-SDR Support**: Configure multiple RTL-SDR devices for radio tracking
-- **Signal Analysis**: Advanced signal detection with configurable thresholds and filters
-- **Signal Matching**: Cross-device signal correlation for improved accuracy
-- **Data Export**: MQTT, CSV, and stdout publishing options
-- **Real-time Dashboard**: Optional web dashboard for live signal monitoring
-- **Expert Mode**: Advanced configuration options for experienced users
+### Live dashboard
 
-### 💻 System Monitoring
-- **Real-time Metrics**: CPU load, memory usage, disk space, network activity
-- **Temperature Monitoring**: Hardware temperature sensors (when available)  
-- **Load Averages**: System load monitoring with htop-style visualization
-- **OS Information**: Detailed operating system and hardware information
-- **Auto-refresh**: Continuous updates when monitoring view is active
+The **Live** page reads the station's own MQTT broker over WebSockets at `/mqtt` (tsOS-base serves it behind the login) and draws what arrives. tsconfig itself subscribes to nothing and stores nothing: the last five minutes are held in the browser and cleared when the page or tab is left. There is a tab for each service that is available, and a time window selector (30 seconds to 5 minutes). Radiotracking has three panels:
 
-### ⚙️ Service Management
-- **Service Control**: Start, stop, restart systemd services through web interface
-- **Real-time Status**: Monitor service health, uptime, and configuration
-- **Log Streaming**: Live service log viewing with real-time updates
-- **Expert Mode**: Show/hide advanced services based on user experience level
-- **Secure Operations**: Controlled access to only configured services
+- **Signal Power**: matched signals in dBW, or calibrated in dBm
+- **Frequency Usage**: the frequency of the matched signals over time
+- **Signal Detail**: the raw signals of every SDR, with the value on the vertical axis to choose (started with a button, as they are many)
 
-### 🔧 System Control
-- **System Reboot**: Safely restart the system with confirmation dialogs
-- **Secure Operations**: Controlled execution with proper permission management
+Dots are drawn at the signal's own `Time` on a sliding 24-hour axis, so a station clock that is off or detections that arrive late show up as signals away from "now". A dot's size is the signal's duration, its colour the SDR's compass direction (0 blue, 1 yellow, 2 red, 3 green), and the axes follow the radiotracking configuration. Details: [docs/frontend.md](docs/frontend.md).
 
-### 📱 Bluetooth Low Energy (BLE) Gateway
-- **Wireless Access**: Access all API endpoints via Bluetooth GATT
-- **Mobile Ready**: Connect from smartphones and tablets without network configuration
-- **Standalone Operation**: Runs as separate service, independent of web interface
-- **Secure**: Encrypted link (BlueZ Just Works pairing) plus an operator login with `pi`'s password for everything except basic system info
-- **Standard Tools**: Works with nRF Connect, LightBlue, gatttool, and other BLE clients
-- **Organized Services**: Multiple GATT services mirroring REST API structure
-- **Auto-discovery**: Advertises using system hostname for easy identification
+### Bluetooth Low Energy (BLE) gateway
+
+A separate service (`tsconfig-ble`) that exposes the API as GATT services, so smartphones and tablets can configure a station without any network: encrypted link plus the operator login, standard tools work (nRF Connect, LightBlue, gatttool), and the station advertises under its hostname. See [below](#bluetooth-low-energy-ble-gateway) and [docs/ble-protocol.md](docs/ble-protocol.md).
+
+### Two modes
+
+In **tracker mode** (on a station) the login is the `pi` password, checked through PAM. In **server mode** it runs centrally, keeps configuration per group of stations to deploy to them, and logs in through OIDC.
 
 ## Installation
 
@@ -180,7 +168,7 @@ System control features require appropriate permissions. The application must be
 4. Use astronomical events or specific times
 5. Download or save configuration
 
-### Radio Tracking Configuration  
+### Radio Tracking Configuration
 1. Go to the **Radio Tracking** tab
 2. Configure RTL-SDR devices and frequency settings
 3. Set signal analysis parameters
@@ -374,15 +362,25 @@ The default `pi` password is `natur` until a config bundle (`userconf.txt`) chan
 tsconfig/
 ├── app/
 │   ├── main.py              # FastAPI application
-│   ├── routers/             # API endpoints
-│   │   ├── schedule.py      # Schedule management
-│   │   ├── radiotracking.py # Radio tracking config
-│   │   └── systemd.py       # System control
+│   ├── routers/             # API endpoints (schedule, radiotracking, systemd, network, ...)
 │   ├── configs/             # Configuration schemas
-│   └── templates/           # Web interface
-├── configs/                 # Configuration files
-└── setup_systemd_permissions.sh # Permission setup
+│   ├── ble_gateway.py       # BLE gateway
+│   ├── templates/           # Jinja pages and partials
+│   └── static/              # Alpine.js frontend (see docs/frontend.md), vendored libraries
+├── configs/                 # Default configuration files
+├── docs/                    # Frontend structure, BLE protocol
+└── tests/                   # pytest (backend) and node:test (frontend, tests/js)
 ```
+
+### Tests
+
+```bash
+ruff check .              # lint (pinned in CI)
+python -m pytest -q        # backend
+node --test 'tests/js/*.test.mjs'   # frontend (Node 24)
+```
+
+CI ([Lint and test](.github/workflows/test.yml)) runs all three, and builds the Docker image.
 
 ### Contributing
 This project is part of the trackIT Systems ecosystem. For development:
