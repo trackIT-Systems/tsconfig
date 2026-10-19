@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.configs import BaseConfig
 
-
 # Sections of radiotracking.ini that radiotracking no longer has. Files written before still contain them:
 # they are not shown or validated, and the next save leaves them out.
 REMOVED_SECTIONS = frozenset({"dashboard"})
