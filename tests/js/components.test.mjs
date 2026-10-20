@@ -16,6 +16,8 @@ const EXPECTED = {
     liveSignalPower: ['serverMode', 'source', 'setSource', 'calibratedHint', 'unit', 'yLabel', 'status', 'init', 'destroy'],
     liveFrequencyUsage: ['serverMode', 'yLabel', 'status', 'init', 'destroy'],
     liveSignalDetail: ['serverMode', 'param', 'paramOptions', 'setParam', 'collecting', 'toggleCollect', 'status', 'init', 'destroy'],
+    liveDetections: ['serverMode', 'detectors', 'isShown', 'toggleDetector', 'status', 'init', 'destroy'],
+    liveInputLevels: ['serverMode', 'yLabel', 'status', 'init', 'destroy'],
     logViewer: ['startStreaming'],
     networkConfig: ['serverMode', 'dispatchMessage', 'showMessage', 'streamLogs', 'init', 'destroy', 'every', 'listen'],
     radiotrackingConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],

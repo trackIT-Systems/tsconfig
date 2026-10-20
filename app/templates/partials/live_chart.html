@@ -3,11 +3,11 @@
 <div class="alert alert-warning py-2" x-show="clockOff || skipped > 0" x-cloak>
     <i class="fas fa-clock me-1"></i>
     <span x-show="clockOff">
-        The latest signal arrived <span x-text="delayText"></span>:
+        The latest <span x-text="noun"></span> arrived <span x-text="delayText"></span>:
         the station's clock differs from this browser's, or detections are delayed.
     </span>
     <span x-show="skipped > 0">
-        <span x-text="skipped"></span> signal<span x-show="skipped !== 1">s</span> not drawn: their time
+        <span x-text="skipped"></span> <span x-text="noun"></span><span x-show="skipped !== 1">s</span> not drawn: their time
         is more than <span x-text="windowMinutes"></span> minutes behind or 10 minutes ahead of this browser's clock.
     </span>
 </div>
@@ -16,6 +16,7 @@
     <span x-text="error"></span>
 </div>
 
+<div class="live-axis-title small text-muted" x-text="yLabel"></div>
 <div class="live-chart-wrap position-relative">
     <div x-ref="chart" class="live-chart"></div>
     <div class="live-tooltip small shadow-sm" x-show="tip" x-cloak
@@ -34,9 +35,9 @@
     </div>
 </div>
 
-<div class="small mt-2" x-show="legend.length > 0" x-cloak>
+<div class="live-legend small mt-2" x-show="legend.length > 0" x-cloak>
     <template x-for="item in legend" :key="item.key">
-        <span class="me-3 text-nowrap">
+        <span class="text-nowrap">
             <i class="fas fa-circle me-1" :style="`color: ${item.color}`"></i><span x-text="item.label"></span>
         </span>
     </template>

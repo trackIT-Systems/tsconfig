@@ -8,6 +8,7 @@ import {
     parseSignal,
     radiotrackingLimits,
 } from '../utils/liveSignals.js';
+import { SOUNDSCAPE_TOPICS, parseDetection, parseLevels } from '../utils/liveSoundscape.js';
 
 const baseUrl = () => window.BASE_URL || '';
 
@@ -34,6 +35,8 @@ const SOURCES = {
     matched: { topic: LIVE_TOPICS.matched, owns: /\/radiotracking\/matched\/json$/, parse: parseSignal },
     calibrated: { topic: LIVE_TOPICS.calibrated, owns: /\/radiotracking\/calibrated\/json$/, parse: parseSignal },
     raw: { topic: LIVE_TOPICS.raw, owns: /\/radiotracking\/device\/[^/]+\/json$/, parse: parseRaw },
+    detections: { topic: SOUNDSCAPE_TOPICS.detections, owns: /\/soundscapepipe\/detection\/json$/, parse: parseDetection },
+    levels: { topic: SOUNDSCAPE_TOPICS.levels, owns: /\/soundscapepipe\/state\/json$/, parse: parseLevels },
 };
 
 /**
@@ -56,8 +59,9 @@ export class LiveManager {
         this.received = Object.fromEntries(Object.keys(SOURCES).map(name => [name, 0])); // since it was wanted
         this.subscribedAt = Object.fromEntries(Object.keys(SOURCES).map(name => [name, Date.now()]));
         this.wanted = Object.fromEntries(Object.keys(SOURCES).map(name => [name, 0]));
-        // chosen on the page, kept while it is open: whether the raw signals are read, how much of what is held is shown
-        this.prefs = { collectRaw: false, viewMs: WINDOW_MS };
+        // chosen on the page, kept while it is open: whether the raw signals are read, how much of what is held is shown,
+        // which detectors' detections are not shown
+        this.prefs = { collectRaw: false, viewMs: WINDOW_MS, hiddenDetectors: [] };
         this.status = 'offline'; // connecting | connected | offline | failed
         this.error = '';
         this.limits = null; // what radiotracking.ini says about the signals, for the axes
@@ -135,7 +139,7 @@ export class LiveManager {
     }
 
     /**
-     * Subscribe to these sources (`matched`, `calibrated`, `raw`) until the returned
+     * Subscribe to these sources (`matched`, `calibrated`, `raw`, `detections`, `levels`) until the returned
      * function is called. Needs the libraries (`loadLibraries()`). The connection
      * opens with the first panel that wants something and closes with the last.
      */
@@ -222,6 +226,7 @@ export class LiveManager {
         }
         this.prefs.collectRaw = false;
         this.prefs.viewMs = WINDOW_MS;
+        this.prefs.hiddenDetectors = [];
         this.error = '';
         this.listeners.clear();
         this.librariesLoaded = null;

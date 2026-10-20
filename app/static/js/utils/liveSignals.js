@@ -20,6 +20,7 @@ export const WINDOW_MS = 5 * 60 * 1000;
  */
 export const LIVE_TABS = [
     { id: 'radiotracking', label: 'Radiotracking', icon: 'fa-broadcast-tower', service: 'radiotracking' },
+    { id: 'soundscapepipe', label: 'Soundscapepipe', icon: 'fa-microphone', service: 'soundscapepipe' },
 ];
 
 /** The time windows to choose from (ms): up to the one that is kept, `WINDOW_MS`. */
@@ -37,9 +38,10 @@ export const CLOCK_TOLERANCE_MS = 5000;
 // Keys of a raw message that are not values to plot (everything else numeric is)
 const NOT_VALUES = new Set(['Time', 'Device']);
 
-const finite = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+export const finite = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
-function parseObject(payload) {
+/** A JSON object, or null if the payload is not one. */
+export function parseObject(payload) {
     let message;
     try {
         message = JSON.parse(payload);

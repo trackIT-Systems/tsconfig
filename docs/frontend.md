@@ -89,7 +89,7 @@ status page's Restart button was missing for that reason.
 
 ## The live dashboard
 
-The **Live** tab (`live.html`, tracker mode, only if radiotracking is available: `isLiveAvailable()`)
+The **Live** tab (`live.html`, tracker mode, if radiotracking or soundscapepipe is available: `isLiveAvailable()`)
 reads MQTT in the browser. There is no server-side part: tsconfig subscribes to nothing and stores
 nothing. The page connects to the local broker over WebSockets at `/mqtt` on its own host (`ws:` or
 `wss:` like the page). The broker only listens on loopback; tsOS-base's Caddy serves the path behind
@@ -112,11 +112,30 @@ each tick, because Alpine cannot see the manager's.
 | Signal Power | `liveSignalPower` | `matched` and `calibrated` | the power of each SDR (dBW or dBm, chosen) |
 | Frequency Usage | `liveFrequencyUsage` | `matched` | the frequency of the signal, one dot per signal |
 | Signal Detail | `liveSignalDetail` | `raw`, after Start | a value of the raw signal, chosen, one series per SDR |
+| Detections | `liveDetections` | `detections` | the confidence of each detection, one series per species; detectors shown or hidden |
+| Input Levels | `liveInputLevels` | `levels` | peak and RMS (dBFS) of every input channel, one dot per report |
+
+The first three are the Radiotracking tab (`partials/live_radiotracking.html`), the last two the
+Soundscapepipe tab (`partials/live_soundscapepipe.html`). soundscapepipe publishes each detection and,
+every `status_interval` (60 s by default), the input levels as JSON on
+`<station>/soundscapepipe/{detection,state}/json` (`utils/liveSoundscape.js` reads them). A detection
+is drawn at the start of what was analysed, so birdedge's arrive about 8 s late (a 5 s window plus
+the analysis): Detections only warns about the clock beyond 30 s (`clockToleranceMs`). Instead of
+radiotracking's limits, its `loadLimits()` reads the configured detectors (`GET /api/soundscapepipe`,
+`configuredDetectors()`: those under `detectors`, and `lure` if it has tasks) and the species names
+(`GET /api/soundscapepipe/species`, `speciesNames()`: yolobat's codes such as `Nnoc` become scientific
+names); without them the panel still works, with the names as detections give them. A button per
+detector shows or hides its detections, a detector that is not configured gets one when it sends;
+hiding only filters what is drawn and counted (`forEachDot()`, `onTick()`), so what is held comes back
+at once, and `liveManager.prefs.hiddenDetectors` keeps the choice while the page is open. The species
+(with its English and German name), detector, duration, channel and, for bats, the frequencies are in the tooltip; the levels' tooltip adds the SNR
+and the capture device's ALSA state.
 
 Each panel is a thin component (`partials/live_signal_power.html`, ...) over three shared parts:
 
 - **`liveManager`** (`managers/liveManager.js`) owns the one MQTT connection and, for each kind of
-  message (`matched`, `calibrated`, `raw`), an `EventWindow` with the signals of the last five minutes.
+  message (`matched`, `calibrated`, `raw`, `detections`, `levels`), an `EventWindow` with the signals of
+  the last five minutes.
   Panels `acquire(sources)` what they need and get a function to give it back; the connection opens
   with the first and closes with the last, and a topic wanted by two panels is subscribed once. The
   windows are module state, so what was read **survives a switch between matched and calibrated and
@@ -133,20 +152,22 @@ Each panel is a thin component (`partials/live_signal_power.html`, ...) over thr
   arrive out of order, and uPlot needs ascending x). Signals are drawn at the message's own `Time`,
   while the axis follows the browser's clock: the point is to see how far the detections are from the
   wall clock. It keeps the last signal's delay (arrival minus `Time`, shown on the card, with a warning
-  beyond 5 s) and counts signals not drawn because their `Time` is more than the window behind or 10
+  beyond the panel's `clockToleranceMs`, 5 s by default) and counts signals not drawn because their `Time` is more than the window behind or 10
   minutes ahead of the browser (so a clock set years ahead cannot push the window away).
 - **`liveChartMixin`** (`mixins/liveChartMixin.js`) is what the charts share: the connection to the
   manager, the once-a-second tick (trim, legend, vertical axis), the chart, the glide, the dots and the
   tooltip. A panel only says what is its own: `liveSources()`, `eventWindow()`,
   `forEachDot(event, add)` (`add(key, y)` per dot; the key picks the colour), `yLabel`, `yRange()`,
-  `formatY()`, `legendLabel()` and `tipRows()`.
+  `formatY()`, `legendLabel()` and `tipRows()`. It may override `colorOf(key)` (default `colorFor()`),
+  `loadLimits()` (default radiotracking's; the Soundscapepipe panels have fixed axes, confidence 0 to
+  1 and dBFS from at least -60 to just above 0, and Detections reads soundscapepipe's instead) and `clockToleranceMs`.
 
 How the charts are drawn:
 
 - **Dots, drawn by us.** uPlot's own points have one size per series, so `drawDots()` draws them in a
   `draw` hook (clipped to the plot area and to the time axis; one fill per series when there are many).
   The diameter shows the duration (`dotSize()`): 6 px at 20 ms, proportional to it (40 ms is twice as
-  wide), limited to 3-24 px. uPlot gets no series (`legend` is the page's, in `live_chart.html`) and no
+  wide), limited to 3-24 px; a signal without a duration (the Soundscapepipe panels') has 6 px. uPlot gets no series (`legend` is the page's, in `live_chart.html`) and no
   data; the vertical axis is fitted to the signals by the mixin (`fitY()`), and the tooltip finds the dot
   under the cursor itself (`showTip()`).
 - **The vertical axes come from the radiotracking configuration**, which tsconfig already parses:
@@ -162,6 +183,12 @@ How the charts are drawn:
   static). Without the configuration every axis is fitted to the data (`powerRange()`,
   `frequencyRange()`, `valueRange()`). Signals outside a fixed axis are clipped.
 - **A 24-hour time axis without a date.** This is live, and a date collided with the times.
+- **Narrow screens.** The vertical axis is only as wide as its tick texts (`yAxisSize()`), and its
+  title (`yLabel`) is above the chart, not turned along the axis. On a plot narrower than 500 px the
+  times are at least 40 px apart instead of 80 (`timeTickSpace()`): uPlot steps from one minute to
+  five, so a phone would show a single time. The legend is a wrapping flex row: Alpine's `x-for`
+  leaves no space between its items, so inline items made one line that pushed the page sideways.
+  On phones the card body has less padding left and right (`style.css`).
 - **The time axis slides on every animation frame** (`glide()`, with uPlot's `pxAlign: 0` so nothing is
   snapped to whole pixels; one pixel is about 0.4 s, so anything slower moves in visible steps). New
   data is drawn once a second, not per message. Nothing is drawn while the page is hidden.
@@ -174,9 +201,10 @@ How the charts are drawn:
   timer on `window`) and is nested like this.
 - **The broker connection, chart and signals stay out of Alpine's reactive data** (closure variables
   and module state): Alpine would wrap the growing arrays in proxies.
-- **The station prefix is a wildcard** (`+/radiotracking/...`): it is the host name or radiotracking's
-  `station` setting, which the page does not know.
-- **Colours by SDR** (`colorFor()`): the SDR number picks the colour, the same on every chart; the first four are the compass directions of the antennas, 0 blue (north), 1 yellow (east), 2 red (south), 3 green (west). Red and green are hard to tell apart with some kinds of colour blindness; the legend names each SDR, and the tooltip too.
+- **The station prefix is a wildcard** (`+/radiotracking/...`, `+/soundscapepipe/...`): it is the host
+  name or the service's `station` setting, which the page does not know.
+- **Colours by SDR** (`colorFor()`): the SDR number picks the colour, the same on every chart; the first four are the compass directions of the antennas, 0 blue (north), 1 yellow (east), 2 red (south), 3 green (west). Red and green are hard to tell apart with some kinds of colour blindness; the legend names each SDR, and the tooltip too. On the Soundscapepipe tab the species picks the colour of a detection (`colorFor()`), and
+  each input channel has a pair: channel 1 dark and light blue, channel 2 orange and yellow, peak and RMS (`levelColor()`).
 - **JSON topics only.** No CBOR or CSV decoding.
 - The libraries are loaded when the tab is first opened, not with every page: mqtt.js 5.16.1
   (`vendor/mqtt/js/mqtt.min.js`, global `mqtt`) and uPlot 1.6.32 (`vendor/uplot`), both MIT, taken

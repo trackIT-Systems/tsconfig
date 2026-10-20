@@ -21,6 +21,25 @@ const BATCH_ABOVE = 1500;
 const HIT_SLACK_PX = 6;
 
 /**
+ * The least distance (px) between the times on the axis. A phone's plot is about 300 px wide:
+ * at 80 px uPlot steps from a minute to five, and there would be a single time on the axis.
+ * The times of whole minutes ("14:05") fit in 40 px.
+ */
+export function timeTickSpace(plotWidth) {
+    return plotWidth < 500 ? 40 : 80;
+}
+
+/**
+ * The width (px) of the vertical axis: as wide as its longest tick text (about 7 px a character
+ * at uPlot's 12 px font) and the tick, no wider. Its title is above the chart (`live_chart.html`),
+ * not turned along the axis, so narrow screens keep their width for the plot.
+ */
+export function yAxisSize(values) {
+    const longest = Math.max(1, ...(values ?? []).map(value => String(value).length));
+    return longest * 7 + 14;
+}
+
+/**
  * What the charts of the live dashboard share: dots over a 24-hour time axis,
  * one colour per series, the diameter showing the duration, and the data of
  * `liveManager` (held there, not here: the panels of a tab share it, and it survives a
@@ -35,6 +54,9 @@ const HIT_SLACK_PX = 6;
  * - `yLabel`, `yRange(min, max)`, `formatY(value)`: the vertical axis
  * - `legendLabel(key)`: the legend's text for a series, null for none
  * - `tipRows(event, hit)`: the rows of the tooltip, `{text, color?}`
+ * - `colorOf(key)`: the colour of a series (default `colorFor`)
+ * - `loadLimits()`: what the axes need from the service's configuration (default radiotracking's)
+ * - `clockToleranceMs`: how late a signal may arrive before the clock warning shows
  *
  * The broker connection, chart and signals are kept out of the component's
  * data: Alpine would wrap them in proxies, and the arrays grow.
@@ -76,10 +98,12 @@ export function liveChartMixin() {
 
         /** The station's clock and this browser's clock are not the same, or detections come in late. */
         get clockOff() {
-            return this.offsetMs !== null && Math.abs(this.offsetMs) > CLOCK_TOLERANCE_MS;
+            return this.offsetMs !== null && Math.abs(this.offsetMs) > this.clockToleranceMs;
         },
 
         // --- what a panel overrides -------------------------------------------------
+
+        clockToleranceMs: CLOCK_TOLERANCE_MS,
 
         liveSources() {
             return [];
@@ -96,6 +120,12 @@ export function liveChartMixin() {
         tipRows() {
             return [];
         },
+        colorOf(key) {
+            return colorFor(key);
+        },
+        loadLimits() {
+            return liveManager.loadLimits();
+        },
         /** Once a second, with the signals of the window, for a panel that has more to refresh. */
         onTick() {},
 
@@ -104,7 +134,7 @@ export function liveChartMixin() {
         async init() {
             try {
                 // The limits only fall back to fitting the data, so they do not hold the page up if they fail
-                await Promise.all([liveManager.loadLibraries(), liveManager.loadLimits()]);
+                await Promise.all([liveManager.loadLibraries(), this.loadLimits()]);
             } catch (error) {
                 this.status = 'failed';
                 this.error = 'The chart libraries could not be loaded.';
@@ -188,7 +218,7 @@ export function liveChartMixin() {
                 this.forEachDot(events[i], key => keys.add(key));
             }
             const legend = [...keys].sort(compareKeys)
-                .map(key => ({ key, label: this.legendLabel(key), color: colorFor(key) }))
+                .map(key => ({ key, label: this.legendLabel(key), color: this.colorOf(key) }))
                 .filter(item => item.label !== null);
             if (JSON.stringify(legend) !== JSON.stringify(this.legend)) this.legend = legend;
         },
@@ -251,7 +281,7 @@ export function liveChartMixin() {
                         stroke: text,
                         grid,
                         ticks: grid,
-                        space: 80,
+                        space: (u, axis, min, max, plotWidth) => timeTickSpace(plotWidth),
                         // 24 hours and no date: this is live, and a date collided with the times
                         values: (u, splits, axis, space, increment) => splits.map(split => formatClock(split, increment < 60)),
                     },
@@ -259,8 +289,7 @@ export function liveChartMixin() {
                         stroke: text,
                         grid,
                         ticks: grid,
-                        label: this.yLabel,
-                        size: 64,
+                        size: (u, values) => yAxisSize(values),
                         values: (u, splits) => splits.map(split => this.formatY(split)),
                     },
                 ],
@@ -324,7 +353,7 @@ export function liveChartMixin() {
                     if (!list) perKey.set(key, list = []);
                     list.push(x, py, radius);
                 } else {
-                    ctx.fillStyle = colorFor(key);
+                    ctx.fillStyle = this.colorOf(key);
                     ctx.beginPath();
                     ctx.arc(x, py, radius, 0, 2 * Math.PI);
                     ctx.fill();
@@ -342,7 +371,7 @@ export function liveChartMixin() {
                 this.forEachDot(event, add);
             }
             for (const [key, list] of perKey) {
-                ctx.fillStyle = colorFor(key);
+                ctx.fillStyle = this.colorOf(key);
                 ctx.beginPath();
                 for (let i = 0; i < list.length; i += 3) {
                     ctx.moveTo(list[i] + list[i + 2], list[i + 1]);

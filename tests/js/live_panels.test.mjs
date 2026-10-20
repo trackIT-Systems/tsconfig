@@ -1,14 +1,18 @@
-// The live dashboard: the manager that holds what the broker sends, and its three panels,
+// The live dashboard: the manager that holds what the broker sends, and its panels,
 // against a fake browser, broker and chart.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { configManager } from '../../app/static/js/components/configManager.js';
+import { liveDetections } from '../../app/static/js/components/liveDetections.js';
 import { liveFrequencyUsage } from '../../app/static/js/components/liveFrequencyUsage.js';
+import { liveInputLevels } from '../../app/static/js/components/liveInputLevels.js';
 import { liveSignalDetail } from '../../app/static/js/components/liveSignalDetail.js';
 import { liveSignalPower } from '../../app/static/js/components/liveSignalPower.js';
 import { liveTabs } from '../../app/static/js/components/liveTabs.js';
 import { liveManager } from '../../app/static/js/managers/liveManager.js';
+import { timeTickSpace, yAxisSize } from '../../app/static/js/mixins/liveChartMixin.js';
 import { LIVE_TOPICS, WINDOW_MS, colorFor, padRange } from '../../app/static/js/utils/liveSignals.js';
+import { SOUNDSCAPE_TOPICS, levelColor } from '../../app/static/js/utils/liveSoundscape.js';
 import { installBrowser } from './helpers.mjs';
 
 const HOST = 'tsos-test';
@@ -257,7 +261,7 @@ test('Signal Power: what was read survives a switch between matched and calibrat
     assert.equal(panel.count, 3, 'nothing was lost, in either direction');
     assert.equal(clients[0].unsubscribed.length, 0, 'and nothing was unsubscribed');
     assert.equal(FakeChart.instances.length, 3, 'the chart is rebuilt for the other unit');
-    assert.match(FakeChart.instances[1].options.axes[1].label, /dBm/);
+    assert.match(panel.yLabel, /dBW/, 'and the axis title is the unit again');
 });
 
 test('Signal Power: switching to something unknown, or to the same, does nothing', async t => {
@@ -412,7 +416,6 @@ test('Signal Detail plots the chosen value of the raw signals, a series per SDR'
     panel.setParam('snr (dB)');
     assert.deepEqual(dots(), [['0', 41], ['1', 32]]);
     assert.equal(panel.yLabel, 'snr (dB)');
-    assert.equal(lastChart().options.axes[1].label, 'snr (dB)', 'the axis is relabelled');
 
     panel.setParam('Duration');
     assert.deepEqual(dots().map(([, y]) => y), [40, 40], 'duration in ms');
@@ -490,6 +493,17 @@ test('Signal Detail cannot be started before the libraries are loaded', t => {
 });
 
 // --- what the charts share ---------------------------------------------------
+
+test('the vertical axis is as wide as its longest tick', () => {
+    assert.equal(yAxisSize(['0', '-10', '-60']), 3 * 7 + 14);
+    assert.equal(yAxisSize(['150.155']), 7 * 7 + 14);
+    assert.equal(yAxisSize(null), 7 + 14, 'before there are ticks');
+});
+
+test('a phone\'s time axis has a time per minute, not one per five', () => {
+    assert.equal(timeTickSpace(290), 40, 'a minute is about 58 px there');
+    assert.equal(timeTickSpace(1100), 80);
+});
 
 test('the time axis is 24 hours without a date', async t => {
     const { mount } = setup(t);
@@ -749,7 +763,7 @@ test('a library that cannot be loaded is shown as failed, not as a blank chart',
     assert.match(panel.error, /libraries/);
 });
 
-test('the Live tab needs radiotracking, and is not there in server mode', t => {
+test('the Live tab needs radiotracking or soundscapepipe, and is not there in server mode', t => {
     const browser = installBrowser();
     t.after(browser.restore);
     const manager = configManager();
@@ -762,6 +776,9 @@ test('the Live tab needs radiotracking, and is not there in server mode', t => {
 
     manager.serverMode = false;
     manager.availableServices = ['soundscapepipe'];
+    assert.equal(manager.isLiveAvailable(), true);
+
+    manager.availableServices = ['schedule'];
     assert.equal(manager.isLiveAvailable(), false);
 });
 
@@ -825,6 +842,173 @@ test('the window is limited to what is kept, and is kept while the page is open'
     assert.equal(liveManager.prefs.viewMs, 1000, 'and not nothing');
 });
 
+// --- Soundscapepipe: Detections and Input Levels -------------------------------
+
+const DETECTION = `${HOST}/soundscapepipe/detection/json`;
+const LEVELS = `${HOST}/soundscapepipe/state/json`;
+const detection = (agoMs, fields = {}) => JSON.stringify({
+    time: new Date(Date.now() - agoMs).toISOString(),
+    duration: 5.0, species: 'Jynx torquilla', confidence: 0.8861, detector: 'birdedge', channel: 'mix', detection: 0.9949,
+    ...fields,
+});
+const levels = (agoMs, fields = {}) => JSON.stringify({
+    time: new Date(Date.now() - agoMs).toISOString(),
+    state: 3, channels: 2, peak: [-0.0008, 0.0], rms: [-21.33, -22.15], snr: [21.33, 22.15],
+    ...fields,
+});
+
+const SOUNDSCAPEPIPE_CONFIG = { detectors: { birdedge: { class_threshold: 0.3 }, yolobat: { class_threshold: 0.3 } }, lure: { tasks: [] } };
+const SPECIES = {
+    birdedge: [{ scientific: 'Jynx torquilla', english: 'Eurasian Wryneck', german: 'Wendehals' }],
+    yolobat: [{ scientific: 'Nyctalus noctula', english: 'Common Noctule', german: 'Großer Abendsegler', modelLabel: 'Nnoc' }],
+};
+
+/** The Detections panel of a station with birdedge and yolobat, a bird and a bat detected. */
+async function detectionsSetup(t) {
+    const { browser, clients, mount } = setup(t);
+    browser.respond({ match: /\/api\/soundscapepipe$/, body: SOUNDSCAPEPIPE_CONFIG });
+    browser.respond({ match: /\/api\/soundscapepipe\/species$/, body: SPECIES });
+    const panel = await mount(liveDetections);
+    clients[0].open();
+    clients[0].send(DETECTION, detection(9000));
+    clients[0].send(DETECTION, detection(2000, {
+        duration: 0.0198, species: 'Nnoc', confidence: 0.4152, detector: 'yolobat', low: 20970, high: 25517,
+    }));
+    panel.tick();
+    return { browser, clients, mount, panel };
+}
+
+const dotsOf = panel => {
+    const dots = [];
+    for (const event of liveManager.windows.detections.events) panel.forEachDot(event, (key, y) => dots.push([key, y]));
+    return dots;
+};
+
+test('Detections draws a dot per detection at its confidence, a series per species with its name', async t => {
+    const { browser, clients, panel } = await detectionsSetup(t);
+    assert.deepEqual(clients[0].subscribed, [SOUNDSCAPE_TOPICS.detections]);
+    assert.deepEqual(dotsOf(panel), [['Jynx torquilla', 0.8861], ['Nnoc', 0.4152]]);
+    assert.deepEqual(panel.legend.map(item => [item.label, item.color]), [
+        ['Jynx torquilla', colorFor('Jynx torquilla')],
+        ['Nyctalus noctula', colorFor('Nnoc')],
+    ], 'a yolobat code is named by the species list');
+    assert.equal(panel.count, 2);
+    assert.equal(panel.yLabel, 'Confidence');
+    assert.deepEqual(panel.yRange(null, null), [-0.03, 1.03]);
+    assert.equal(browser.calls.filter(call => call.url.endsWith('/api/radiotracking')).length, 0,
+        'nothing to read from the radiotracking configuration');
+
+    const bat = liveManager.windows.detections.events[1];
+    assert.deepEqual(panel.tipRows(bat).map(row => row.text), [
+        'Nyctalus noctula', 'Common Noctule', 'Großer Abendsegler', 'Confidence: 0.42', 'Detector: yolobat, channel mix',
+        'Duration: 19.8 ms', 'Frequency: 21.0–25.5 kHz',
+    ]);
+    const bird = liveManager.windows.detections.events[0];
+    assert.deepEqual(panel.tipRows(bird).map(row => row.text), [
+        'Jynx torquilla', 'Eurasian Wryneck', 'Wendehals', 'Confidence: 0.89', 'Detector: birdedge, channel mix', 'Duration: 5.0 s',
+    ]);
+});
+
+test('Detections has a button for each configured detector, and hides and shows their detections', async t => {
+    const { clients, panel } = await detectionsSetup(t);
+    assert.deepEqual(panel.detectors, ['birdedge', 'yolobat'], 'from soundscapepipe.yml; lure has no tasks');
+    assert.ok(panel.isShown('birdedge') && panel.isShown('yolobat'));
+
+    panel.toggleDetector('birdedge');
+    assert.equal(panel.isShown('birdedge'), false);
+    assert.deepEqual(dotsOf(panel), [['Nnoc', 0.4152]]);
+    assert.deepEqual(panel.legend.map(item => item.label), ['Nyctalus noctula']);
+    assert.equal(panel.count, 1, 'the count is what is shown');
+    assert.deepEqual(liveManager.prefs.hiddenDetectors, ['birdedge'], 'kept while the page is open');
+
+    panel.toggleDetector('birdedge');
+    assert.deepEqual(dotsOf(panel), [['Jynx torquilla', 0.8861], ['Nnoc', 0.4152]], 'what was held comes back');
+    assert.equal(panel.count, 2);
+
+    clients[0].send(DETECTION, detection(500, { species: 'Test', confidence: 0, detector: 'lure', channel: 'n/a' }));
+    panel.tick();
+    assert.deepEqual(panel.detectors, ['birdedge', 'yolobat', 'lure'], 'a detector that sends gets a button too');
+});
+
+test('Detections works without the configuration and the species list', async t => {
+    const { browser, clients, mount } = setup(t);
+    browser.respond({ match: /\/api\/soundscapepipe$/, status: 404, body: {} });
+    browser.respond({ match: /\/api\/soundscapepipe\/species$/, status: 500, body: {} });
+    const panel = await mount(liveDetections);
+    assert.equal(panel.ready, true);
+    clients[0].open();
+    clients[0].send(DETECTION, detection(1000, { species: 'Nnoc', detector: 'yolobat' }));
+    panel.tick();
+    assert.deepEqual(panel.detectors, ['yolobat']);
+    assert.deepEqual(panel.legend.map(item => item.label), ['Nnoc'], 'the code, without a name for it');
+});
+
+test('a hidden detector stays hidden when the panel comes back', async t => {
+    const { mount, panel } = await detectionsSetup(t);
+    panel.toggleDetector('yolobat');
+    panel.destroy(); // the tab is left
+    const again = await mount(liveDetections);
+    assert.equal(again.isShown('yolobat'), false);
+    assert.equal(again.isShown('birdedge'), true);
+});
+
+test('Detections that arrive late, as birdedge\'s do, are no clock warning', async t => {
+    const { clients, mount } = setup(t);
+    const panel = await mount(liveDetections);
+    clients[0].open();
+    clients[0].send(DETECTION, detection(8000));
+    panel.tick();
+    assert.ok(panel.offsetMs >= 8000);
+    assert.equal(panel.clockOff, false);
+
+    clients[0].send(DETECTION, detection(45_000));
+    panel.tick();
+    assert.equal(panel.clockOff, true, 'but a station clock that is off by more still shows');
+});
+
+test('Input Levels draws the peak and RMS of every channel, a series each', async t => {
+    const { browser, clients, mount } = setup(t);
+    const panel = await mount(liveInputLevels);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed, [SOUNDSCAPE_TOPICS.levels]);
+    clients[0].send(LEVELS, levels(1000));
+    panel.tick();
+
+    const dots = [];
+    panel.forEachDot(liveManager.windows.levels.events[0], (key, y) => dots.push([key, y]));
+    assert.deepEqual(dots, [['peak-0', -0.0008], ['peak-1', 0], ['rms-0', -21.33], ['rms-1', -22.15]], 'no SNR dots');
+    assert.deepEqual(panel.legend.map(item => item.label), ['Ch 1 Peak', 'Ch 2 Peak', 'Ch 1 RMS', 'Ch 2 RMS']);
+    assert.equal(new Set(panel.legend.map(item => item.color)).size, 4, 'four colours');
+    assert.equal(panel.legend[0].color, levelColor('peak-0'));
+    assert.equal(panel.noun, 'report');
+    assert.equal(browser.calls.filter(call => call.url.endsWith('/api/radiotracking')).length, 0);
+
+    const [low, high] = panel.yRange(-22.15, 0);
+    assert.ok(low <= -60 && high > 0, 'full scale and some room below the levels');
+    assert.equal(panel.yRange(-90, 0)[0], -95);
+
+    assert.deepEqual(panel.tipRows(liveManager.windows.levels.events[0]).map(row => row.text), [
+        'Ch 1 Peak: -0.0 dBFS', 'Ch 1 RMS: -21.3 dBFS', 'Ch 1 SNR: 21.3 dB',
+        'Ch 2 Peak: 0.0 dBFS', 'Ch 2 RMS: -22.1 dBFS', 'Ch 2 SNR: 22.1 dB',
+        'Capture: running (3)',
+    ]);
+});
+
+test('the Soundscapepipe panels share the connection, and ignore radiotracking', async t => {
+    const { clients, mount } = setup(t);
+    const detections = await mount(liveDetections);
+    await mount(liveInputLevels);
+    assert.equal(clients.length, 1);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed.sort(), [SOUNDSCAPE_TOPICS.detections, SOUNDSCAPE_TOPICS.levels].sort());
+    clients[0].send(MATCHED, matched(1000, { 0: -60 }));
+    clients[0].send(`${HOST}/soundscapepipe/detection/csv`, '2026-10-20 15:22:12.727829+02:00;5.0;Fringilla coelebs');
+    clients[0].send(DETECTION, '{"not": "a detection"}');
+    detections.tick();
+    assert.equal(detections.count, 0);
+    assert.equal(liveManager.windows.levels.length, 0);
+});
+
 // --- the tabs ----------------------------------------------------------------
 
 function tabsSetup(t, { hash = '', available = ['radiotracking'] } = {}) {
@@ -843,6 +1027,16 @@ function tabsSetup(t, { hash = '', available = ['radiotracking'] } = {}) {
 test('the Live page has a tab for each service that is available', t => {
     const { tabs } = tabsSetup(t);
     assert.deepEqual(tabs.tabs.map(tab => tab.id), ['radiotracking']);
+
+    const both = tabsSetup(t, { available: ['radiotracking', 'soundscapepipe'] });
+    assert.deepEqual(both.tabs.tabs.map(tab => tab.id), ['radiotracking', 'soundscapepipe']);
+
+    const audio = tabsSetup(t, { hash: '#live', available: ['soundscapepipe'] });
+    assert.deepEqual(audio.tabs.tabs.map(tab => tab.id), ['soundscapepipe']);
+    audio.tabs.init();
+    assert.equal(audio.tabs.tab, 'soundscapepipe', 'an audio station opens its own tab');
+    assert.deepEqual(audio.replaced, ['#live/soundscapepipe']);
+    audio.tabs.destroy();
 
     const none = tabsSetup(t, { available: [] });
     assert.deepEqual(none.tabs.tabs, [], 'no service, no tab');

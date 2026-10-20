@@ -1,0 +1,21 @@
+<!-- Input Levels -->
+<div class="row mb-4">
+    <div class="col" x-data="liveInputLevels()">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-volume-high me-2"></i>Input Levels
+                </h5>
+                {% include 'partials/live_status_badge.html' %}
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    Peak and RMS level of every input channel in dBFS: 0 dBFS is full scale, where the input clips.
+                    soundscapepipe reports once per <code>status_interval</code> (60 s by default).
+                </p>
+
+                {% include 'partials/live_chart.html' %}
+            </div>
+        </div>
+    </div>
+</div>
