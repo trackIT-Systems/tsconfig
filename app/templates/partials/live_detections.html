@@ -9,12 +9,13 @@
                 <div class="d-flex flex-wrap align-items-center gap-3">
                     <div class="btn-group btn-group-sm" role="group" aria-label="Detectors" x-show="detectors.length > 0" x-cloak>
                         <template x-for="name in detectors" :key="name">
-                            <button type="button" class="btn"
-                                    :class="isShown(name) ? 'btn-primary' : 'btn-outline-primary'"
+                            <button type="button" class="btn text-nowrap"
+                                    :class="buttonClass(name)"
                                     :aria-pressed="isShown(name)"
-                                    :title="isShown(name) ? `Hide the detections of ${name}` : `Show the detections of ${name}`"
-                                    @click="toggleDetector(name)"
-                                    x-text="name"></button>
+                                    :title="detectorTitle(name)"
+                                    @click="toggleDetector(name)">
+                                <i class="fas fa-triangle-exclamation me-1" x-show="behind(name)"></i><span x-text="name"></span><span class="ms-1 opacity-75" x-show="delayOf(name)" x-text="delayOf(name)"></span>
+                            </button>
                         </template>
                     </div>
                     {% include 'partials/live_status_badge.html' %}
@@ -23,11 +24,15 @@
             <div class="card-body">
                 <p class="small text-muted">
                     Confidence of every detection, a dot per detection in the colour of its species.
-                    The buttons show or hide the detections of a detector. A detection is drawn at the
-                    start of what was analysed: birdedge's arrive about 8 s later.
+                    The buttons show or hide the detections of a detector, with how far it is behind
+                    real time (yellow: it cannot keep up). A detection is drawn at the start of what was
+                    analysed, so it comes in a few seconds after its time: see the dashed lines.
                 </p>
 
                 {% include 'partials/live_chart.html' %}
+                <p class="small text-muted mb-0 mt-1" x-show="pendingText" x-cloak>
+                    <i class="fas fa-hourglass-half me-1"></i><span x-text="pendingText"></span>
+                </p>
             </div>
         </div>
     </div>

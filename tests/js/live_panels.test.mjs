@@ -501,8 +501,9 @@ test('the vertical axis is as wide as its longest tick', () => {
 });
 
 test('a phone\'s time axis has a time per minute, not one per five', () => {
-    assert.equal(timeTickSpace(290), 40, 'a minute is about 58 px there');
-    assert.equal(timeTickSpace(1100), 80);
+    assert.equal(timeTickSpace(290, 300), 40, 'a minute is about 58 px there');
+    assert.equal(timeTickSpace(290, 30), 60, 'times with seconds are wider');
+    assert.equal(timeTickSpace(1100, 300), 80);
 });
 
 test('the time axis is 24 hours without a date', async t => {
@@ -886,7 +887,7 @@ const dotsOf = panel => {
 
 test('Detections draws a dot per detection at its confidence, a series per species with its name', async t => {
     const { browser, clients, panel } = await detectionsSetup(t);
-    assert.deepEqual(clients[0].subscribed, [SOUNDSCAPE_TOPICS.detections]);
+    assert.deepEqual(clients[0].subscribed, [SOUNDSCAPE_TOPICS.detections, SOUNDSCAPE_TOPICS.performance]);
     assert.deepEqual(dotsOf(panel), [['Jynx torquilla', 0.8861], ['Nnoc', 0.4152]]);
     assert.deepEqual(panel.legend.map(item => [item.label, item.color]), [
         ['Jynx torquilla', colorFor('Jynx torquilla')],
@@ -928,6 +929,85 @@ test('Detections has a button for each configured detector, and hides and shows 
     clients[0].send(DETECTION, detection(500, { species: 'Test', confidence: 0, detector: 'lure', channel: 'n/a' }));
     panel.tick();
     assert.deepEqual(panel.detectors, ['birdedge', 'yolobat', 'lure'], 'a detector that sends gets a button too');
+});
+
+const PERFORMANCE = `${HOST}/soundscapepipe/performance/json`;
+const report = (agoMs, fields) => JSON.stringify({
+    time: new Date(Date.now() - agoMs).toISOString(), interval: 60.0, window: 5.0, windows: 12, skipped: 0,
+    runtime_mean: 2.1, runtime_max: 3.0, delay_max: 8.1, load: 0.42, lag: 0.2, lost: 0, ...fields,
+});
+
+test('Detections marks how far each detector has analysed, and shows its delay', async t => {
+    const { clients, panel } = await detectionsSetup(t);
+    assert.deepEqual(panel.markers(1000), [], 'no report yet, no line');
+    assert.equal(panel.pendingText, '');
+    assert.equal(panel.delayOf('birdedge'), '');
+
+    clients[0].send(PERFORMANCE, report(30_000, { detector: 'birdedge', delay_max: 7.5 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'birdedge', delay_max: 8.1 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', window: 1.0, delay_max: 1.24, load: 0.1 }));
+    panel.tick();
+    assert.equal(panel.count, 2, 'reports are no detections');
+    assert.equal(panel.delayOf('birdedge'), '8.1 s', 'the latest report');
+    assert.equal(panel.delayOf('yolobat'), '1.2 s');
+    assert.deepEqual(panel.markers(1000), [
+        { at: 1000 - 8.1, label: 'birdedge 8.1 s' },
+        { at: 1000 - 1.24, label: 'yolobat 1.2 s' },
+    ], 'a line per detector at its own delay, the slowest first');
+    assert.match(panel.pendingText, /^Dashed lines: left of its line a detector has analysed all of the audio/);
+    assert.match(panel.detectorTitle('birdedge'), /^Hide the detections of birdedge\. detections up to 8\.1 s after the audio, load 42 %, lag 0\.2 s$/);
+    assert.equal(panel.buttonClass('birdedge'), 'btn-primary');
+
+    panel.toggleDetector('birdedge');
+    assert.deepEqual(panel.markers(1000), [{ at: 1000 - 1.24, label: 'yolobat 1.2 s' }], 'none for a hidden detector');
+    assert.equal(panel.buttonClass('birdedge'), 'btn-outline-primary');
+});
+
+test('the markers are drawn as dashed lines the height of the plot, their labels in rows at its bottom', async t => {
+    const { clients, panel } = await detectionsSetup(t);
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'birdedge', delay_max: 8.1 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', delay_max: 1.24 }));
+    panel.tick();
+
+    const lines = [];
+    const texts = [];
+    let dash = null;
+    let from = null;
+    const ctx = {
+        save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, arc() {}, fill() {},
+        setLineDash(pattern) { if (pattern.length > 0) dash = pattern; },
+        moveTo(x, y) { from = [x, y]; },
+        lineTo(x, y) { lines.push([...from, x, y]); },
+        stroke() {},
+        fillText: (text, x, y) => texts.push([text, x, y]),
+    };
+    const edge = Date.now() / 1000;
+    lastChart().options.hooks.draw[0]({
+        ctx,
+        bbox: { left: 0, top: 10, width: 400, height: 200 },
+        scales: { x: { min: edge - 60, max: edge } },
+        valToPos: (value, axis) => (axis === 'x' ? (value - (edge - 60)) / 60 * 400 : 0),
+    });
+    const x = delay => Math.round((60 - delay) / 60 * 400);
+    assert.deepEqual(lines, [[x(8.1), 10, x(8.1), 210], [x(1.24), 10, x(1.24), 210]], 'from the top to the bottom of the plot');
+    assert.ok(dash, 'dashed');
+    assert.deepEqual(texts.map(([text, , y]) => [text, y]), [['birdedge 8.1 s', 207], ['yolobat 1.2 s', 193]],
+        'a row each, the slowest lowest');
+    assert.equal(texts[0][1], x(8.1) - 3, 'each label ends at its line');
+});
+
+test('Detections warns about a detector that cannot keep up', async t => {
+    const { clients, panel } = await detectionsSetup(t);
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'birdedge', load: 0.97 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', load: 0.5, lost: 12.5 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'audioprotopnet', load: 0.3 }));
+    panel.tick();
+    assert.equal(panel.behind('birdedge'), true, 'nearly all of the time in inference');
+    assert.equal(panel.behind('yolobat'), true, 'audio was lost');
+    assert.equal(panel.buttonClass('yolobat'), 'btn-warning');
+    assert.match(panel.detectorTitle('yolobat'), /13 s of audio not analysed/);
+    assert.equal(panel.behind('audioprotopnet'), false);
+    assert.deepEqual(panel.detectors, ['birdedge', 'yolobat', 'audioprotopnet'], 'a detector that reports gets a button');
 });
 
 test('Detections works without the configuration and the species list', async t => {
@@ -1000,7 +1080,8 @@ test('the Soundscapepipe panels share the connection, and ignore radiotracking',
     await mount(liveInputLevels);
     assert.equal(clients.length, 1);
     clients[0].open();
-    assert.deepEqual(clients[0].subscribed.sort(), [SOUNDSCAPE_TOPICS.detections, SOUNDSCAPE_TOPICS.levels].sort());
+    assert.deepEqual(clients[0].subscribed.sort(),
+        [SOUNDSCAPE_TOPICS.detections, SOUNDSCAPE_TOPICS.levels, SOUNDSCAPE_TOPICS.performance].sort());
     clients[0].send(MATCHED, matched(1000, { 0: -60 }));
     clients[0].send(`${HOST}/soundscapepipe/detection/csv`, '2026-10-20 15:22:12.727829+02:00;5.0;Fringilla coelebs');
     clients[0].send(DETECTION, '{"not": "a detection"}');

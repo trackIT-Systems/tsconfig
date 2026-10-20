@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { colorFor } from '../../app/static/js/utils/liveSignals.js';
 import {
+    LOAD_WARNING,
     configuredDetectors,
+    fallsBehind,
+    formatDelay,
+    latestReports,
+    parsePerformance,
     levelColor,
     levelLabel,
     levelRange,
@@ -107,4 +112,34 @@ test('speciesNames: by scientific name, yolobat by its code', () => {
     });
     assert.deepEqual(speciesNames(null), {});
     assert.deepEqual(speciesNames({ message: 'ok', birdedge: [null, {}] }), {});
+});
+
+// As soundscapepipe bf21746 publishes it
+const PERFORMANCE = '{"time": "2026-10-20T17:10:09.4+02:00", "detector": "birdedge", "interval": 60.002, "window": 5.0, "windows": 12, "skipped": 0, "runtime_mean": 2.101234, "runtime_max": 3.05, "delay_max": 8.123456, "load": 0.4202, "lag": 0.21, "lost": 0.0}';
+
+test('parsePerformance reads an inference report', () => {
+    const report = parsePerformance(PERFORMANCE);
+    assert.equal(report.key, 'birdedge');
+    assert.equal(report.epochMs, Date.parse('2026-10-20T15:10:09.4Z'));
+    assert.deepEqual(report.values, {
+        interval: 60.002, window: 5.0, windows: 12, skipped: 0, runtime_mean: 2.101234, runtime_max: 3.05,
+        delay_max: 8.123456, load: 0.4202, lag: 0.21, lost: 0,
+    });
+    assert.equal(parsePerformance('{"time": "2026-10-20T17:10:09+02:00", "delay_max": 1}'), null, 'no detector');
+    assert.equal(parsePerformance('nope'), null);
+});
+
+test('the latest report of each detector, and whether it falls behind', () => {
+    const events = [
+        { key: 'birdedge', values: { delay_max: 7 } },
+        { key: 'yolobat', values: { delay_max: 1 } },
+        { key: 'birdedge', values: { delay_max: 8 } },
+    ];
+    assert.deepEqual(latestReports(events), { birdedge: { delay_max: 8 }, yolobat: { delay_max: 1 } });
+    assert.equal(fallsBehind({ load: LOAD_WARNING, lost: 0 }), true);
+    assert.equal(fallsBehind({ load: 0.5, lost: 0.1 }), true);
+    assert.equal(fallsBehind({ load: 0.5, lost: 0 }), false);
+    assert.equal(fallsBehind(undefined), false);
+    assert.equal(formatDelay(8.123), '8.1 s');
+    assert.equal(formatDelay(12.6), '13 s');
 });

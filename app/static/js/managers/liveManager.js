@@ -8,7 +8,7 @@ import {
     parseSignal,
     radiotrackingLimits,
 } from '../utils/liveSignals.js';
-import { SOUNDSCAPE_TOPICS, parseDetection, parseLevels } from '../utils/liveSoundscape.js';
+import { SOUNDSCAPE_TOPICS, parseDetection, parseLevels, parsePerformance } from '../utils/liveSoundscape.js';
 
 const baseUrl = () => window.BASE_URL || '';
 
@@ -37,6 +37,7 @@ const SOURCES = {
     raw: { topic: LIVE_TOPICS.raw, owns: /\/radiotracking\/device\/[^/]+\/json$/, parse: parseRaw },
     detections: { topic: SOUNDSCAPE_TOPICS.detections, owns: /\/soundscapepipe\/detection\/json$/, parse: parseDetection },
     levels: { topic: SOUNDSCAPE_TOPICS.levels, owns: /\/soundscapepipe\/state\/json$/, parse: parseLevels },
+    performance: { topic: SOUNDSCAPE_TOPICS.performance, owns: /\/soundscapepipe\/performance\/json$/, parse: parsePerformance },
 };
 
 /**
@@ -139,7 +140,7 @@ export class LiveManager {
     }
 
     /**
-     * Subscribe to these sources (`matched`, `calibrated`, `raw`, `detections`, `levels`) until the returned
+     * Subscribe to these sources (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`) until the returned
      * function is called. Needs the libraries (`loadLibraries()`). The connection
      * opens with the first panel that wants something and closes with the last.
      */

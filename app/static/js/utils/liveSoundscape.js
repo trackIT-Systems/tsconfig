@@ -4,7 +4,14 @@ import { COLORS, colorFor, finite, parseObject } from './liveSignals.js';
 export const SOUNDSCAPE_TOPICS = {
     detections: '+/soundscapepipe/detection/json',
     levels: '+/soundscapepipe/state/json',
+    performance: '+/soundscapepipe/performance/json',
 };
+
+// The numbers of an inference report (soundscapepipe's `performance` topic)
+const PERFORMANCE_VALUES = ['interval', 'window', 'windows', 'skipped', 'runtime_mean', 'runtime_max', 'delay_max', 'load', 'lag', 'lost'];
+
+/** A detector whose inference takes more than this share of the time cannot keep up for long. */
+export const LOAD_WARNING = 0.9;
 
 /**
  * birdedge stamps a detection with the start of its 5-second window and publishes it once the
@@ -87,6 +94,39 @@ export function parseLevels(payload) {
         state: finite(message.state),
         channels: finite(message.channels),
     };
+}
+
+/**
+ * Read an inference report (`.../soundscapepipe/performance/json`), one per detector every
+ * `status_interval`: `{"time", "detector", "delay_max", "load", "lag", "lost", ...}` (seconds).
+ * @returns {{at: string|null, epochMs: number|null, duration: null, key: string,
+ *            values: Object<string, number>}|null} null without a detector
+ */
+export function parsePerformance(payload) {
+    const message = parseObject(payload);
+    if (!message || text(message.detector) === null) return null;
+    const values = {};
+    for (const name of PERFORMANCE_VALUES) {
+        if (finite(message[name]) !== null) values[name] = message[name];
+    }
+    return { ...timeOf(message), duration: null, key: message.detector, values };
+}
+
+/** The latest report of each detector in these events (ascending in time), by detector. */
+export function latestReports(events) {
+    const latest = {};
+    for (const event of events) latest[event.key] = event.values;
+    return latest;
+}
+
+/** A detector falls behind: inference takes nearly all of the time, or audio was not analysed. */
+export function fallsBehind(report) {
+    return (report?.load ?? 0) >= LOAD_WARNING || (report?.lost ?? 0) > 0;
+}
+
+/** "8.1 s" */
+export function formatDelay(seconds) {
+    return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s`;
 }
 
 /**

@@ -20,13 +20,19 @@ const BATCH_ABOVE = 1500;
 // How close (px) the cursor must be to a dot, beyond its radius, to show its tooltip
 const HIT_SLACK_PX = 6;
 
+// The labels of `markers()`: their size (px), and the height of a row when they are stacked
+const MARKER_FONT_PX = 11;
+const MARKER_ROW_PX = 14;
+
 /**
  * The least distance (px) between the times on the axis. A phone's plot is about 300 px wide:
- * at 80 px uPlot steps from a minute to five, and there would be a single time on the axis.
- * The times of whole minutes ("14:05") fit in 40 px.
+ * at 80 px uPlot steps from a minute to five, and five minutes would show a single time. Whole
+ * minutes ("14:05") fit in 40 px, times with seconds ("14:05:30", windows of two minutes and
+ * less) need 60.
  */
-export function timeTickSpace(plotWidth) {
-    return plotWidth < 500 ? 40 : 80;
+export function timeTickSpace(plotWidth, rangeSeconds) {
+    if (plotWidth >= 500) return 80;
+    return rangeSeconds > 180 ? 40 : 60;
 }
 
 /**
@@ -57,6 +63,7 @@ export function yAxisSize(values) {
  * - `colorOf(key)`: the colour of a series (default `colorFor`)
  * - `loadLimits()`: what the axes need from the service's configuration (default radiotracking's)
  * - `clockToleranceMs`: how late a signal may arrive before the clock warning shows
+ * - `markers(edge)`: dashed vertical lines, `{at, label}` (`at` in s; `edge` is the axis' end)
  *
  * The broker connection, chart and signals are kept out of the component's
  * data: Alpine would wrap them in proxies, and the arrays grow.
@@ -66,6 +73,7 @@ export function liveChartMixin() {
     let release = null; // gives back what liveSources() acquired
     let yBounds = null;
     let gliding = false;
+    let ink = '#888'; // the page's text colour, for the markers
 
     return {
         status: 'idle', // connecting | connected | offline | failed, or idle: reading nothing
@@ -122,6 +130,9 @@ export function liveChartMixin() {
         },
         colorOf(key) {
             return colorFor(key);
+        },
+        markers() {
+            return [];
         },
         loadLimits() {
             return liveManager.loadLimits();
@@ -253,6 +264,7 @@ export function liveChartMixin() {
             chart?.destroy();
 
             const text = getComputedStyle(element).color;
+            ink = text;
             const grid = { stroke: 'rgba(128,128,128,0.2)', width: 1 };
             yBounds = this.computeYBounds(this.eventWindow());
 
@@ -281,7 +293,7 @@ export function liveChartMixin() {
                         stroke: text,
                         grid,
                         ticks: grid,
-                        space: (u, axis, min, max, plotWidth) => timeTickSpace(plotWidth),
+                        space: (u, axis, min, max, plotWidth) => timeTickSpace(plotWidth, max - min),
                         // 24 hours and no date: this is live, and a date collided with the times
                         values: (u, splits, axis, space, increment) => splits.map(split => formatClock(split, increment < 60)),
                     },
@@ -364,6 +376,22 @@ export function liveChartMixin() {
             ctx.beginPath();
             ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
             ctx.clip();
+            // The markers' lines under the dots, the full height of the plot
+            const markers = this.markers(max).filter(marker => marker.at > min && marker.at <= max);
+            if (markers.length > 0) {
+                ctx.strokeStyle = ink;
+                ctx.globalAlpha = 0.6;
+                ctx.lineWidth = ratio;
+                ctx.setLineDash([4 * ratio, 3 * ratio]);
+                for (const marker of markers) {
+                    const x = Math.round(u.valToPos(marker.at, 'x', true));
+                    ctx.beginPath();
+                    ctx.moveTo(x, bbox.top);
+                    ctx.lineTo(x, bbox.top + bbox.height);
+                    ctx.stroke();
+                }
+                ctx.setLineDash([]);
+            }
             ctx.globalAlpha = 0.8; // dots on top of each other stay countable
             for (let i = firstAtOrAfter(events, min); i < events.length; i++) {
                 event = events[i];
@@ -379,6 +407,17 @@ export function liveChartMixin() {
                 }
                 ctx.fill();
             }
+            // Their labels above the dots, at the bottom of the plot: a row each, so lines that
+            // are close do not write over each other; each ends at its line
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = ink;
+            ctx.font = `${MARKER_FONT_PX * ratio}px system-ui, sans-serif`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            markers.forEach((marker, row) => {
+                const x = Math.round(u.valToPos(marker.at, 'x', true));
+                ctx.fillText(marker.label, x - 3 * ratio, bbox.top + bbox.height - (3 + row * MARKER_ROW_PX) * ratio);
+            });
             ctx.restore();
         },
 

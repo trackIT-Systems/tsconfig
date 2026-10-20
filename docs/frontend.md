@@ -112,7 +112,7 @@ each tick, because Alpine cannot see the manager's.
 | Signal Power | `liveSignalPower` | `matched` and `calibrated` | the power of each SDR (dBW or dBm, chosen) |
 | Frequency Usage | `liveFrequencyUsage` | `matched` | the frequency of the signal, one dot per signal |
 | Signal Detail | `liveSignalDetail` | `raw`, after Start | a value of the raw signal, chosen, one series per SDR |
-| Detections | `liveDetections` | `detections` | the confidence of each detection, one series per species; detectors shown or hidden |
+| Detections | `liveDetections` | `detections` and `performance` | the confidence of each detection, one series per species; detectors shown or hidden |
 | Input Levels | `liveInputLevels` | `levels` | peak and RMS (dBFS) of every input channel, one dot per report |
 
 The first three are the Radiotracking tab (`partials/live_radiotracking.html`), the last two the
@@ -127,14 +127,22 @@ radiotracking's limits, its `loadLimits()` reads the configured detectors (`GET 
 names); without them the panel still works, with the names as detections give them. A button per
 detector shows or hides its detections, a detector that is not configured gets one when it sends;
 hiding only filters what is drawn and counted (`forEachDot()`, `onTick()`), so what is held comes back
-at once, and `liveManager.prefs.hiddenDetectors` keeps the choice while the page is open. The species
+at once, and `liveManager.prefs.hiddenDetectors` keeps the choice while the page is open. Detections also
+reads the detectors' inference reports (`<station>/soundscapepipe/performance/json`, one per detector
+every `status_interval`, `parsePerformance()`): the latest `delay_max` of each detector (the longest
+time from a window's first sample to its detections) is on its button, and each detector shown has
+a dashed line at that delay before the end of the time axis (`markers()`): left of it the detector
+has analysed all of the audio, right of it more detections may come (`delay_max` is the slowest
+window of the report, most are faster, so some detections are already there). A line per detector, not one band for all:
+their delays differ (birdedge's 5 s windows about 7 s, yolobat's 1 s windows about 2.5 s). A detector whose load reaches 0.9 or that lost audio has a yellow button
+(`fallsBehind()`); its button's title has the load, lag and lost audio. The species
 (with its English and German name), detector, duration, channel and, for bats, the frequencies are in the tooltip; the levels' tooltip adds the SNR
 and the capture device's ALSA state.
 
 Each panel is a thin component (`partials/live_signal_power.html`, ...) over three shared parts:
 
 - **`liveManager`** (`managers/liveManager.js`) owns the one MQTT connection and, for each kind of
-  message (`matched`, `calibrated`, `raw`, `detections`, `levels`), an `EventWindow` with the signals of
+  message (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`), an `EventWindow` with the signals of
   the last five minutes.
   Panels `acquire(sources)` what they need and get a function to give it back; the connection opens
   with the first and closes with the last, and a topic wanted by two panels is subscribed once. The
@@ -160,7 +168,9 @@ Each panel is a thin component (`partials/live_signal_power.html`, ...) over thr
   `forEachDot(event, add)` (`add(key, y)` per dot; the key picks the colour), `yLabel`, `yRange()`,
   `formatY()`, `legendLabel()` and `tipRows()`. It may override `colorOf(key)` (default `colorFor()`),
   `loadLimits()` (default radiotracking's; the Soundscapepipe panels have fixed axes, confidence 0 to
-  1 and dBFS from at least -60 to just above 0, and Detections reads soundscapepipe's instead) and `clockToleranceMs`.
+  1 and dBFS from at least -60 to just above 0, and Detections reads soundscapepipe's instead),
+  `clockToleranceMs` and `markers(edge)` (dashed lines the height of the plot under the dots, `{at,
+  label}`, their labels in rows at the bottom of the plot so lines that are close stay readable).
 
 How the charts are drawn:
 
@@ -185,8 +195,9 @@ How the charts are drawn:
 - **A 24-hour time axis without a date.** This is live, and a date collided with the times.
 - **Narrow screens.** The vertical axis is only as wide as its tick texts (`yAxisSize()`), and its
   title (`yLabel`) is above the chart, not turned along the axis. On a plot narrower than 500 px the
-  times are at least 40 px apart instead of 80 (`timeTickSpace()`): uPlot steps from one minute to
-  five, so a phone would show a single time. The legend is a wrapping flex row: Alpine's `x-for`
+  times are at least 40 px apart instead of 80 when they are whole minutes, 60 px when they have
+  seconds (`timeTickSpace()`): uPlot steps from one minute to five, so a phone would show a single
+  time. The legend is a wrapping flex row: Alpine's `x-for`
   leaves no space between its items, so inline items made one line that pushed the page sideways.
   On phones the card body has less padding left and right (`style.css`).
 - **The time axis slides on every animation frame** (`glide()`, with uPlot's `pxAlign: 0` so nothing is
