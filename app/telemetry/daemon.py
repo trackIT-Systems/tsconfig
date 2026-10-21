@@ -23,6 +23,8 @@ from app.bluetooth.supervisor import sd_notify
 from app.logging_config import setup_logging
 from app.telemetry.clock import Clock
 from app.telemetry.collectors import COLLECTORS, Collector, Unavailable
+from app.telemetry.collectors.journalstats import JournalStatsCollector
+from app.telemetry.journal import JournalSource
 from app.telemetry.outputs import CsvFiles, MqttOutput
 from app.telemetry.samples import Sample, encode_json, make_values
 from app.telemetry.settings import DEFAULT_CONFIG, TelemetrySettings, load_settings
@@ -73,10 +75,13 @@ async def available_collectors(collectors: Iterable[Collector]) -> list[Collecto
 
 
 class Daemon:
-    def __init__(self, collectors: list[Collector], outputs: list[Output], clock: Clock):
+    def __init__(
+        self, collectors: list[Collector], outputs: list[Output], clock: Clock, journal: JournalSource | None = None
+    ):
         self.collectors = collectors
         self.outputs = outputs
         self.clock = clock
+        self.journal = journal
         # What last failed, by collector or output, so a failure repeating every
         # minute is logged as a warning once (and its recovery once)
         self._failures: dict[str, str] = {}
@@ -117,16 +122,19 @@ class Daemon:
             for reading in readings
         ]
 
+    def write(self, sample: Sample, outputs: Iterable[Output]) -> None:
+        for output in outputs:
+            key = type(output).__name__
+            try:
+                output.write(sample)
+            except Exception as e:  # noqa: BLE001 - a failing output must not stop the other one
+                self._failed(key, e)
+            else:
+                self._succeeded(key)
+
     async def tick(self, collector: Collector) -> None:
         for sample in await self.collect(collector):
-            for output in self.outputs:
-                key = type(output).__name__
-                try:
-                    output.write(sample)
-                except Exception as e:  # noqa: BLE001 - a failing output must not stop the other one
-                    self._failed(key, e)
-                else:
-                    self._succeeded(key)
+            self.write(sample, self.outputs)
 
     async def run_collector(self, collector: Collector, stop: asyncio.Event) -> None:
         interval = collector.settings.interval
@@ -148,7 +156,10 @@ class Daemon:
                 except TimeoutError:
                     pass
 
-        await asyncio.gather(watchdog(), *(self.run_collector(c, stop) for c in self.collectors))
+        tasks = [watchdog(), *(self.run_collector(c, stop) for c in self.collectors)]
+        if self.journal:
+            tasks.append(self.journal.run(stop))
+        await asyncio.gather(*tasks)
 
 
 def _settings(path: Path) -> TelemetrySettings:
@@ -168,6 +179,7 @@ async def _once(collectors: list[Collector], clock: Clock) -> None:
 
 
 async def _serve(settings: TelemetrySettings, collectors: list[Collector], clock: Clock) -> None:
+    """Publish until SIGTERM; `collectors` are the enabled ones, not yet checked."""
     host = socket.gethostname()
     outputs: list[Output] = []
     files = None
@@ -184,6 +196,23 @@ async def _serve(settings: TelemetrySettings, collectors: list[Collector], clock
         mqtt.start()
         outputs.append(mqtt)
 
+    daemon = Daemon([], outputs, clock)
+    # Journal entries only go over MQTT: the journal itself is their file
+    if settings.journal.enabled and mqtt:
+        state_dir = os.environ.get("STATE_DIRECTORY")
+        daemon.journal = JournalSource(
+            settings.journal,
+            clock,
+            publish=lambda sample: daemon.write(sample, [mqtt]),
+            failed=daemon._failed,
+            succeeded=daemon._succeeded,
+            state_dir=Path(state_dir) if state_dir else None,
+        )
+        for collector in collectors:
+            if isinstance(collector, JournalStatsCollector):
+                collector.counts = daemon.journal.counts
+    daemon.collectors = await available_collectors(collectors)
+
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGTERM, signal.SIGINT):
@@ -191,12 +220,12 @@ async def _serve(settings: TelemetrySettings, collectors: list[Collector], clock
 
     logger.info(
         "Publishing %s to %s",
-        ", ".join(f"{c.name} every {c.settings.interval} s" for c in collectors) or "nothing",
+        ", ".join(f"{c.name} every {c.settings.interval} s" for c in daemon.collectors) or "nothing",
         ", ".join(type(o).__name__ for o in outputs) or "nowhere",
     )
     sd_notify("READY=1")
     try:
-        await Daemon(collectors, outputs, clock).run(stop)
+        await daemon.run(stop)
     finally:
         sd_notify("STOPPING=1")
         if mqtt:
@@ -219,9 +248,9 @@ def main(argv: list[str] | None = None) -> int:
     clock = Clock(Path(runtime_dir) if runtime_dir else None)
 
     async def run() -> None:
-        collectors = await available_collectors(enabled_collectors(settings))
+        collectors = enabled_collectors(settings)
         if args.once:
-            await _once(collectors, clock)
+            await _once(await available_collectors(collectors), clock)
         else:
             await _serve(settings, collectors, clock)
 

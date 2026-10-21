@@ -7,6 +7,7 @@ app.telemetry.settings.CollectorsSettings; there is no plugin mechanism.
 from app.telemetry.collectors.base import Collector, Reading, Unavailable
 from app.telemetry.collectors.configs import ConfigsCollector
 from app.telemetry.collectors.disk import DiskCollector
+from app.telemetry.collectors.journalstats import JournalStatsCollector
 from app.telemetry.collectors.modem import ModemCollector
 from app.telemetry.collectors.network import NetworkCollector
 from app.telemetry.collectors.release import ReleaseCollector
@@ -28,6 +29,7 @@ COLLECTORS: tuple[type[Collector], ...] = (
     ModemCollector,
     ConfigsCollector,
     ReleaseCollector,
+    JournalStatsCollector,
 )
 
 __all__ = ["COLLECTORS", "Collector", "Reading", "Unavailable"]

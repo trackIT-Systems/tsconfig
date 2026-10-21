@@ -42,6 +42,10 @@ class NetworkSettings(CollectorSettings):
     )
 
 
+class JournalStatsSettings(CollectorSettings):
+    interval: int = Field(600, ge=10, le=86400, description="Seconds between two readings")
+
+
 class CollectorsSettings(_Strict):
     system: CollectorSettings = Field(default_factory=CollectorSettings)
     thermal: CollectorSettings = Field(default_factory=CollectorSettings)
@@ -55,6 +59,48 @@ class CollectorsSettings(_Strict):
     modem: HourlyCollectorSettings = Field(default_factory=HourlyCollectorSettings)
     configs: HourlyCollectorSettings = Field(default_factory=HourlyCollectorSettings)
     release: HourlyCollectorSettings = Field(default_factory=HourlyCollectorSettings)
+    journalstats: JournalStatsSettings = Field(default_factory=JournalStatsSettings)
+
+
+# Syslog priorities 0..6 by name; debug (7) is never published
+Level = Literal["emerg", "alert", "crit", "err", "warning", "notice", "info"]
+LEVELS: tuple[Level, ...] = ("emerg", "alert", "crit", "err", "warning", "notice", "info")
+
+
+class JournalLimits(_Strict):
+    """How many journal entries of one level are published; see docs/logging.md, "Limits"."""
+
+    repeat_window: int = Field(600, ge=0, le=86400, description="Seconds in which a repeated message is sent once")
+    burst: int = Field(10, ge=0, le=10000, description="Entries per unit sent at once before `rate` applies")
+    rate: float = Field(60, gt=0, le=86400, description="Seconds per entry and unit after the burst")
+    budget: int = Field(100, ge=0, le=100000, description="Entries per hour for the whole station")
+    max_length: int = Field(256, ge=16, le=65536, description="Characters per message")
+
+
+class JournalLimitOverrides(_Strict):
+    """The limits of one level that differ from the default ones."""
+
+    repeat_window: int | None = Field(None, ge=0, le=86400)
+    burst: int | None = Field(None, ge=0, le=10000)
+    rate: float | None = Field(None, gt=0, le=86400)
+    budget: int | None = Field(None, ge=0, le=100000)
+    max_length: int | None = Field(None, ge=16, le=65536)
+
+
+class JournalSettings(_Strict):
+    """Journal entries published per unit and level (docs/logging.md, "Forwarding over MQTT")."""
+
+    enabled: bool = True
+    # The lowest level published; the bridge selects what leaves the station
+    level: Level = "info"
+    limits: JournalLimits = Field(default_factory=JournalLimits)
+    levels: dict[Level, JournalLimitOverrides] = Field(default_factory=dict)
+
+    def limits_for(self, level: Level) -> JournalLimits:
+        override = self.levels.get(level)
+        if override is None:
+            return self.limits
+        return self.limits.model_copy(update=override.model_dump(exclude_none=True))
 
 
 class BrokerSettings(_Strict):
@@ -75,6 +121,7 @@ class TelemetrySettings(_Strict):
     formats: list[Literal["csv", "json", "cbor"]] = Field(default_factory=lambda: ["csv", "json", "cbor"])
     files: FileSettings = Field(default_factory=FileSettings)
     collectors: CollectorsSettings = Field(default_factory=CollectorsSettings)
+    journal: JournalSettings = Field(default_factory=JournalSettings)
 
 
 def load_settings(path: Path) -> TelemetrySettings:

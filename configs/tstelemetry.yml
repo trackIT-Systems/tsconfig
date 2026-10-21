@@ -58,3 +58,28 @@ collectors:
   release:
     enabled: true
     interval: 3600
+  # Entries and dropped entries per unit and level of the journal source below
+  journalstats:
+    enabled: true
+    interval: 600
+# Journal entries, published as <hostname>/tsconfig/journal/<unit>/<level>/{csv,json,cbor} (MQTT only).
+# The MQTT bridge selects which units and levels leave the station; see tsOS-base docs/logging.md.
+journal:
+  enabled: true
+  # The lowest level published: emerg, alert, crit, err, warning, notice or info (debug never is)
+  level: info
+  # Limits for every level, counted per level
+  limits:
+    # Seconds in which the same unit, level and message is sent once; a count of the repeats follows
+    repeat_window: 600
+    # Entries per unit sent at once, then one every `rate` seconds
+    burst: 10
+    rate: 60
+    # Entries per hour for the whole station
+    budget: 100
+    # Characters per message; a traceback keeps its first and last line
+    max_length: 256
+  # Limits of single levels that differ, e.g.
+  #   info:
+  #     budget: 50
+  levels: {}
