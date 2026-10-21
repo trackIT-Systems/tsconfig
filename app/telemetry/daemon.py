@@ -212,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--once", action="store_true", help="read every collector once, print as JSON and exit")
     args = parser.parse_args(argv)
 
-    setup_logging(verbosity=args.verbose)
+    setup_logging(verbosity=args.verbose, identifier="tstelemetry")
     settings = _settings(args.config)
     # systemd's RuntimeDirectory= (cleared at boot) keeps the clock-synced marker
     runtime_dir = os.environ.get("RUNTIME_DIRECTORY")

@@ -94,7 +94,7 @@ def main():
     args = parse_arguments()
 
     # Set up logging
-    setup_logging(verbosity=args.verbose)
+    setup_logging(verbosity=args.verbose, identifier="tsconfig-ble")
     logger = get_logger(__name__)
 
     # Log configuration

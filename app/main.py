@@ -42,7 +42,7 @@ from app.routers import (
 from app.utils.subprocess_async import run_subprocess_async
 
 # Set up logging for the main application
-setup_logging()
+setup_logging(identifier="tsconfig")
 logger = get_logger(__name__)
 
 if not config_loader.is_server_mode():
@@ -114,7 +114,7 @@ async def lifespan(app: FastAPI):
     # uvicorn applies its own logging config after this module is imported,
     # which resets the uvicorn/uvicorn.access levels; re-apply ours once the
     # server is up.
-    setup_logging()
+    setup_logging(identifier="tsconfig")
     await validate_oidc_config()
     yield
 
