@@ -7,7 +7,9 @@ import { serverModeMixin } from '../mixins/serverModeMixin.js';
 import { colorFor, formatTick } from '../utils/liveSignals.js';
 import {
     DETECTION_DELAY_MS,
+    analysisBlock,
     configuredDetectors,
+    detectorColor,
     fallsBehind,
     formatDelay,
     latestReports,
@@ -37,9 +39,9 @@ async function getJson(path) {
  * detections: the detectors of soundscapepipe.yml, and any other that sends some.
  *
  * The detectors' inference reports (every `status_interval`) give how long a window takes from
- * its first sample to its detections (`delay_max`, the slowest window of the report). A dashed line
- * per detector marks how far it has analysed all of the audio: left of its line its detections are
- * complete, right of it more may come. The buttons show the delay too.
+ * its first sample to its detections (`delay_max`, the slowest window of the report) and how long a
+ * window is: a box per detector, in its colour, shades the block of audio it is analysing now
+ * (`analysisBlock()`). Its button has the same colour and shows the delay.
  */
 export function liveDetections() {
     let names = {}; // species names by what detections call them (yolobat: `Nnoc`)
@@ -112,16 +114,12 @@ export function liveDetections() {
             this.count = shown;
         },
 
-        /**
-         * A line per detector shown, at its latest delay before the end of the axis: how far it has
-         * analysed the audio. The slowest first, so its label is the lowest.
-         */
-        markers(edge) {
+        /** A box per detector shown, in its colour, over the block of audio it is analysing now. */
+        spans(edge) {
             return this.detectors
-                .filter(detector => this.isShown(detector) && Number.isFinite(this.reports[detector]?.delay_max))
-                .map(detector => ({ detector, delay: this.reports[detector].delay_max }))
-                .sort((a, b) => b.delay - a.delay)
-                .map(({ detector, delay }) => ({ at: edge - delay, label: `${detector} ${formatDelay(delay)}` }));
+                .filter(detector => this.isShown(detector))
+                .map(detector => ({ ...analysisBlock(this.reports[detector], edge), color: detectorColor(detector) }))
+                .filter(span => span.from !== undefined);
         },
 
         /** "8.1 s": how far a detector is behind real time, from its latest report. */
@@ -134,9 +132,12 @@ export function liveDetections() {
             return fallsBehind(this.reports[detector]);
         },
 
-        buttonClass(detector) {
-            const kind = this.behind(detector) ? 'warning' : 'primary';
-            return this.isShown(detector) ? `btn-${kind}` : `btn-outline-${kind}`;
+        /** The button in the detector's colour: filled while its detections are shown, outlined while not. */
+        buttonStyle(detector) {
+            const color = detectorColor(detector);
+            return this.isShown(detector)
+                ? `background-color: ${color}; border-color: ${color}; color: #fff`
+                : `background-color: transparent; border-color: ${color}; color: ${color}`;
         },
 
         detectorTitle(detector) {
@@ -152,11 +153,16 @@ export function liveDetections() {
             return `${action} the detections of ${detector}. ${parts.join(', ')}`;
         },
 
-        /** Under the chart: what the dashed lines are. */
+        /** Under the chart: what the boxes are, with each block's length and delay. */
         get pendingText() {
-            const shown = this.detectors.filter(detector => this.isShown(detector) && this.delayOf(detector));
-            return shown.length > 0
-                ? 'Dashed lines: left of its line a detector has analysed all of the audio; right of it, more detections may come'
+            const blocks = this.detectors
+                .filter(detector => this.isShown(detector) && analysisBlock(this.reports[detector], 0))
+                .map(detector => {
+                    const { window, delay_max: delay } = this.reports[detector];
+                    return `${detector} ${formatDelay(window)} blocks, ${formatDelay(delay)} behind`;
+                });
+            return blocks.length > 0
+                ? `Shaded: the block of audio each detector is analysing now (${blocks.join(', ')})`
                 : '';
         },
 

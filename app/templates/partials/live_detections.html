@@ -10,7 +10,7 @@
                     <div class="btn-group btn-group-sm" role="group" aria-label="Detectors" x-show="detectors.length > 0" x-cloak>
                         <template x-for="name in detectors" :key="name">
                             <button type="button" class="btn text-nowrap"
-                                    :class="buttonClass(name)"
+                                    :style="buttonStyle(name)"
                                     :aria-pressed="isShown(name)"
                                     :title="detectorTitle(name)"
                                     @click="toggleDetector(name)">
@@ -25,8 +25,9 @@
                 <p class="small text-muted">
                     Confidence of every detection, a dot per detection in the colour of its species.
                     The buttons show or hide the detections of a detector, with how far it is behind
-                    real time (yellow: it cannot keep up). A detection is drawn at the start of what was
-                    analysed, so it comes in a few seconds after its time: see the dashed lines.
+                    real time (<i class="fas fa-triangle-exclamation"></i>: it cannot keep up). Each
+                    detector's colour shades the block of audio it is analysing now: its detections in
+                    that block come once it is through.
                 </p>
 
                 {% include 'partials/live_chart.html' %}

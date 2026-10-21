@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import { colorFor } from '../../app/static/js/utils/liveSignals.js';
 import {
     LOAD_WARNING,
+    analysisBlock,
     configuredDetectors,
+    detectorColor,
     fallsBehind,
     formatDelay,
     latestReports,
@@ -142,4 +144,18 @@ test('the latest report of each detector, and whether it falls behind', () => {
     assert.equal(fallsBehind(undefined), false);
     assert.equal(formatDelay(8.123), '8.1 s');
     assert.equal(formatDelay(12.6), '13 s');
+});
+
+test('analysisBlock: the window being analysed, delay_max before the edge and window long', () => {
+    assert.deepEqual(analysisBlock({ window: 5, delay_max: 7.2 }, 100), { from: 92.8, to: 97.8 });
+    assert.deepEqual(analysisBlock({ window: 5, delay_max: 3 }, 100), { from: 97, to: 100 }, 'never past the edge');
+    assert.equal(analysisBlock({ delay_max: 7.2 }, 100), null, 'no window');
+    assert.equal(analysisBlock({ window: 5 }, 100), null, 'no delay');
+    assert.equal(analysisBlock(undefined, 100), null);
+});
+
+test('each detector has its own colour', () => {
+    const colors = ['birdedge', 'yolobat', 'audioprotopnet', 'lure', 'schedule'].map(detectorColor);
+    assert.equal(new Set(colors).size, colors.length);
+    assert.equal(detectorColor('somethingnew'), colorFor('somethingnew'));
 });

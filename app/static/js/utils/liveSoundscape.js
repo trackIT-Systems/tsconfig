@@ -10,6 +10,33 @@ export const SOUNDSCAPE_TOPICS = {
 // The numbers of an inference report (soundscapepipe's `performance` topic)
 const PERFORMANCE_VALUES = ['interval', 'window', 'windows', 'skipped', 'runtime_mean', 'runtime_max', 'delay_max', 'load', 'lag', 'lost'];
 
+// A colour per detector, the same on every station, for its button and its analysis block; detectors
+// not listed get one from their name. Okabe-Ito colours, as the species', but the block is only a tint
+const DETECTOR_COLORS = {
+    birdedge: COLORS[3],
+    yolobat: COLORS[4],
+    audioprotopnet: COLORS[1],
+    lure: COLORS[5],
+    schedule: COLORS[7],
+};
+
+export function detectorColor(detector) {
+    return DETECTOR_COLORS[detector] ?? colorFor(detector);
+}
+
+/**
+ * The block of audio a detector is analysing now, from its latest report: a window that starts at
+ * t0 is published at about t0 + `delay_max`, so the one being analysed started `delay_max` before
+ * the end of the axis and is `window` long. Null without both.
+ */
+export function analysisBlock(report, edge) {
+    const delay = report?.delay_max;
+    const window = report?.window;
+    if (!Number.isFinite(delay) || !Number.isFinite(window) || delay <= 0 || window <= 0) return null;
+    const from = edge - delay;
+    return { from, to: Math.min(edge, from + window) };
+}
+
 /** A detector whose inference takes more than this share of the time cannot keep up for long. */
 export const LOAD_WARNING = 0.9;
 

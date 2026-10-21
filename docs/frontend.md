@@ -130,12 +130,16 @@ hiding only filters what is drawn and counted (`forEachDot()`, `onTick()`), so w
 at once, and `liveManager.prefs.hiddenDetectors` keeps the choice while the page is open. Detections also
 reads the detectors' inference reports (`<station>/soundscapepipe/performance/json`, one per detector
 every `status_interval`, `parsePerformance()`): the latest `delay_max` of each detector (the longest
-time from a window's first sample to its detections) is on its button, and each detector shown has
-a dashed line at that delay before the end of the time axis (`markers()`): left of it the detector
-has analysed all of the audio, right of it more detections may come (`delay_max` is the slowest
-window of the report, most are faster, so some detections are already there). A line per detector, not one band for all:
-their delays differ (birdedge's 5 s windows about 7 s, yolobat's 1 s windows about 2.5 s). A detector whose load reaches 0.9 or that lost audio has a yellow button
-(`fallsBehind()`); its button's title has the load, lag and lost audio. The species
+time from a window's first sample to its detections) is on its button. Each detector has a colour
+(`detectorColor()`): its button is filled with it while its detections are shown, outlined while
+not, and a translucent box in it, the height of the plot and under the dots, shades the block of
+audio the detector is analysing now (`spans()`, `analysisBlock()`): a window that starts at t0 is
+published at about t0 + `delay_max`, so that block starts `delay_max` before the end of the axis and
+is `window` long. A box per detector, overlapping, not one band for all: their blocks and delays
+differ (birdedge 5 s blocks about 7 s behind, yolobat 1 s blocks about 2.5 s behind). The block is an
+estimate from the latest report (`delay_max` is the slowest window of its interval), it moves with
+the axis between reports. A detector whose load reaches 0.9 or that lost audio has a warning icon on
+its button (`fallsBehind()`); its button's title has the load, lag and lost audio. The species
 (with its English and German name), detector, duration, channel and, for bats, the frequencies are in the tooltip; the levels' tooltip adds the SNR
 and the capture device's ALSA state.
 
@@ -169,8 +173,8 @@ Each panel is a thin component (`partials/live_signal_power.html`, ...) over thr
   `formatY()`, `legendLabel()` and `tipRows()`. It may override `colorOf(key)` (default `colorFor()`),
   `loadLimits()` (default radiotracking's; the Soundscapepipe panels have fixed axes, confidence 0 to
   1 and dBFS from at least -60 to just above 0, and Detections reads soundscapepipe's instead),
-  `clockToleranceMs` and `markers(edge)` (dashed lines the height of the plot under the dots, `{at,
-  label}`, their labels in rows at the bottom of the plot so lines that are close stay readable).
+  `clockToleranceMs` and `spans(edge)` (translucent boxes the height of the plot under the dots,
+  `{from, to, color}`, with their edges drawn so boxes that overlap stay apart).
 
 How the charts are drawn:
 

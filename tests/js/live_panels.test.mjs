@@ -12,7 +12,7 @@ import { liveTabs } from '../../app/static/js/components/liveTabs.js';
 import { liveManager } from '../../app/static/js/managers/liveManager.js';
 import { timeTickSpace, yAxisSize } from '../../app/static/js/mixins/liveChartMixin.js';
 import { LIVE_TOPICS, WINDOW_MS, colorFor, padRange } from '../../app/static/js/utils/liveSignals.js';
-import { SOUNDSCAPE_TOPICS, levelColor } from '../../app/static/js/utils/liveSoundscape.js';
+import { SOUNDSCAPE_TOPICS, detectorColor, levelColor } from '../../app/static/js/utils/liveSoundscape.js';
 import { installBrowser } from './helpers.mjs';
 
 const HOST = 'tsos-test';
@@ -937,63 +937,65 @@ const report = (agoMs, fields) => JSON.stringify({
     runtime_mean: 2.1, runtime_max: 3.0, delay_max: 8.1, load: 0.42, lag: 0.2, lost: 0, ...fields,
 });
 
-test('Detections marks how far each detector has analysed, and shows its delay', async t => {
+test('Detections shades the block each detector is analysing now, in its colour', async t => {
     const { clients, panel } = await detectionsSetup(t);
-    assert.deepEqual(panel.markers(1000), [], 'no report yet, no line');
+    assert.deepEqual(panel.spans(1000), [], 'no report yet, no block');
     assert.equal(panel.pendingText, '');
     assert.equal(panel.delayOf('birdedge'), '');
 
     clients[0].send(PERFORMANCE, report(30_000, { detector: 'birdedge', delay_max: 7.5 }));
     clients[0].send(PERFORMANCE, report(1000, { detector: 'birdedge', delay_max: 8.1 }));
-    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', window: 1.0, delay_max: 1.24, load: 0.1 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', window: 1.0, delay_max: 2.5, load: 0.1 }));
     panel.tick();
     assert.equal(panel.count, 2, 'reports are no detections');
     assert.equal(panel.delayOf('birdedge'), '8.1 s', 'the latest report');
-    assert.equal(panel.delayOf('yolobat'), '1.2 s');
-    assert.deepEqual(panel.markers(1000), [
-        { at: 1000 - 8.1, label: 'birdedge 8.1 s' },
-        { at: 1000 - 1.24, label: 'yolobat 1.2 s' },
-    ], 'a line per detector at its own delay, the slowest first');
-    assert.match(panel.pendingText, /^Dashed lines: left of its line a detector has analysed all of the audio/);
+    assert.equal(panel.delayOf('yolobat'), '2.5 s');
+    assert.deepEqual(panel.spans(1000), [
+        { from: 1000 - 8.1, to: 1000 - 8.1 + 5, color: detectorColor('birdedge') },
+        { from: 1000 - 2.5, to: 1000 - 2.5 + 1, color: detectorColor('yolobat') },
+    ], 'each its own block: as long as its window, as far back as its delay');
+    assert.notEqual(detectorColor('birdedge'), detectorColor('yolobat'));
+    assert.equal(panel.pendingText,
+        'Shaded: the block of audio each detector is analysing now (birdedge 5.0 s blocks, 8.1 s behind, yolobat 1.0 s blocks, 2.5 s behind)');
     assert.match(panel.detectorTitle('birdedge'), /^Hide the detections of birdedge\. detections up to 8\.1 s after the audio, load 42 %, lag 0\.2 s$/);
-    assert.equal(panel.buttonClass('birdedge'), 'btn-primary');
+    assert.equal(panel.buttonStyle('birdedge'),
+        `background-color: ${detectorColor('birdedge')}; border-color: ${detectorColor('birdedge')}; color: #fff`);
 
     panel.toggleDetector('birdedge');
-    assert.deepEqual(panel.markers(1000), [{ at: 1000 - 1.24, label: 'yolobat 1.2 s' }], 'none for a hidden detector');
-    assert.equal(panel.buttonClass('birdedge'), 'btn-outline-primary');
+    assert.deepEqual(panel.spans(1000).map(span => span.color), [detectorColor('yolobat')], 'none for a hidden detector');
+    assert.equal(panel.buttonStyle('birdedge'),
+        `background-color: transparent; border-color: ${detectorColor('birdedge')}; color: ${detectorColor('birdedge')}`);
 });
 
-test('the markers are drawn as dashed lines the height of the plot, their labels in rows at its bottom', async t => {
+test('the blocks are drawn the height of the plot, under the dots, overlapping', async t => {
     const { clients, panel } = await detectionsSetup(t);
-    clients[0].send(PERFORMANCE, report(1000, { detector: 'birdedge', delay_max: 8.1 }));
-    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', delay_max: 1.24 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'birdedge', window: 5.0, delay_max: 8.1 }));
+    clients[0].send(PERFORMANCE, report(1000, { detector: 'yolobat', window: 1.0, delay_max: 2.5 }));
     panel.tick();
 
-    const lines = [];
-    const texts = [];
-    let dash = null;
-    let from = null;
+    const ops = [];
     const ctx = {
-        save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, arc() {}, fill() {},
-        setLineDash(pattern) { if (pattern.length > 0) dash = pattern; },
-        moveTo(x, y) { from = [x, y]; },
-        lineTo(x, y) { lines.push([...from, x, y]); },
-        stroke() {},
-        fillText: (text, x, y) => texts.push([text, x, y]),
+        save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, moveTo() {},
+        arc: () => ops.push(['dot']),
+        fill() {},
+        fillRect: (x, y, w, h) => ops.push(['fill', ctx.fillStyle, ctx.globalAlpha, x, y, w, h]),
+        strokeRect: (x, y, w, h) => ops.push(['edge', ctx.strokeStyle, x, y, w, h]),
     };
     const edge = Date.now() / 1000;
     lastChart().options.hooks.draw[0]({
         ctx,
-        bbox: { left: 0, top: 10, width: 400, height: 200 },
+        bbox: { left: 0, top: 10, width: 600, height: 200 },
         scales: { x: { min: edge - 60, max: edge } },
-        valToPos: (value, axis) => (axis === 'x' ? (value - (edge - 60)) / 60 * 400 : 0),
+        valToPos: (value, axis) => (axis === 'x' ? (value - (edge - 60)) / 60 * 600 : 0),
     });
-    const x = delay => Math.round((60 - delay) / 60 * 400);
-    assert.deepEqual(lines, [[x(8.1), 10, x(8.1), 210], [x(1.24), 10, x(1.24), 210]], 'from the top to the bottom of the plot');
-    assert.ok(dash, 'dashed');
-    assert.deepEqual(texts.map(([text, , y]) => [text, y]), [['birdedge 8.1 s', 207], ['yolobat 1.2 s', 193]],
-        'a row each, the slowest lowest');
-    assert.equal(texts[0][1], x(8.1) - 3, 'each label ends at its line');
+    const x = seconds => Math.round((60 - seconds) / 60 * 600); // seconds before the edge
+    const fills = ops.filter(op => op[0] === 'fill');
+    assert.deepEqual(fills.map(op => op.slice(1)), [
+        [detectorColor('birdedge'), 0.15, x(8.1), 10, x(3.1) - x(8.1), 200],
+        [detectorColor('yolobat'), 0.15, x(2.5), 10, x(1.5) - x(2.5), 200],
+    ], 'translucent, from the top of the plot to its bottom');
+    assert.equal(ops.filter(op => op[0] === 'edge').length, 2, 'with edges');
+    assert.ok(ops.findIndex(op => op[0] === 'dot') > ops.findLastIndex(op => op[0] !== 'dot'), 'the dots on top');
 });
 
 test('Detections warns about a detector that cannot keep up', async t => {
@@ -1004,7 +1006,6 @@ test('Detections warns about a detector that cannot keep up', async t => {
     panel.tick();
     assert.equal(panel.behind('birdedge'), true, 'nearly all of the time in inference');
     assert.equal(panel.behind('yolobat'), true, 'audio was lost');
-    assert.equal(panel.buttonClass('yolobat'), 'btn-warning');
     assert.match(panel.detectorTitle('yolobat'), /13 s of audio not analysed/);
     assert.equal(panel.behind('audioprotopnet'), false);
     assert.deepEqual(panel.detectors, ['birdedge', 'yolobat', 'audioprotopnet'], 'a detector that reports gets a button');

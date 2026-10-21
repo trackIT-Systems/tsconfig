@@ -20,9 +20,9 @@ const BATCH_ABOVE = 1500;
 // How close (px) the cursor must be to a dot, beyond its radius, to show its tooltip
 const HIT_SLACK_PX = 6;
 
-// The labels of `markers()`: their size (px), and the height of a row when they are stacked
-const MARKER_FONT_PX = 11;
-const MARKER_ROW_PX = 14;
+// The boxes of `spans()`: translucent, so they overlap, with edges that show where each ends
+const SPAN_FILL_ALPHA = 0.15;
+const SPAN_EDGE_ALPHA = 0.6;
 
 /**
  * The least distance (px) between the times on the axis. A phone's plot is about 300 px wide:
@@ -63,7 +63,7 @@ export function yAxisSize(values) {
  * - `colorOf(key)`: the colour of a series (default `colorFor`)
  * - `loadLimits()`: what the axes need from the service's configuration (default radiotracking's)
  * - `clockToleranceMs`: how late a signal may arrive before the clock warning shows
- * - `markers(edge)`: dashed vertical lines, `{at, label}` (`at` in s; `edge` is the axis' end)
+ * - `spans(edge)`: boxes the height of the plot under the dots, `{from, to, color}` (s; `edge` is the axis' end)
  *
  * The broker connection, chart and signals are kept out of the component's
  * data: Alpine would wrap them in proxies, and the arrays grow.
@@ -73,7 +73,6 @@ export function liveChartMixin() {
     let release = null; // gives back what liveSources() acquired
     let yBounds = null;
     let gliding = false;
-    let ink = '#888'; // the page's text colour, for the markers
 
     return {
         status: 'idle', // connecting | connected | offline | failed, or idle: reading nothing
@@ -131,7 +130,7 @@ export function liveChartMixin() {
         colorOf(key) {
             return colorFor(key);
         },
-        markers() {
+        spans() {
             return [];
         },
         loadLimits() {
@@ -264,7 +263,6 @@ export function liveChartMixin() {
             chart?.destroy();
 
             const text = getComputedStyle(element).color;
-            ink = text;
             const grid = { stroke: 'rgba(128,128,128,0.2)', width: 1 };
             yBounds = this.computeYBounds(this.eventWindow());
 
@@ -376,21 +374,18 @@ export function liveChartMixin() {
             ctx.beginPath();
             ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
             ctx.clip();
-            // The markers' lines under the dots, the full height of the plot
-            const markers = this.markers(max).filter(marker => marker.at > min && marker.at <= max);
-            if (markers.length > 0) {
-                ctx.strokeStyle = ink;
-                ctx.globalAlpha = 0.6;
-                ctx.lineWidth = ratio;
-                ctx.setLineDash([4 * ratio, 3 * ratio]);
-                for (const marker of markers) {
-                    const x = Math.round(u.valToPos(marker.at, 'x', true));
-                    ctx.beginPath();
-                    ctx.moveTo(x, bbox.top);
-                    ctx.lineTo(x, bbox.top + bbox.height);
-                    ctx.stroke();
-                }
-                ctx.setLineDash([]);
+            // The spans under the dots, the full height of the plot
+            ctx.lineWidth = ratio;
+            for (const span of this.spans(max)) {
+                if (span.to <= min || span.from >= max) continue;
+                const left = Math.round(u.valToPos(Math.max(span.from, min), 'x', true));
+                const right = Math.round(u.valToPos(Math.min(span.to, max), 'x', true));
+                ctx.fillStyle = span.color;
+                ctx.strokeStyle = span.color;
+                ctx.globalAlpha = SPAN_FILL_ALPHA;
+                ctx.fillRect(left, bbox.top, right - left, bbox.height);
+                ctx.globalAlpha = SPAN_EDGE_ALPHA;
+                ctx.strokeRect(left, bbox.top, right - left, bbox.height);
             }
             ctx.globalAlpha = 0.8; // dots on top of each other stay countable
             for (let i = firstAtOrAfter(events, min); i < events.length; i++) {
@@ -407,17 +402,6 @@ export function liveChartMixin() {
                 }
                 ctx.fill();
             }
-            // Their labels above the dots, at the bottom of the plot: a row each, so lines that
-            // are close do not write over each other; each ends at its line
-            ctx.globalAlpha = 0.9;
-            ctx.fillStyle = ink;
-            ctx.font = `${MARKER_FONT_PX * ratio}px system-ui, sans-serif`;
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'bottom';
-            markers.forEach((marker, row) => {
-                const x = Math.round(u.valToPos(marker.at, 'x', true));
-                ctx.fillText(marker.label, x - 3 * ratio, bbox.top + bbox.height - (3 + row * MARKER_ROW_PX) * ratio);
-            });
             ctx.restore();
         },
 
