@@ -95,6 +95,10 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - A downloaded config bundle carries `/boot/firmware/authorized_keys`, the file a bundle upload writes (copied to `~/.ssh/authorized_keys2` at boot). It carried the operator's own `~/.ssh/authorized_keys` instead, so a downloaded bundle did not upload back unchanged
 - The web UI asks for `/api/server-mode`, `/api/available-services` and `/api/system-status` once on the first page load instead of twice each (10 instead of 13 requests). Components that are left while still loading no longer start their refresh timers afterwards, and a status page left during its map setup no longer breaks the map of the next one. SSH key service actions show their toast with the right type
 
+### Removed
+
+- `huaweicheck` from the default systemd service list: tsOS runs the Huawei / Brovi E3372 sticks in modem mode under ModemManager and no longer ships the service
+
 ## [2026.7.1] - 2026-07-14
 
 ### Added
