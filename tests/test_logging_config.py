@@ -164,3 +164,14 @@ def test_setup_logging_without_journald(monkeypatch, capsys, tmp_path):
     logging.getLogger("app.x").warning("Careful")
 
     assert capsys.readouterr().err == "WARNING app.x: Careful\n"
+
+
+def test_setup_logging_overrides_uvicorns_own_levels(monkeypatch):
+    monkeypatch.setattr(logging_config, "stderr_is_journal", lambda: False)
+    # uvicorn's dictConfig sets these to INFO before our lifespan re-applies the setup
+    logging.getLogger("uvicorn.error").setLevel(logging.INFO)
+
+    setup_logging()
+
+    assert not logging.getLogger("uvicorn.error").isEnabledFor(logging.INFO)
+    assert logging.getLogger("uvicorn.error").isEnabledFor(logging.WARNING)

@@ -171,8 +171,9 @@ def setup_logging(
     for name in ("httpx", "httpcore", "uvicorn.access"):
         logging.getLogger(name).setLevel(access_level)
 
-    # Other third-party libraries follow the application level
-    for name in ("uvicorn", "fastapi", "dbus"):
+    # Other third-party libraries follow the application level. uvicorn sets
+    # uvicorn.error to INFO itself, so it has to be named, not only its parent
+    for name in ("uvicorn", "uvicorn.error", "fastapi", "dbus"):
         logging.getLogger(name).setLevel(level)
 
 
