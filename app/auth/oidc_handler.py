@@ -48,7 +48,8 @@ class OIDCHandler:
             self.state_serializer.loads(state, max_age=max_age)
             return True
         except Exception as e:
-            logger.warning(f"State validation failed: {e}", exc_info=True)
+            logger.warning("State validation failed: %s", e)
+            logger.debug("State validation traceback", exc_info=True)
             return False
 
     def generate_pkce_pair(self) -> tuple[str, str]:
@@ -147,12 +148,12 @@ class OIDCHandler:
             )
 
             if response.status_code != 200:
-                logger.error(f"Token exchange failed: {response.status_code} {response.text}")
+                logger.error("Token exchange failed: %s %s", response.status_code, response.text)
                 raise ValueError(f"Token exchange failed: {response.status_code}")
 
             token_response = response.json()
 
-        logger.debug("Successfully exchanged authorization code for tokens")
+        logger.debug("Exchanged the authorization code for tokens")
         return token_response
 
     async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
@@ -194,12 +195,12 @@ class OIDCHandler:
             )
 
             if response.status_code != 200:
-                logger.warning(f"Token refresh failed: {response.status_code} {response.text}")
+                logger.warning("Token refresh failed: %s %s", response.status_code, response.text)
                 raise ValueError(f"Token refresh failed: {response.status_code}")
 
             token_response = response.json()
 
-        logger.debug("Successfully refreshed access token")
+        logger.debug("Refreshed the access token")
         return token_response
 
     async def _get_jwks(self) -> dict[str, Any]:
@@ -208,7 +209,7 @@ class OIDCHandler:
             return self._jwks_cache
 
         jwks_uri = await oidc_config.get_jwks_uri()
-        logger.debug(f"Fetching JWKS from {jwks_uri}")
+        logger.debug("Fetching JWKS from %s", jwks_uri)
 
         async with httpx.AsyncClient() as client:
             response = await client.get(jwks_uri, timeout=10.0)
@@ -264,14 +265,15 @@ class OIDCHandler:
                 else:
                     raise ValueError(f"Invalid audience: {claims.get('aud')}")
 
-            logger.debug(f"Successfully validated token for user: {claims.get('sub')}")
+            logger.debug("Validated the token of user %s", claims.get("sub"))
             return dict(claims)
 
         except JoseError as e:
-            logger.warning(f"Token validation failed: {e}")
+            logger.warning("Token validation failed: %s", e)
             raise ValueError(f"Invalid token: {e}")
         except Exception as e:
-            logger.warning(f"Token validation failed: {e}", exc_info=True)
+            logger.warning("Token validation failed: %s", e)
+            logger.debug("Token validation traceback", exc_info=True)
             raise ValueError(f"Token validation failed: {e}")
 
     def extract_user_claims(self, token_claims: dict[str, Any]) -> dict[str, Any]:
@@ -313,7 +315,7 @@ class OIDCHandler:
         # Check if user is in any of the required groups
         for group in user_groups:
             if group in required_groups:
-                logger.debug(f"User authorized via group: {group}")
+                logger.debug("User authorized via group: %s", group)
                 return True, None
 
         return False, f"User is not in any required groups. Required: {required_groups}, User has: {user_groups}"

@@ -48,3 +48,13 @@ async def test_unusable_passwords_never_reach_pam(password):
 async def test_pam_failures_mean_denied_not_exception(error):
     with patch.object(pam_auth, "_authenticate_blocking", side_effect=error):
         assert await pam_auth.authenticate_operator("pi", "natur") is False
+
+
+def test_loggable_username_names_only_login_accounts():
+    from app.auth.pam_auth import loggable_username
+
+    assert loggable_username("pi") == "'pi'"
+    assert loggable_username("root") == "'root'"
+    # a password typed into the user name field must not be logged
+    assert loggable_username("hunter2") == "an unknown user"
+    assert loggable_username(None) == "an unknown user"

@@ -29,7 +29,7 @@ from app.telemetry.outputs import CsvFiles, MqttOutput
 from app.telemetry.samples import Sample, encode_json, make_values
 from app.telemetry.settings import DEFAULT_CONFIG, TelemetrySettings, load_settings
 
-logger = logging.getLogger("tstelemetry")
+logger = logging.getLogger(__name__)
 
 # A collection taking longer than this is abandoned (the worker thread is not killed)
 MAX_COLLECT_S = 60
@@ -68,7 +68,8 @@ async def available_collectors(collectors: Iterable[Collector]) -> list[Collecto
             logger.info("Not collecting %s: %s", collector.name, e)
             continue
         except Exception as e:  # one broken collector must not stop the daemon
-            logger.warning("Not collecting %s, its check failed: %s", collector.name, e, exc_info=True)
+            logger.warning("Not collecting %s, its check failed: %s", collector.name, e)
+            logger.debug("%s check traceback", collector.name, exc_info=True)
             continue
         available.append(collector)
     return available

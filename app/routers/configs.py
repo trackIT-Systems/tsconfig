@@ -368,7 +368,7 @@ async def list_configs():
                     most_recent_mtime_timestamp = file_stat.st_mtime
         except Exception:
             # Skip files that can't be accessed
-            logger.debug(f"Skipping {filename} in config listing", exc_info=True)
+            logger.debug("Skipping %s in config listing", filename, exc_info=True)
             continue
 
     # Build response
@@ -713,7 +713,7 @@ async def collect_privileged_stats(config_instances: dict[str, Any]) -> dict[str
         try:
             stats[filename] = await priv.stat_config(config_type)
         except priv.PrivilegedCallError as e:
-            logger.warning(f"Could not determine the modification time of {filename}: {e}")
+            logger.warning("Could not determine the modification time of %s: %s", filename, e)
     return stats
 
 
@@ -894,7 +894,7 @@ async def _apply_config_zip_from_path(
                 except UnicodeDecodeError:
                     raise ValueError(f"File '{basename}' must be UTF-8 encoded text")
             elif basename in registry.RETIRED_CONFIG_FILES:
-                logger.warning(f"Skipping {basename}: {registry.RETIRED_CONFIG_FILES[basename]}")
+                logger.warning("Skipping %s: %s", basename, registry.RETIRED_CONFIG_FILES[basename])
 
     if not recognized_files:
         raise ValueError(
@@ -907,7 +907,7 @@ async def _apply_config_zip_from_path(
     files_by_type = {RECOGNIZED_CONFIG_FILES[filename]: filename for filename in recognized_files}
     unsupported = await support.unsupported_config_types(files_by_type)
     if unsupported:
-        logger.warning(support.unsupported_message(unsupported, files_by_type) + ", skipping")
+        logger.warning("%s, skipping", support.unsupported_message(unsupported, files_by_type))
         for config_type in unsupported:
             del recognized_files[files_by_type[config_type]]
 
@@ -1077,7 +1077,7 @@ async def upload_config_zip(
                         detail=f"File '{basename}' must be UTF-8 encoded text",
                     )
             elif basename in registry.RETIRED_CONFIG_FILES:
-                logger.warning(f"Skipping {basename}: {registry.RETIRED_CONFIG_FILES[basename]}")
+                logger.warning("Skipping %s: %s", basename, registry.RETIRED_CONFIG_FILES[basename])
             else:
                 # Skip hidden files and common non-config files
                 if not basename.startswith(".") and basename.lower() not in ["readme.md", "readme.txt", "readme"]:
@@ -1142,7 +1142,7 @@ async def upload_config_zip(
             }
             all_valid = False
         except Exception as e:
-            logger.debug(f"Validation error for {filename}", exc_info=True)
+            logger.debug("Validation error for %s", filename, exc_info=True)
             validation_results[filename] = {
                 "valid": False,
                 "errors": [f"Validation error: {e!s}"],
@@ -1243,7 +1243,7 @@ async def upload_config_zip(
 
             saved_files.append(filename)
         except Exception as e:
-            logger.debug(f"Failed to save {filename}", exc_info=True)
+            logger.debug("Failed to save %s", filename, exc_info=True)
             save_errors[filename] = str(e)
 
     if save_errors:
@@ -1546,7 +1546,7 @@ async def _check_existing_config_files():
                     most_recent_mtime = file_stat.st_mtime
         except Exception:
             # Skip files that can't be accessed
-            logger.debug(f"Skipping {config_type} when checking config files", exc_info=True)
+            logger.debug("Skipping %s when checking config files", config_type, exc_info=True)
             continue
 
     # Check if any files were found
@@ -1604,7 +1604,7 @@ async def download_config_zip():
                     most_recent_mtime = file_stat.st_mtime
         except Exception:
             # Skip files that can't be read
-            logger.debug(f"Skipping {filename} in config zip", exc_info=True)
+            logger.debug("Skipping %s in config zip", filename, exc_info=True)
             continue
 
     # Check if any files were found

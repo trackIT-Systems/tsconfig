@@ -1,5 +1,6 @@
 """Tests for the BlueZ supervision: what is registered again, when, and the watchdog policy."""
 
+import logging
 import os
 import shutil
 import socket
@@ -73,6 +74,30 @@ class TestRegistration:
         h.sup.registration_ok()
         h.sup.registration_failed("x", "boom")
         assert h.run_scheduled() == 2.0
+
+    def test_repeated_refusals_are_logged_once_and_the_recovery_once(self, caplog):
+        h = Harness()
+        with caplog.at_level(logging.INFO, logger="app.bluetooth.supervisor"):
+            for _ in range(3):
+                h.sup.registration_failed("GATT application", "org.bluez.Error.Failed")
+            h.sup.registration_ok("GATT application")
+        assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+            ("ERROR", "Registering GATT application failed: org.bluez.Error.Failed"),
+            ("INFO", "Registering GATT application works again"),
+        ]
+
+    def test_repeated_registration_errors_are_warned_about_once(self, caplog):
+        h = Harness(register_result=RuntimeError("no adapter"))
+        h.sup.request(0)
+        with caplog.at_level(logging.INFO, logger="app.bluetooth.supervisor"):
+            for _ in range(3):
+                h.run_scheduled()
+            h.register_result = None
+            h.run_scheduled()
+        assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+            ("WARNING", "Registering with BlueZ failed: RuntimeError: no adapter"),
+            ("INFO", "Registering with BlueZ works again"),
+        ]
 
     def test_bluez_losing_everything_forces_registration_again(self):
         h = Harness()

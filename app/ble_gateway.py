@@ -97,42 +97,54 @@ def main():
     setup_logging(verbosity=args.verbose, identifier="tsconfig-ble")
     logger = get_logger(__name__)
 
-    # Log configuration
-    logger.info("=" * 60)
-    logger.info("tsOS Configuration Manager - BLE GATT Gateway")
-    logger.info("=" * 60)
-    logger.info(f"API URL: {args.api_url}")
-    logger.info(f"Operator login required: {not args.no_auth}")
-    logger.info(f"Discoverable: {not args.no_discoverable}")
-    logger.info("=" * 60)
+    logger.info(
+        "BLE gateway starting: API %s, operator login required: %s, discoverable: %s",
+        args.api_url,
+        not args.no_auth,
+        not args.no_discoverable,
+    )
 
     # Wait a little for the API, but start anyway: the gateway must stay reachable (and answer
     # requests with errors) while tsconfig is restarting or down, and works again once it is back.
-    logger.debug(f"Verifying API connectivity to {args.api_url}...")
+    logger.debug("Verifying API connectivity to %s", args.api_url)
     max_retries = 10  # 10 seconds with 1-second intervals
     retry_interval = 1
 
     import httpx
 
+    error = None
     for attempt in range(max_retries):
         try:
             with httpx.Client(timeout=5.0) as client:
                 response = client.get(f"{args.api_url}/api/server-mode")
                 if response.status_code == 200:
-                    logger.info("✓ API is reachable")
+                    logger.debug("API is reachable")
+                    error = None
                     break
                 else:
-                    logger.warning(f"API returned status code: {response.status_code}")
+                    error = f"HTTP status {response.status_code}"
+                    logger.debug(
+                        "API returned status code %s (attempt %s/%s)", response.status_code, attempt + 1, max_retries
+                    )
         except (httpx.HTTPError, httpx.InvalidURL) as e:
+            error = e
             if attempt < max_retries - 1:
-                logger.debug(f"✗ Cannot reach API (attempt {attempt + 1}/{max_retries}): {e}")
-                logger.debug(f"Retrying in {retry_interval} seconds...")
+                logger.debug(
+                    "Cannot reach API (attempt %s/%s), retrying in %s s: %s",
+                    attempt + 1,
+                    max_retries,
+                    retry_interval,
+                    e,
+                )
                 import time
 
                 time.sleep(retry_interval)
-            else:
-                logger.warning(f"✗ Cannot reach API after {max_retries} attempts: {e}")
-                logger.warning("Starting anyway; requests will fail until tsconfig is reachable")
+    if error is not None:
+        logger.warning(
+            "Cannot reach the tsconfig API at %s (%s), starting anyway: requests fail until it is reachable",
+            args.api_url,
+            error,
+        )
 
     # Create and start the BLE GATT server
     try:
@@ -143,20 +155,20 @@ def main():
             discoverable=not args.no_discoverable,
         )
 
-        logger.info("Starting BLE GATT server...")
+        logger.debug("Starting the BLE GATT server")
         server.start()
 
     except KeyboardInterrupt:
         logger.info("Shutdown requested by user")
         sys.exit(0)
     except PermissionError:
-        logger.error("Permission denied while starting the BLE GATT server.")
-        logger.error(
-            "On a tracker it runs as the tsconfig-ble user; see the BLE section of docs/security.md in tsOS-base."
+        logger.critical(
+            "Permission denied while starting the BLE GATT server: on a tracker it runs as the tsconfig-ble user, "
+            "see the BLE section of docs/security.md in tsOS-base"
         )
         sys.exit(1)
-    except Exception as e:
-        logger.error(f"Failed to start BLE GATT server: {e}", exc_info=args.verbose >= 2)
+    except Exception:
+        logger.critical("Cannot start the BLE GATT server", exc_info=True)
         sys.exit(1)
 
 

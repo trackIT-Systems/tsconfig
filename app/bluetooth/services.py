@@ -142,7 +142,7 @@ class SystemService(Service):
             char_index += 1
             self.add_characteristic(AuthenticateCharacteristic(bus, char_index, self, api_client, authenticator))
 
-        logger.debug(f"System Service created with {len(self.characteristics)} characteristics")
+        logger.debug("System Service created with %s characteristics", len(self.characteristics))
 
 
 class SystemdService(Service):
@@ -181,7 +181,7 @@ class SystemdService(Service):
         char_index += 1
         self.add_characteristic(SystemdServiceLogsCharacteristic(bus, char_index, self, api_client, authenticator))
 
-        logger.debug(f"Systemd Service created with {len(self.characteristics)} characteristics")
+        logger.debug("Systemd Service created with %s characteristics", len(self.characteristics))
 
 
 class UploadService(Service):
@@ -212,4 +212,4 @@ class UploadService(Service):
         char_index += 1
         self.add_characteristic(UploadZipCharacteristic(bus, char_index, self, api_client, authenticator))
 
-        logger.debug(f"Upload Service created with {len(self.characteristics)} characteristics")
+        logger.debug("Upload Service created with %s characteristics", len(self.characteristics))

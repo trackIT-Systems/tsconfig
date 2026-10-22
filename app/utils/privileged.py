@@ -253,7 +253,7 @@ async def schedule_reboot(delay: int = 10, timeout: float = DEFAULT_TIMEOUT) -> 
             logger.exception("Reboot failed")
             return
         if returncode != 0:
-            logger.error(f"Reboot failed: {stderr.decode('utf-8', errors='replace').strip()}")
+            logger.error("Reboot failed: %s", stderr.decode("utf-8", errors="replace").strip())
 
     task = asyncio.create_task(_reboot_after_delay())
     _background_tasks.add(task)

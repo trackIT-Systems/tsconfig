@@ -17,7 +17,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
+from app.auth.pam_auth import OPERATOR_USER, authenticate_operator, loggable_username
 from app.auth.session import (
     SESSION_TTL_SECONDS,
     login_retry_after,
@@ -137,7 +137,7 @@ class BleAuthenticator:
 
         if not await check():
             record_login_failure(source, username)
-            logger.warning(f"Failed BLE login as {username!r} ({method}) from {device}")
+            logger.warning("Failed BLE login as %s (%s) from %s", loggable_username(username), method, device)
             return LoginResult(
                 False,
                 CODE_UNAUTHENTICATED,
@@ -147,10 +147,10 @@ class BleAuthenticator:
 
         record_login_success(source, username)
         self._authenticated[str(device)] = self._clock()
-        logger.info(f"BLE login succeeded as {username!r} ({method}) for {device}")
+        logger.info("BLE login succeeded as %r (%s) for %s", username, method, device)
         return LoginResult(True)
 
     def forget(self, device: str) -> None:
         """Drop a connection's login (called when BlueZ reports a disconnect)."""
         if self._authenticated.pop(str(device), None) is not None:
-            logger.debug(f"Cleared BLE login for {device}")
+            logger.debug("Cleared BLE login for %s", device)

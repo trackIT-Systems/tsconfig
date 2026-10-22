@@ -32,7 +32,7 @@ class ProxyHeadersMiddleware:
         forwarded_proto = headers.get("x-forwarded-proto")
         forwarded_host = headers.get("x-forwarded-host") or headers.get("host")
 
-        logger.debug(f"ProxyHeadersMiddleware: proto={forwarded_proto}, host={forwarded_host}")
+        logger.debug("ProxyHeadersMiddleware: proto=%s, host=%s", forwarded_proto, forwarded_host)
         if not (forwarded_proto and forwarded_host):
             logger.debug("ProxyHeadersMiddleware: no forwarded headers found, skipping URL reconstruction")
             return
@@ -41,12 +41,12 @@ class ProxyHeadersMiddleware:
         root_path = scope.get("root_path", "")
         path = scope.get("path", "/")
         query_string = scope.get("query_string", b"").decode()
-        logger.debug(f"ProxyHeadersMiddleware: root_path='{root_path}', path='{path}', query='{query_string}'")
+        logger.debug("ProxyHeadersMiddleware: root_path='%s', path='%s', query='%s'", root_path, path, query_string)
 
         public_url = f"{forwarded_proto}://{forwarded_host}{root_path}{path}"
         if query_string:
             public_url += f"?{query_string}"
-        logger.debug(f"ProxyHeadersMiddleware: constructed public_url='{public_url}'")
+        logger.debug("ProxyHeadersMiddleware: constructed public_url='%s'", public_url)
 
         state = scope.setdefault("state", {})
         state["forwarded_proto"] = forwarded_proto

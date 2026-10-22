@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.config_loader import config_loader
 from app.logging_config import get_logger
+from app.utils.failures import FailureLog
 from app.utils.privileged import (
     ALLOWED_SYSTEMCTL_VERBS,
     PrivilegedCallError,
@@ -22,6 +23,9 @@ from app.utils.privileged import (
 from app.utils.subprocess_async import run_subprocess_async
 
 logger = get_logger(__name__)
+
+# The status page polls the services: a readout that keeps failing is logged once
+_service_failures = FailureLog(logger)
 
 router = APIRouter(prefix="/api/systemd", tags=["systemd"])
 
@@ -225,6 +229,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             text=True,
             timeout=10,
         )
+        _service_failures.succeeded(f"systemctl show {service_config.name}")
 
         if result.returncode != 0:
             # Service doesn't exist or error occurred - mark as expert
@@ -283,6 +288,7 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
         )
 
     except (TimeoutError, subprocess.TimeoutExpired):
+        _service_failures.failed(f"systemctl show {service_config.name}", "timed out")
         return ServiceInfo(
             name=service_config.name,
             description="Timeout getting service info",
@@ -293,8 +299,8 @@ async def get_service_info(service_config: ServiceConfig) -> ServiceInfo:
             expert=True,  # Force expert mode for services with timeout
             is_target=False,
         )
-    except Exception as e:
-        logger.debug(f"Failed to get info for service {service_config.name}", exc_info=True)
+    except Exception as e:  # noqa: BLE001 - FailureLog logs it, with the traceback at DEBUG
+        _service_failures.failed(f"systemctl show {service_config.name}", e)
         return ServiceInfo(
             name=service_config.name,
             description=f"Error: {e!s}",
@@ -462,7 +468,7 @@ async def stream_service_logs(
                 yield f"data: {log_line}\n\n"
 
         except Exception as e:
-            logger.debug(f"Error streaming logs for {service_name}", exc_info=True)
+            logger.debug("Error streaming logs for %s", service_name, exc_info=True)
             yield f"data: Error streaming logs: {e!s}\n\n"
         finally:
             # Runs when journalctl ends and when the stream is cancelled

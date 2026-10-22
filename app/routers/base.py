@@ -7,7 +7,10 @@ from fastapi import APIRouter, HTTPException
 from app.config_loader import config_loader
 from app.configs import BaseConfig, support
 from app.configs.registry import CONFIG_TYPES
+from app.logging_config import get_logger
 from app.utils.privileged import PrivilegedCallError, write_config
+
+logger = get_logger(__name__)
 
 
 class BaseConfigRouter:
@@ -59,12 +62,6 @@ class BaseConfigRouter:
         self, config_dict: dict[str, Any], config_group: str | None = None
     ) -> dict[str, Any]:
         """Helper method to update configuration with a dictionary."""
-        import traceback
-
-        from app.logging_config import get_logger
-
-        logger = get_logger(__name__)
-
         try:
             cfg_instance = self.get_config_instance(config_group)
 
@@ -91,22 +88,21 @@ class BaseConfigRouter:
                     if not config_group:
                         raise ValueError("Config group is required in server mode")
 
-                    logger.info(f"Server mode detected, creating versioned directory for group: {config_group}")
+                    logger.info("Saving the %s configuration of group %s as a new version", self.prefix, config_group)
 
                     # Get the previous latest directory before creating new one
                     # Resolve the symlink to get the actual directory path
                     old_latest_dir = config_loader.get_config_group_dir(config_group)
                     if old_latest_dir and old_latest_dir.is_symlink():
                         old_latest_dir = old_latest_dir.resolve()
-                    logger.debug(f"Previous version directory: {old_latest_dir}")
+                    logger.debug("Previous version directory: %s", old_latest_dir)
 
                     # Create new versioned directory and update 'latest' symlink
                     try:
                         versioned_dir = config_loader.create_versioned_config_dir(config_group)
-                        logger.debug(f"Created versioned directory: {versioned_dir}")
+                        logger.debug("Created versioned directory: %s", versioned_dir)
                     except Exception as e:
-                        logger.error(f"Failed to create versioned directory: {e}")
-                        logger.error(traceback.format_exc())
+                        logger.debug("Cannot create a versioned directory: %s", e)
                         raise
 
                     # Copy all config files from previous version to new version
@@ -121,9 +117,9 @@ class BaseConfigRouter:
                                 try:
                                     new_file = versioned_dir / config_file
                                     shutil.copy2(old_file, new_file)
-                                    logger.debug(f"Copied {config_file} from previous version")
+                                    logger.debug("Copied %s from previous version", config_file)
                                 except OSError as e:
-                                    logger.warning(f"Failed to copy {config_file}: {e}")
+                                    logger.warning("Cannot copy %s from the previous version: %s", config_file, e)
                     else:
                         logger.debug("No previous version found, starting fresh")
 
@@ -132,8 +128,7 @@ class BaseConfigRouter:
                         versioned_cfg_instance = self.config_class(versioned_dir)
                         logger.debug("Created config instance for versioned directory")
                     except Exception as e:
-                        logger.error(f"Failed to create config instance: {e}")
-                        logger.error(traceback.format_exc())
+                        logger.debug("Cannot create a config instance for the versioned directory: %s", e)
                         raise
 
                     # Save to the versioned directory
@@ -141,8 +136,7 @@ class BaseConfigRouter:
                         versioned_cfg_instance.save(config_dict)
                         logger.debug("Saved config to versioned directory")
                     except Exception as e:
-                        logger.error(f"Failed to save config: {e}")
-                        logger.error(traceback.format_exc())
+                        logger.debug("Cannot save to the versioned directory: %s", e)
                         raise
                 else:
                     # Tracker mode: this config lives on the root-owned boot
@@ -172,7 +166,7 @@ class BaseConfigRouter:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.exception("Error saving configuration")
+                logger.exception("Cannot save the %s configuration", self.prefix)
                 raise HTTPException(
                     status_code=500,
                     detail={
@@ -186,7 +180,7 @@ class BaseConfigRouter:
             raise
         except Exception as e:
             # Handle other errors
-            logger.exception("Unexpected error in update_config_helper")
+            logger.exception("Cannot update the %s configuration", self.prefix)
             error_detail: dict[str, Any] = {
                 "message": f"Failed to update {self.prefix} configuration",
                 "error": str(e),

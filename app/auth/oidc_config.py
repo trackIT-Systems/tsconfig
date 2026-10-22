@@ -82,14 +82,14 @@ class OIDCConfig:
             return self._discovery_cache
 
         discovery_url = f"{self.issuer_url}.well-known/openid-configuration"
-        logger.debug(f"Fetching OIDC discovery document from {discovery_url}")
+        logger.debug("Fetching OIDC discovery document from %s", discovery_url)
 
         async with httpx.AsyncClient() as client:
             response = await client.get(discovery_url, timeout=10.0)
             response.raise_for_status()
             self._discovery_cache = response.json()
 
-        logger.info(f"Successfully loaded OIDC discovery document from {self.issuer_url}")
+        logger.info("Loaded the OIDC discovery document from %s", self.issuer_url)
         return self._discovery_cache
 
     def clear_cache(self):

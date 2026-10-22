@@ -62,7 +62,7 @@ async def forward(socket_path: Path, request: dict[str, Any], timeout: float) ->
         reply = json.loads(line)
         return reply if isinstance(reply, dict) else None
     except (OSError, TimeoutError, ValueError) as e:
-        logger.debug(f"No reply from {socket_path}: {e!r}")
+        logger.debug("No reply from %s: %r", socket_path, e)
         return None
     finally:
         if writer is not None:

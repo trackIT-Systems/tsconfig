@@ -53,11 +53,18 @@ class MqttOutput:
         self.client = client
         self.client.will_set(state_topic(host), json.dumps({"state": "offline"}), qos=1, retain=True)
         self.client.on_connect = self._on_connect
+        # The client retries a refused connection every minute: logged once per reason
+        self._refused: str | None = None
 
     def _on_connect(self, client, _userdata, _flags, reason_code, _properties=None):
         if getattr(reason_code, "is_failure", False):
-            logger.warning("MQTT connection refused: %s", reason_code)
+            if str(reason_code) != self._refused:
+                logger.warning("MQTT connection refused: %s", reason_code)
+            else:
+                logger.debug("MQTT connection refused again: %s", reason_code)
+            self._refused = str(reason_code)
             return
+        self._refused = None
         logger.info("Connected to MQTT broker %s:%d", self.broker.host, self.broker.port)
         client.publish(state_topic(self.host), json.dumps({"state": "online"}), qos=1, retain=True)
 

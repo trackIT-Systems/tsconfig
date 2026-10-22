@@ -39,11 +39,25 @@ from app.routers import (
     tsupdate,
     userconf,
 )
+from app.utils.failures import FailureLog
 from app.utils.subprocess_async import run_subprocess_async
 
 # Set up logging for the main application
 setup_logging(identifier="tsconfig")
 logger = get_logger(__name__)
+
+# The status page polls every few seconds: what fails there is logged once per change
+_status_failures = FailureLog(logger)
+
+
+def _report_status(key: str, error: str | None) -> None:
+    """Log the outcome of a polled status readout once per change (`error` None = it worked)."""
+    if error:
+        # The readouts' own errors often start with what failed already
+        _status_failures.failed(key, error.removeprefix(f"{key} failed: "))
+    else:
+        _status_failures.succeeded(key)
+
 
 if not config_loader.is_server_mode():
     # psutil is in the `tracker` extra; the first cpu_percent(interval=None)
@@ -161,9 +175,9 @@ Each endpoint includes detailed request/response schemas and the ability to try 
 )
 
 # Log application startup
-logger.info(f"tsOS Configuration Manager v{__version__} starting up")
-logger.debug(f"Base URL: {BASE_URL}")
-logger.debug(f"Server mode: {config_loader.is_server_mode()}")
+logger.info("tsOS Configuration Manager v%s starting up", __version__)
+logger.debug("Base URL: %s", BASE_URL)
+logger.debug("Server mode: %s", config_loader.is_server_mode())
 
 # Include routers
 app.include_router(auth.router)  # Authentication router (only active in server mode)
@@ -226,20 +240,17 @@ async def validate_oidc_config():
         if oidc_config.is_configured():
             is_valid, error = oidc_config.validate()
             if is_valid:
-                logger.info("OIDC authentication is configured and valid")
+                logger.debug("OIDC authentication is configured and valid")
                 try:
                     # Try to fetch discovery document to validate connection
                     await oidc_config.get_discovery_document()
-                    logger.info("Successfully connected to OIDC provider")
+                    logger.debug("Connected to the OIDC provider")
                 except Exception:
-                    logger.exception("Failed to connect to OIDC provider")
-                    logger.warning("Server mode is enabled but OIDC provider is not accessible")
+                    logger.exception("Cannot connect to the OIDC provider, logins in server mode will fail")
             else:
-                logger.error(f"OIDC configuration is invalid: {error}")
-                logger.warning("Server mode is enabled but OIDC is misconfigured")
+                logger.error("OIDC configuration is invalid, logins in server mode will fail: %s", error)
         else:
-            logger.warning("Server mode is enabled but OIDC is not configured")
-            logger.warning("Authentication will not be enforced")
+            logger.warning("Server mode is enabled but OIDC is not configured: authentication will not be enforced")
 
 
 @app.get(
@@ -325,7 +336,7 @@ async def get_geolocation():
         geolocation = geolocation_config.load()
         return geolocation
     except (FileNotFoundError, ValueError) as e:
-        logger.debug(f"Geolocation not available: {e!s}")
+        logger.debug("Geolocation not available: %s", e)
         return None
 
 
@@ -466,9 +477,10 @@ async def get_system_status():
         if tsupdate_status:
             system_info["tsupdate_status"] = tsupdate_status
 
+        _status_failures.succeeded("System status")
         return JSONResponse(content=system_info)
-    except Exception as e:
-        logger.debug("Failed to get system status", exc_info=True)
+    except Exception as e:  # noqa: BLE001 - FailureLog logs it, with the traceback at DEBUG
+        _status_failures.failed("System status", e)
         return JSONResponse(status_code=500, content={"error": f"Failed to get system status: {e!s}"})
 
 
@@ -501,7 +513,7 @@ async def _get_tsupdate_status():
         )
 
         if result.returncode != 0:
-            logger.debug(f"tsupdate status command failed: {result.stderr}")
+            _status_failures.failed("tsupdate status", result.stderr.strip() or f"exit status {result.returncode}")
             return None
 
         status_data = json.loads(result.stdout)
@@ -514,12 +526,10 @@ async def _get_tsupdate_status():
         }
 
         _tsupdate_status_cache = tsupdate_status
+        _status_failures.succeeded("tsupdate status")
         return tsupdate_status
-    except (TimeoutError, FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
-        logger.debug(f"Failed to get tsupdate status: {e!s}")
-        return None
-    except Exception as e:
-        logger.debug(f"Unexpected error getting tsupdate status: {e!s}", exc_info=True)
+    except Exception as e:  # noqa: BLE001 - the status page shows the rest without it
+        _status_failures.failed("tsupdate status", e)
         return None
 
 
@@ -723,10 +733,12 @@ async def get_timedatectl_status():
         except (TimeoutError, subprocess.TimeoutExpired, FileNotFoundError):
             timedatectl_status["available"] = False
             timedatectl_status["error"] = "timedatectl command not found"
+            _report_status("timedatectl status", timedatectl_status["error"])
             return JSONResponse(content=timedatectl_status)
 
         if not timedatectl_status["available"]:
             timedatectl_status["error"] = "timedatectl command not available"
+            _report_status("timedatectl status", timedatectl_status["error"])
             return JSONResponse(content=timedatectl_status)
 
         # Get timedatectl status
@@ -745,10 +757,11 @@ async def get_timedatectl_status():
             logger.debug("Error executing timedatectl status", exc_info=True)
             timedatectl_status["error"] = f"Error executing timedatectl status: {e!s}"
 
+        _report_status("timedatectl status", timedatectl_status["error"])
         return JSONResponse(content=timedatectl_status)
 
-    except Exception as e:
-        logger.debug("Failed to get timedatectl status", exc_info=True)
+    except Exception as e:  # noqa: BLE001 - FailureLog logs it, with the traceback at DEBUG
+        _status_failures.failed("timedatectl status", e)
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to get timedatectl status: {e!s}"},
@@ -824,10 +837,12 @@ async def get_network_connectivity():
         except (TimeoutError, subprocess.TimeoutExpired, FileNotFoundError):
             network_connectivity_status["available"] = False
             network_connectivity_status["error"] = "nmcli command not found"
+            _report_status("nmcli networking connectivity", network_connectivity_status["error"])
             return JSONResponse(content=network_connectivity_status)
 
         if not network_connectivity_status["available"]:
             network_connectivity_status["error"] = "nmcli command not available"
+            _report_status("nmcli networking connectivity", network_connectivity_status["error"])
             return JSONResponse(content=network_connectivity_status)
 
         # Get network connectivity status
@@ -855,10 +870,11 @@ async def get_network_connectivity():
             logger.debug("Error executing nmcli networking connectivity", exc_info=True)
             network_connectivity_status["error"] = f"Error executing nmcli networking connectivity: {e!s}"
 
+        _report_status("nmcli networking connectivity", network_connectivity_status["error"])
         return JSONResponse(content=network_connectivity_status)
 
-    except Exception as e:
-        logger.debug("Failed to get network connectivity status", exc_info=True)
+    except Exception as e:  # noqa: BLE001 - FailureLog logs it, with the traceback at DEBUG
+        _status_failures.failed("nmcli networking connectivity", e)
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to get network connectivity status: {e!s}"},

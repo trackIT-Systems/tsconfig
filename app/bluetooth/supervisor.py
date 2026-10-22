@@ -9,11 +9,13 @@ It also feeds the systemd watchdog: pings continue while the gateway is healthy 
 still recovering, and stop when recovery keeps failing, so systemd restarts it.
 """
 
+import logging
 import os
 import socket
 from collections.abc import Callable
 
 from app.logging_config import get_logger
+from app.utils.failures import FailureLog
 
 logger = get_logger(__name__)
 
@@ -35,7 +37,7 @@ def sd_notify(state: str) -> bool:
             sock.sendall(state.encode())
         return True
     except OSError as e:
-        logger.debug(f"sd_notify({state!r}) failed: {e}")
+        logger.debug("sd_notify(%r) failed: %s", state, e)
         return False
 
 
@@ -68,6 +70,8 @@ class Supervisor:
         self.unhealthy_checks = 0
         self._pending = False
         self._backoff = 1.0
+        # Registration is retried every few seconds while BlueZ refuses it
+        self._failures = FailureLog(logger)
 
     @property
     def needs_registration(self) -> bool:
@@ -91,13 +95,15 @@ class Supervisor:
         self.adv_registered = False
         self.request(0.5)
 
-    def registration_ok(self) -> None:
-        """BlueZ confirmed a registration."""
+    def registration_ok(self, what: str | None = None) -> None:
+        """BlueZ confirmed a registration (of `what`, as named to `registration_failed`)."""
         self._backoff = 1.0
+        if what is not None:
+            self._failures.succeeded(f"Registering {what}")
 
     def registration_failed(self, what: str, error: object) -> None:
         """BlueZ refused a registration: try again, a little later each time."""
-        logger.error(f"Registering {what} failed: {error}")
+        self._failures.failed(f"Registering {what}", str(error), level=logging.ERROR)
         self._backoff = min(self._backoff * 2, MAX_BACKOFF_S)
         self.request(self._backoff)
 
@@ -117,11 +123,13 @@ class Supervisor:
         try:
             ok = self._register()
         except Exception as e:  # noqa: BLE001 - any failure means "try again later"
-            logger.warning(f"Registering with BlueZ failed: {e}")
+            self._failures.failed("Registering with BlueZ", e)
             ok = False
         if ok is False:
             self._backoff = min(self._backoff * 2, MAX_BACKOFF_S)
             self.request(self._backoff)
+        else:
+            self._failures.succeeded("Registering with BlueZ")
 
     # --- periodic health check ---------------------------------------------
 

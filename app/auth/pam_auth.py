@@ -44,6 +44,16 @@ logger = get_logger(__name__)
 LOGIN_USERS = (OPERATOR_USER, STAFF_USER)
 PAM_SERVICE = "tsconfig"
 
+
+def loggable_username(username: object) -> str:
+    """The user name for a failed-login log line: only the accounts that can log in are named.
+
+    Anything else may be a password typed into the user name field, which must
+    not reach the journal (or the journal topics over MQTT).
+    """
+    return repr(username) if username in LOGIN_USERS else "an unknown user"
+
+
 # The setuid su binary, a constant so tests can point it at a fake.
 SU_PATH = "/usr/bin/su"
 # Whole `su` attempt, including pam_unix's ~2 s failure delay.
@@ -144,7 +154,7 @@ def _authenticate_blocking(username: str, password: str) -> bool:
     handle = c_void_p()
     rc = libpam.pam_start(PAM_SERVICE.encode(), username.encode(), pointer(conversation), pointer(handle))
     if rc != PAM_SUCCESS:
-        logger.error(f"pam_start failed with code {rc}")
+        logger.error("pam_start failed with code %s", rc)
         return False
     try:
         rc = libpam.pam_authenticate(handle, 0)
@@ -192,7 +202,7 @@ def _check_staff_via_su_blocking(password: str) -> bool:
             close_fds=True,
         )
     except OSError as e:
-        logger.error(f"Cannot start su for the staff login: {e}")
+        logger.error("Cannot start su for the staff login: %s", e)
         os.close(master)
         return False
     finally:
@@ -252,14 +262,14 @@ async def authenticate_operator(username: str, password: str) -> bool:
                 logger.debug("Staff password with control characters refused (cannot be typed into su)")
                 return False
             if _su_slots.locked():
-                logger.warning("Too many concurrent staff logins; refusing this attempt")
+                logger.warning("Too many concurrent staff logins, refusing this attempt")
                 return False
             async with _su_slots:
                 return await asyncio.to_thread(_check_staff_via_su_blocking, password)
         return await asyncio.to_thread(_authenticate_blocking, username, password)
     except OSError as e:
-        logger.error(f"Password check unavailable: {e}")
+        logger.error("Password check unavailable: %s", e)
         return False
     except Exception:  # never let a PAM/su problem become a 500 with details
-        logger.exception("Password check error")
+        logger.exception("Password check failed")
         return False

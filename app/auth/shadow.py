@@ -34,7 +34,7 @@ def read_hash(user: str) -> str | None:
                         return None
                     return password_hash
     except OSError as e:
-        logger.error(f"Cannot read {SHADOW_PATH}: {e}")
+        logger.error("Cannot read %s: %s", SHADOW_PATH, e)
     return None
 
 

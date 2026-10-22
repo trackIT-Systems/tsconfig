@@ -15,9 +15,14 @@ from collections.abc import Iterable
 
 from app.configs.registry import SERVICE_MAPPING
 from app.logging_config import get_logger
+from app.utils.failures import FailureLog
 from app.utils.subprocess_async import run_subprocess_async
 
 logger = get_logger(__name__)
+
+# Asked on every listing of the available services: a failure is logged once
+_failures = FailureLog(logger)
+QUERY = "Querying systemd units (all configs count as supported meanwhile)"
 
 
 async def unsupported_config_types(config_types: Iterable[str]) -> dict[str, str]:
@@ -37,18 +42,18 @@ async def unsupported_config_types(config_types: Iterable[str]) -> dict[str, str
     cmd = ["systemctl", "show", "--property=LoadState", *(f"{name}.service" for name in names)]
     try:
         result = await run_subprocess_async(cmd, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
-        logger.warning("Could not query systemd units, treating all configs as supported", exc_info=True)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _failures.failed(QUERY, e)
         return {}
 
     # One "LoadState=..." block per unit, in argument order, separated by blank lines
     states = [block.strip().removeprefix("LoadState=") for block in result.stdout.strip().split("\n\n")]
     if result.returncode != 0 or len(states) != len(names):
-        logger.warning(
-            f"Unexpected systemctl show output (exit {result.returncode}), treating all configs as supported: "
-            f"{result.stdout!r} {result.stderr!r}"
+        _failures.failed(
+            QUERY, f"unexpected systemctl show output (exit {result.returncode}): {result.stdout!r} {result.stderr!r}"
         )
         return {}
+    _failures.succeeded(QUERY)
 
     missing = {name for name, state in zip(names, states, strict=True) if state == "not-found"}
     return {config_type: unit for config_type, unit in units.items() if unit in missing}

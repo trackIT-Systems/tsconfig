@@ -37,7 +37,8 @@ async def get_current_user(
 
     # In server mode, authentication is required
     if not oidc_config.is_configured():
-        logger.error("OIDC is not configured but server mode is enabled")
+        # Warned about once at startup (main.validate_oidc_config), not per request
+        logger.debug("OIDC is not configured but server mode is enabled")
         raise HTTPException(
             status_code=503,
             detail="Authentication is not configured",
@@ -82,7 +83,7 @@ async def get_current_user(
         is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
 
         if not is_authorized:
-            logger.warning(f"User {user_info.get('email')} authorization failed: {error_msg}")
+            logger.warning("User %s authorization failed: %s", user_info.get("email"), error_msg)
             raise HTTPException(
                 status_code=403,
                 detail=f"Access denied: {error_msg}",
@@ -90,7 +91,7 @@ async def get_current_user(
 
         return user_info
     except ValueError as e:
-        logger.warning(f"Token validation failed: {e}")
+        logger.warning("Token validation failed: %s", e)
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token",

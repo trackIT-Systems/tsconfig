@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from app import __version__
 from app.auth.dependencies import get_current_user, get_optional_user
 from app.auth.oidc_config import oidc_config
-from app.auth.pam_auth import OPERATOR_USER, authenticate_operator
+from app.auth.pam_auth import OPERATOR_USER, authenticate_operator, loggable_username
 from app.auth.session import (
     client_source,
     delete_session_cookies,
@@ -114,7 +114,7 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Error initiating OIDC login")
+        logger.exception("Cannot start the OIDC login")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to initiate login: {e!s}",
@@ -152,12 +152,12 @@ async def operator_login(
 
     if not await authenticate_operator(username, password):
         record_login_failure(source, username)
-        logger.warning(f"Failed login as {username!r} from {source}")
+        logger.warning("Failed login as %s from %s", loggable_username(username), source)
         wait = login_retry_after(source, username)
         return _render_login(request, next_path, "Wrong username or password.", 401, wait, username=username)
 
     record_login_success(source, username)
-    logger.info(f"Logged in as {username!r} from {source}")
+    logger.info("Logged in as %r from %s", username, source)
     response = RedirectResponse(url=f"{_base_url()}{next_path}", status_code=303)
     set_session_cookie(response, request)
     return response
@@ -197,7 +197,7 @@ async def callback(
     # Retrieve code verifier and return_to from store
     stored_data = _pkce_store.pop(state, None)
     if not stored_data:
-        logger.warning("State data not found for state parameter")
+        logger.warning("OIDC callback with an unknown state parameter")
         raise HTTPException(
             status_code=400,
             detail="Invalid state parameter",
@@ -207,7 +207,7 @@ async def callback(
     return_to = stored_data.get("return_to")
 
     if not code_verifier:
-        logger.warning("Code verifier not found in stored data")
+        logger.warning("OIDC callback without a stored code verifier")
         raise HTTPException(
             status_code=400,
             detail="Invalid state parameter",
@@ -245,7 +245,7 @@ async def callback(
         is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
 
         if not is_authorized:
-            logger.warning(f"User {user_info.get('email')} authorization failed: {error_msg}")
+            logger.warning("User %s authorization failed: %s", user_info.get("email"), error_msg)
 
             # Render forbidden page with user info
             base_url = os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
@@ -261,7 +261,7 @@ async def callback(
                 status_code=403,
             )
 
-        logger.info(f"User {user_info.get('email')} successfully authenticated and authorized")
+        logger.info("User %s successfully authenticated and authorized", user_info.get("email"))
 
         # Get base URL
         base_url = os.environ.get("TSCONFIG_BASE_URL", "").rstrip("/")
@@ -299,7 +299,7 @@ async def callback(
         return response
 
     except ValueError as e:
-        logger.error(f"Authentication failed: {e}")
+        logger.error("Authentication failed: %s", e)
         raise HTTPException(
             status_code=400,
             detail=f"Authentication failed: {e!s}",
@@ -308,7 +308,7 @@ async def callback(
         # Re-raise HTTPExceptions (including our 403 from above)
         raise
     except Exception:
-        logger.exception("Unexpected error during authentication")
+        logger.exception("OIDC callback failed")
         raise HTTPException(
             status_code=500,
             detail="Authentication failed due to server error",
@@ -369,13 +369,13 @@ async def refresh_token(
         is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
 
         if not is_authorized:
-            logger.warning(f"User {user_info.get('email')} authorization failed after refresh: {error_msg}")
+            logger.warning("User %s authorization failed after refresh: %s", user_info.get("email"), error_msg)
             raise HTTPException(
                 status_code=403,
                 detail=f"Access denied: {error_msg}",
             )
 
-        logger.debug(f"Successfully refreshed token for user: {user_info.get('email')}")
+        logger.debug("Successfully refreshed token for user: %s", user_info.get("email"))
 
         # Prepare response with updated cookies
         response = JSONResponse(content={"success": True, "user": user_info})
@@ -404,7 +404,7 @@ async def refresh_token(
         return response
 
     except ValueError as e:
-        logger.warning(f"Token refresh failed: {e}")
+        logger.warning("Token refresh failed: %s", e)
         raise HTTPException(
             status_code=401,
             detail="Token refresh failed",
@@ -412,7 +412,7 @@ async def refresh_token(
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Unexpected error during token refresh")
+        logger.exception("Token refresh failed")
         raise HTTPException(
             status_code=500,
             detail="Token refresh failed due to server error",
@@ -462,9 +462,10 @@ async def logout(
                 logout_url = (
                     f"{end_session_endpoint}?post_logout_redirect_uri={encoded_redirect}&id_token_hint={auth_token}"
                 )
-                logger.info(f"Redirecting to OIDC logout with post_logout_redirect_uri: {post_logout_redirect}")
+                logger.debug("Redirecting to OIDC logout with post_logout_redirect_uri %s", post_logout_redirect)
     except Exception as e:
-        logger.warning(f"Could not configure OIDC logout: {e}", exc_info=True)
+        logger.warning("Could not configure OIDC logout: %s", e)
+        logger.debug("OIDC logout traceback", exc_info=True)
 
     # Clear authentication cookies
     response = RedirectResponse(url=logout_url, status_code=302)
@@ -512,14 +513,14 @@ async def frontchannel_logout(
             )
 
         if iss != oidc_config.issuer_url:
-            logger.warning(f"Front-channel logout called with invalid issuer: {iss}")
+            logger.warning("Front-channel logout called with invalid issuer: %s", iss)
             raise HTTPException(
                 status_code=400,
                 detail="Invalid issuer",
             )
 
-    # Log the logout event
-    logger.info(f"Front-channel logout triggered for session: {sid if sid else 'unknown'}")
+    # Log the logout event (not the session ID: it identifies the session to the provider)
+    logger.info("Front-channel logout triggered by the OIDC provider")
 
     # Clear the authentication cookies
     # Return minimal HTML with Set-Cookie header

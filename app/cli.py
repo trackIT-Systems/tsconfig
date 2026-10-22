@@ -28,8 +28,7 @@ from app.utils import privileged as priv
 
 DEFAULT_CONFIG_ZIP = OPERATOR_HOME / "tsos-default-name_config.zip"
 
-# Logger will be initialized in main() after logging setup
-logger = None
+logger = get_logger(__name__)
 
 
 # restart_systemd_service_sync / schedule_reboot_sync used to shell out to
@@ -57,14 +56,12 @@ async def process_system_reset(
     Raises:
         SystemExit: On validation errors or other failures
     """
-    log = get_logger(__name__)
-
     if config_loader.is_server_mode():
-        log.error("System reset is not available in server mode")
+        logger.error("System reset is not available in server mode")
         sys.exit(1)
 
     if keep_config and keep_overlay:
-        log.error("No steps to execute: both --keep-config and --keep-overlay specified")
+        logger.error("No steps to execute: both --keep-config and --keep-overlay specified")
         sys.exit(1)
 
     reset_config = not keep_config
@@ -73,39 +70,39 @@ async def process_system_reset(
 
     if reset_config:
         if not DEFAULT_CONFIG_ZIP.exists():
-            log.error(f"Default config zip not found: {DEFAULT_CONFIG_ZIP}")
+            logger.error("Default config zip not found: %s", DEFAULT_CONFIG_ZIP)
             sys.exit(1)
         try:
             saved_files, cmdline_updated = await _apply_config_zip_from_path(DEFAULT_CONFIG_ZIP, force=True)
-            log.info(f"Reset config: {', '.join(saved_files)}")
+            logger.info("Reset config: %s", ", ".join(saved_files))
             if cmdline_updated:
                 reboot_needed = True
         except ValueError as e:
-            log.error(str(e))
+            logger.error("Cannot apply the default configuration: %s", e)
             sys.exit(1)
 
         try:
             await priv.delete_config("wireguard")
-            log.info("Removed wireguard.conf")
+            logger.info("Removed wireguard.conf")
         except priv.PrivilegedCallError as e:
-            log.warning(f"Failed to remove wireguard.conf: {e}")
+            logger.warning("Failed to remove wireguard.conf: %s", e)
 
     if should_wipe_overlay:
         try:
             await priv.wipe_overlay()
-            log.info("Wiped overlay filesystem")
+            logger.info("Wiped overlay filesystem")
             reboot_needed = True
         except priv.PrivilegedCallError as e:
-            log.error(f"Failed to wipe overlay: {e}")
+            logger.error("Failed to wipe overlay: %s", e)
             sys.exit(1)
 
     if reboot_needed:
-        log.info("Scheduling system reboot...")
+        logger.debug("Scheduling a system reboot")
         try:
             await priv.schedule_reboot(delay=10)
-            log.info("Reboot scheduled")
+            logger.info("System reboot scheduled in 10 seconds")
         except priv.PrivilegedCallError as e:
-            log.warning(f"Failed to schedule reboot: {e}")
+            logger.warning("Failed to schedule reboot: %s", e)
 
 
 async def process_zip_upload(
@@ -136,12 +133,10 @@ async def process_zip_upload(
     Raises:
         SystemExit: On validation errors or other failures
     """
-    # Get logger (will be initialized in main())
-    log = get_logger(__name__)
     # Validate reboot parameter
     reboot_lower = reboot.lower()
     if reboot_lower not in ["forbid", "allow", "force"]:
-        log.error(f"Invalid reboot parameter: '{reboot}'. Must be 'forbid', 'allow', or 'force'")
+        logger.error("Invalid reboot parameter '%s', must be 'forbid', 'allow' or 'force'", reboot)
         sys.exit(1)
 
     # Read zip file content
@@ -149,10 +144,10 @@ async def process_zip_upload(
         content = await asyncio.to_thread(Path(zip_path).read_bytes)
         zip_buffer = BytesIO(content)
     except FileNotFoundError:
-        log.error(f"Zip file not found: {zip_path}")
+        logger.error("Zip file not found: %s", zip_path)
         sys.exit(1)
     except OSError as e:
-        log.error(f"Failed to read file: {e!s}")
+        logger.error("Failed to read file: %s", e)
         sys.exit(1)
 
     # Verify it's a valid zip file
@@ -162,13 +157,13 @@ async def process_zip_upload(
             zip_file.testzip()
             file_list = zip_file.namelist()
     except zipfile.BadZipFile:
-        log.error("Invalid zip file")
+        logger.error("Invalid zip file")
         sys.exit(1)
     except Exception:
         # testzip()/namelist() can raise far more than BadZipFile (encrypted
         # members, unsupported compression, zlib errors, ...); any of them
         # means the upload is unusable.
-        log.exception("Failed to read zip file")
+        logger.exception("Failed to read zip file")
         sys.exit(1)
 
     # Extract file timestamps from zip
@@ -192,7 +187,7 @@ async def process_zip_upload(
                     file_content = zip_file.read(filename).decode("utf-8")
                     recognized_files[basename] = file_content
                 except UnicodeDecodeError:
-                    log.error(f"File '{basename}' must be UTF-8 encoded text")
+                    logger.error("File '%s' must be UTF-8 encoded text", basename)
                     sys.exit(1)
             else:
                 # Skip hidden files and common non-config files
@@ -201,17 +196,18 @@ async def process_zip_upload(
 
     # Handle pedantic mode
     if pedantic and unknown_files:
-        log.error(
-            f"Unknown files in zip archive: {', '.join(unknown_files)}. "
-            f"Recognized files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}"
+        logger.error(
+            "Unknown files in zip archive: %s (recognized files are: %s)",
+            ", ".join(unknown_files),
+            ", ".join(RECOGNIZED_CONFIG_FILES.keys()),
         )
         sys.exit(1)
 
     # If no recognized files found
     if not recognized_files:
-        log.error(
-            f"No recognized configuration files found in zip. "
-            f"Supported files are: {', '.join(RECOGNIZED_CONFIG_FILES.keys())}"
+        logger.error(
+            "No recognized configuration files found in zip (supported files are: %s)",
+            ", ".join(RECOGNIZED_CONFIG_FILES.keys()),
         )
         sys.exit(1)
 
@@ -219,12 +215,12 @@ async def process_zip_upload(
     files_by_type = {RECOGNIZED_CONFIG_FILES[filename]: filename for filename in recognized_files}
     unsupported = await support.unsupported_config_types(files_by_type)
     if unsupported:
-        log.error(support.unsupported_message(unsupported, files_by_type) + ". No changes were made.")
+        logger.error("%s, no changes were made", support.unsupported_message(unsupported, files_by_type))
         sys.exit(1)
 
-    log.info(f"Found {len(recognized_files)} recognized configuration file(s)")
+    logger.info("Found %s recognized configuration file(s)", len(recognized_files))
     if unknown_files:
-        log.warning(f"Ignoring {len(unknown_files)} unknown file(s): {', '.join(unknown_files)}")
+        logger.warning("Ignoring %s unknown file(s): %s", len(unknown_files), ", ".join(unknown_files))
 
     # Parse and validate all recognized files
     validation_results = {}
@@ -254,7 +250,7 @@ async def process_zip_upload(
 
             if validation_errors:
                 all_valid = False
-                log.error(f"Validation failed for {filename}: {validation_errors}")
+                logger.error("Validation failed for %s: %s", filename, validation_errors)
 
         except ValueError as e:
             validation_results[filename] = {
@@ -262,21 +258,21 @@ async def process_zip_upload(
                 "errors": [f"Parse error: {e!s}"],
             }
             all_valid = False
-            log.error(f"Parse error for {filename}: {e!s}")
+            logger.error("Parse error for %s: %s", filename, e)
         except Exception as e:
             validation_results[filename] = {
                 "valid": False,
                 "errors": [f"Validation error: {e!s}"],
             }
             all_valid = False
-            log.exception(f"Validation error for {filename}")
+            logger.exception("Validation error for %s", filename)
 
     # If not all files are valid, exit without saving
     if not all_valid:
-        log.error("Validation failed for one or more files. No changes were made.")
+        logger.error("Validation failed for one or more files, no changes were made")
         sys.exit(1)
 
-    log.info("All configuration files validated successfully")
+    logger.info("All configuration files validated successfully")
 
     # Perform timestamp comparisons for all valid files
     timestamp_comparisons = compare_file_timestamps(
@@ -298,14 +294,16 @@ async def process_zip_upload(
                 )
 
         if newer_files_on_disk:
-            log.error(
-                f"Pedantic mode: {len(newer_files_on_disk)} file(s) on disk are newer than zip versions. "
-                "No changes were made."
+            logger.error(
+                "Pedantic mode: %s file(s) on disk are newer than in the zip, no changes were made",
+                len(newer_files_on_disk),
             )
             for file_info in newer_files_on_disk:
-                log.error(
-                    f"  {file_info['filename']}: existing={file_info['existing_timestamp']}, "
-                    f"zip={file_info['zip_timestamp']}"
+                logger.error(
+                    "%s is newer on disk: existing=%s, zip=%s",
+                    file_info["filename"],
+                    file_info["existing_timestamp"],
+                    file_info["zip_timestamp"],
                 )
             sys.exit(1)
 
@@ -334,11 +332,13 @@ async def process_zip_upload(
                 )
 
     if files_skipped:
-        log.warning(f"Skipping {len(files_skipped)} file(s) (not newer than existing)")
+        logger.warning("Skipping %s file(s) (not newer than existing)", len(files_skipped))
         for skip_info in files_skipped:
-            log.debug(
-                f"  {skip_info['filename']}: existing={skip_info.get('existing_timestamp')}, "
-                f"zip={skip_info.get('zip_timestamp')}"
+            logger.debug(
+                "Skipping %s: existing=%s, zip=%s",
+                skip_info["filename"],
+                skip_info.get("existing_timestamp"),
+                skip_info.get("zip_timestamp"),
             )
 
     # Save the selected files
@@ -348,7 +348,7 @@ async def process_zip_upload(
 
     for filename in files_to_save:
         try:
-            log.debug(f"Saving {filename}...")
+            logger.debug("Saving %s", filename)
             config_type = RECOGNIZED_CONFIG_FILES[filename]
 
             # Set mtime from zip timestamp (regardless of mode)
@@ -365,13 +365,13 @@ async def process_zip_upload(
                 save_metadata[filename] = save_result
 
             saved_files.append(filename)
-            log.info(f"Saved {filename}")
+            logger.info("Saved %s", filename)
         except Exception as e:
             save_errors[filename] = str(e)
-            log.exception(f"Failed to save {filename}")
+            logger.exception("Failed to save %s", filename)
 
     if save_errors:
-        log.error(f"Failed to save some configuration files: {save_errors}")
+        logger.error("Failed to save some configuration files: %s", save_errors)
         sys.exit(1)
 
     # Files saved successfully
@@ -382,21 +382,17 @@ async def process_zip_upload(
     else:
         mode_desc = "default mode"
 
-    message_parts = []
     if saved_files:
-        message_parts.append(
-            f"Successfully uploaded and validated {len(saved_files)} configuration file(s) in {mode_desc}"
-        )
-
+        logger.info("Uploaded and validated %s configuration file(s) in %s", len(saved_files), mode_desc)
     if files_skipped:
-        message_parts.append(f"Skipped {len(files_skipped)} file(s) (not newer than existing)")
-
-    log.info(". ".join(message_parts) if message_parts else "No files were processed")
+        logger.info("Skipped %s file(s), not newer than the existing ones", len(files_skipped))
+    if not saved_files and not files_skipped:
+        logger.info("No files were processed")
 
     # Add save metadata if any (e.g., hostname changes for cmdline.txt)
     if save_metadata:
         for filename, metadata in save_metadata.items():
-            log.info(f"Save metadata for {filename}: {metadata}")
+            logger.info("Save metadata for %s: %s", filename, metadata)
 
     # Optionally restart services (only if not force-rebooting, as reboot will restart everything)
     services_restarted = []
@@ -409,23 +405,23 @@ async def process_zip_upload(
             service_name = SERVICE_MAPPING.get(config_type)
 
             if service_name:
-                log.debug(f"Restarting service {service_name}...")
+                logger.debug("Restarting %s", service_name)
                 success, error = await priv.systemctl_action(service_name, "restart")
 
                 if success:
                     services_restarted.append(service_name)
-                    log.info(f"Restarted service: {service_name}")
+                    logger.debug("Restarted %s", service_name)
                 else:
                     service_restart_errors[service_name] = error
-                    log.warning(f"Failed to restart service {service_name}: {error}")
+                    logger.warning("Failed to restart service %s: %s", service_name, error)
 
         # Log restart results
         if services_restarted:
-            log.info(f"Restarted service(s): {', '.join(set(services_restarted))}")
+            logger.info("Restarted service(s): %s", ", ".join(set(services_restarted)))
 
         if service_restart_errors:
             errors_msg = ", ".join([f"{svc}: {err}" for svc, err in service_restart_errors.items()])
-            log.warning(f"Some services failed to restart: {errors_msg}")
+            logger.warning("Some services failed to restart: %s", errors_msg)
 
     # Handle reboot based on policy
     # Check if cmdline.txt was updated (requires reboot to take effect)
@@ -434,23 +430,23 @@ async def process_zip_upload(
     if reboot_lower == "forbid":
         # Never reboot, even if cmdline.txt was updated
         if cmdline_updated:
-            log.warning("cmdline.txt updated but reboot forbidden - changes will not take effect until manual reboot")
+            logger.warning("cmdline.txt updated but reboot forbidden: the changes take effect at the next reboot")
     elif reboot_lower == "force":
         # Always reboot after successful upload
-        log.info("Scheduling system reboot in 10 seconds (forced)...")
+        logger.debug("Scheduling a system reboot in 10 seconds (forced)")
         try:
             await priv.schedule_reboot(delay=10)
-            log.info("System reboot scheduled in 10 seconds (forced)")
+            logger.info("System reboot scheduled in 10 seconds (forced)")
         except priv.PrivilegedCallError as e:
-            log.warning(f"Failed to schedule reboot: {e}")
+            logger.warning("Failed to schedule reboot: %s", e)
     elif reboot_lower == "allow" and cmdline_updated:
         # "allow" mode with cmdline.txt updated - automatically reboot
-        log.info("cmdline.txt updated - scheduling system reboot in 10 seconds...")
+        logger.debug("cmdline.txt updated, scheduling a system reboot in 10 seconds")
         try:
             await priv.schedule_reboot(delay=10)
-            log.info("System reboot scheduled in 10 seconds (cmdline.txt updated)")
+            logger.info("System reboot scheduled in 10 seconds (cmdline.txt updated)")
         except priv.PrivilegedCallError as e:
-            log.warning(f"Failed to schedule reboot: {e}")
+            logger.warning("Failed to schedule reboot: %s", e)
     # else: "allow" mode but cmdline.txt was not updated - no reboot
 
     return {
@@ -587,10 +583,6 @@ def main():
     else:
         setup_logging(log_level="INFO")
 
-    # Initialize module-level logger
-    global logger
-    logger = get_logger(__name__)
-
     # Handle commands
     if args.command == "zip":
         try:
@@ -603,13 +595,13 @@ def main():
                     reboot=args.reboot,
                 )
             )
-            logger.info("Upload completed successfully")
+            logger.info("Upload completed")
             sys.exit(0)
         except KeyboardInterrupt:
             logger.warning("Upload interrupted by user")
             sys.exit(130)
         except Exception:
-            logger.exception("Unexpected error")
+            logger.exception("Upload failed")
             sys.exit(1)
     elif args.command == "system-reset":
         try:
@@ -624,7 +616,7 @@ def main():
             logger.warning("Reset interrupted by user")
             sys.exit(130)
         except Exception:
-            logger.exception("Unexpected error")
+            logger.exception("System reset failed")
             sys.exit(1)
     else:
         parser.print_help()

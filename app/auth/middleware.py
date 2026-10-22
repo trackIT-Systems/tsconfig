@@ -13,7 +13,7 @@ from starlette.websockets import WebSocketClose
 
 from app import __version__
 from app.auth.oidc_config import oidc_config
-from app.auth.pam_auth import LOGIN_USERS, authenticate_operator
+from app.auth.pam_auth import LOGIN_USERS, authenticate_operator, loggable_username
 from app.auth.session import (
     client_source,
     has_valid_session,
@@ -128,8 +128,8 @@ class AuthenticationMiddleware:
         self.tracker_public_paths = tracker_public
 
         self.base_url = base_url
-        logger.debug(f"AuthenticationMiddleware initialized with base_url: {base_url}")
-        logger.debug(f"Public paths: {self.public_paths}")
+        logger.debug("AuthenticationMiddleware initialized with base_url: %s", base_url)
+        logger.debug("Public paths: %s", self.public_paths)
 
     def _is_public_path(self, path: str) -> bool:
         """Check if the request path is public (doesn't require authentication)."""
@@ -184,7 +184,7 @@ class AuthenticationMiddleware:
 
         if not await authenticate_operator(username, password):
             record_login_failure(source, username)
-            logger.warning(f"Failed WebDAV login as {username!r} from {source}")
+            logger.warning("Failed WebDAV login as %s from %s", loggable_username(username), source)
             return Response(
                 content='{"detail":"Wrong credentials"}',
                 status_code=401,
@@ -200,7 +200,9 @@ class AuthenticationMiddleware:
         """Tracker mode: operator session cookie or trusted local request."""
         method = request.scope.get("method", "GET")  # websocket scopes have none
         if (method in UNSAFE_METHODS or request.scope["type"] == "websocket") and is_cross_origin(request):
-            logger.warning(f"Refused cross-origin {method} {request.url.path} from {request.headers.get('origin')!r}")
+            logger.warning(
+                "Refused cross-origin %s %s from %r", method, request.url.path, request.headers.get("origin")
+            )
             return Response(
                 content='{"detail":"Cross-origin request refused"}',
                 status_code=403,
@@ -289,8 +291,9 @@ class AuthenticationMiddleware:
         if not oidc_config.is_configured():
             # OIDC not configured, but server mode is enabled
             # This is a configuration error, but we'll allow the request
-            # The endpoints themselves can decide if they need auth
-            logger.warning("Server mode enabled but OIDC not configured")
+            # The endpoints themselves can decide if they need auth.
+            # Warned about once at startup (main.validate_oidc_config), not per request
+            logger.debug("Server mode enabled but OIDC not configured")
             return Proceed()
 
         # Check if path is public (doesn't require authentication)
@@ -341,7 +344,7 @@ class AuthenticationMiddleware:
             is_authorized, error_msg = oidc_handler.validate_user_groups(user_info, required_groups)
 
             if not is_authorized:
-                logger.warning(f"User {user_info.get('email')} authorization failed: {error_msg}")
+                logger.warning("User %s authorization failed: %s", user_info.get("email"), error_msg)
 
                 if self._is_browser_request(request):
                     # Render forbidden page for browser
@@ -375,7 +378,7 @@ class AuthenticationMiddleware:
 
         except ValueError as e:
             # Token validation failed - try to refresh before giving up
-            logger.warning(f"Token validation failed: {e}")
+            logger.warning("Token validation failed: %s", e)
 
             # Check if we have a refresh token to attempt refresh
             refresh_token = request.cookies.get("refresh_token")
@@ -429,12 +432,13 @@ class AuthenticationMiddleware:
                                         max_age=30 * 24 * 60 * 60,
                                     )
 
-                                logger.debug(f"Successfully refreshed token for user: {user_info.get('email')}")
+                                logger.debug("Successfully refreshed token for user: %s", user_info.get("email"))
                                 return Proceed(decorate=set_refreshed_cookies)
                             else:
-                                logger.warning(f"User authorization failed after token refresh: {error_msg}")
+                                logger.warning("User authorization failed after token refresh: %s", error_msg)
                 except Exception as refresh_error:
-                    logger.warning(f"Token refresh failed in middleware: {refresh_error}", exc_info=True)
+                    logger.warning("Token refresh failed in middleware: %s", refresh_error)
+                    logger.debug("Token refresh traceback", exc_info=True)
                     # Fall through to normal error handling
 
             # Refresh failed or no refresh token available - redirect/return error

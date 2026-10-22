@@ -98,7 +98,7 @@ async def test_a_repeating_failure_is_warned_about_once(caplog):
     clock = FakeClock(0.0)
     collector = Fixed(error=OSError("I2C read failed"))
     runner = Daemon([collector], [Recorder()], clock)
-    with caplog.at_level(logging.INFO, logger="tstelemetry"):
+    with caplog.at_level(logging.INFO, logger="app.telemetry.daemon"):
         for _ in range(3):
             await runner.tick(collector)
         collector.error = None
@@ -111,7 +111,7 @@ async def test_a_repeating_failure_is_warned_about_once(caplog):
 def test_a_broken_settings_file_falls_back_to_the_defaults(tmp_path, caplog):
     path = tmp_path / "tstelemetry.yml"
     path.write_text("collectors:\n  system:\n    func: \"__import__('os')\"\n")
-    with caplog.at_level(logging.ERROR, logger="tstelemetry"):
+    with caplog.at_level(logging.ERROR, logger="app.telemetry.daemon"):
         assert daemon._settings(path) == TelemetrySettings()
     assert "using the defaults" in caplog.text
 

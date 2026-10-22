@@ -1,6 +1,7 @@
 """Network management router for NetworkManager connections."""
 
 import asyncio
+import logging
 import subprocess
 from typing import Any
 
@@ -12,11 +13,15 @@ from app.logging_config import get_logger
 from app.privileged.ops import ALLOWED_CONNECTIONS
 from app.system import modem
 from app.system.modem import ModemInfo
+from app.utils.failures import FailureLog
 from app.utils.privileged import PrivilegedCallError, unset_gsm_fields
 from app.utils.subprocess_async import run_subprocess_async
 
 router = APIRouter(prefix="/api/network", tags=["network"])
 logger = get_logger(__name__)
+
+# The status page polls the modem every few seconds
+_modem_failures = FailureLog(logger)
 
 
 def _ensure_tracker_mode() -> None:
@@ -460,7 +465,7 @@ async def get_nmcli_connection_properties(connection_name: str, show_secrets: bo
     except HTTPException:
         raise
     except Exception as e:
-        logger.debug(f"Failed to get properties from connection {connection_name}", exc_info=True)
+        logger.debug("Failed to get properties from connection %s", connection_name, exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Failed to get properties from connection {connection_name}: {e!s}"
         )
@@ -504,7 +509,7 @@ async def get_device_ipv4_address(device: str) -> str | None:
 
         return None
     except Exception:
-        logger.debug(f"Could not get IPv4 address of {device}", exc_info=True)
+        logger.debug("Could not get IPv4 address of %s", device, exc_info=True)
         return None
 
 
@@ -800,7 +805,8 @@ async def update_hotspot_config(update: HotspotUpdate) -> dict[str, Any]:
                 raise
             except Exception as e:
                 # If capabilities check fails, log but don't block the update
-                logger.warning(f"Could not validate WiFi capabilities: {e}", exc_info=True)
+                logger.warning("Could not validate WiFi capabilities: %s", e)
+                logger.debug("WiFi capabilities traceback", exc_info=True)
 
         # Validate channel width if provided
         if update.channel_width is not None:
@@ -957,7 +963,7 @@ async def update_cellular_config(update: CellularUpdate) -> dict[str, Any]:
             try:
                 await unset_gsm_fields("cellular", fields_to_remove_from_netplan)
             except PrivilegedCallError as e:
-                logger.warning(f"Failed to remove GSM fields from netplan: {e}")
+                logger.warning("Failed to remove GSM fields from netplan: %s", e)
 
         # Execute all modifications in a single nmcli connection modify call
         result = await nmcli_connection_modify("cellular", set_props)
@@ -1036,12 +1042,15 @@ async def get_modem_info() -> ModemInfo | None:
         Modem information including basic info, signal strength, and connection status, or None if no modem found
     """
     try:
-        return await modem.read_modem()
+        info = await modem.read_modem()
     except modem.MmcliTimeout as e:
+        _modem_failures.failed("Modem readout", e)
         raise HTTPException(status_code=504, detail=str(e))
     except modem.MmcliUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
-    except Exception:
-        # Log the error but don't raise - return None for graceful degradation
-        logger.exception("Error getting modem information")
+    except Exception as e:  # noqa: BLE001 - FailureLog logs it, with the traceback at DEBUG
+        # Return None for graceful degradation; the status page polls this, so it is logged once
+        _modem_failures.failed("Modem readout", e, level=logging.ERROR)
         return None
+    _modem_failures.succeeded("Modem readout")
+    return info

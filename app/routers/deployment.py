@@ -36,8 +36,8 @@ async def deploy_config(
     # Construct the full deployment endpoint URL
     deploy_url = f"{deployment_api_url}/api/config-groups/{config_group_id}/deploy"
 
-    logger.info(f"Deployment request for config group: {config_group_id}")
-    logger.debug(f"Deployment API URL: {deploy_url}")
+    logger.info("Deployment request for config group: %s", config_group_id)
+    logger.debug("Deployment API URL: %s", deploy_url)
 
     # Extract authentication token from the incoming request to forward it
     auth_token = None
@@ -57,7 +57,7 @@ async def deploy_config(
     headers = {"Content-Type": "application/json"}
     if auth_token:
         headers["Authorization"] = f"Bearer {auth_token}"
-        logger.debug(f"Forwarding auth token (length: {len(auth_token)})")
+        logger.debug("Forwarding auth token (length: %s)", len(auth_token))
     else:
         logger.warning("No auth token to forward to deployment API")
 
@@ -71,7 +71,7 @@ async def deploy_config(
                 error_message = error_data.get(
                     "error", f"Config group '{config_group_id}' not found in deployment system"
                 )
-                logger.error(f"Deployment API 404: {error_data}")
+                logger.error("Deployment API 404: %s", error_data)
                 raise HTTPException(status_code=404, detail=error_message)
 
             # Handle other non-200 responses
@@ -83,11 +83,13 @@ async def deploy_config(
                         or error_data.get("message")
                         or f"Deployment failed with status {response.status_code}"
                     )
-                    logger.error(f"Deployment API error (status {response.status_code}): {error_data}")
+                    logger.error("Deployment API error (status %s): %s", response.status_code, error_data)
                 except (ValueError, AttributeError) as parse_error:  # not JSON / not a JSON object
                     error_message = f"Deployment failed with status {response.status_code}"
                     logger.error(
-                        f"Deployment API error (status {response.status_code}), failed to parse response: {parse_error}"
+                        "Deployment API error (status %s), failed to parse response: %s",
+                        response.status_code,
+                        parse_error,
                     )
                 raise HTTPException(status_code=response.status_code, detail=error_message)
 

@@ -214,7 +214,7 @@ def _parse_alsa_cards() -> list[dict[str, Any]]:
                     }
                     cards.append(card_info)
     except (OSError, UnicodeDecodeError) as e:
-        logger.warning(f"Could not read /proc/asound/cards: {e}")
+        logger.warning("Could not read /proc/asound/cards: %s", e)
 
     return cards
 

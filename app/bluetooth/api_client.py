@@ -6,6 +6,7 @@ to the tsconfig HTTP API endpoints.
 
 import asyncio
 import base64
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -13,8 +14,12 @@ import httpx
 
 from app.bluetooth.auth import BleRequestError
 from app.logging_config import get_logger
+from app.utils.failures import FailureLog
 
 logger = get_logger(__name__)
+
+# Key under which the API being unreachable (tsconfig down or restarting) is logged
+API = "tsconfig API"
 
 
 def _request_error(e: httpx.HTTPError) -> Exception:
@@ -47,6 +52,24 @@ class TsConfigApiClient:
         self.timeout = timeout
         self.client: httpx.AsyncClient | None = None
         self._client_loop: asyncio.AbstractEventLoop | None = None
+        # BLE clients may poll: a failing request is logged once, not on every read
+        self._failures = FailureLog(logger, level=logging.ERROR)
+
+    def _succeeded(self, request: str) -> None:
+        self._failures.succeeded(API)
+        self._failures.succeeded(request)
+
+    def _failed(self, request: str, e: httpx.HTTPError) -> None:
+        """Log a failed request: the API being unreachable once for all requests, an
+        error answer once per request (it goes back to the BLE client either way)."""
+        if isinstance(e, httpx.HTTPStatusError):
+            self._failures.succeeded(API)
+            self._failures.failed(
+                request, f"HTTP {e.response.status_code} {e.response.reason_phrase}", level=logging.WARNING
+            )
+        else:
+            self._failures.failed(API, e)
+            logger.debug("%s failed: %s", request, e)
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -88,9 +111,10 @@ class TsConfigApiClient:
         try:
             response = await self.client.get(endpoint, params=params)
             response.raise_for_status()
+            self._succeeded(f"GET {endpoint}")
             return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"HTTP GET error for {endpoint}: {e}")
+            self._failed(f"GET {endpoint}", e)
             raise
 
     async def _post(self, endpoint: str, json_data: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
@@ -111,9 +135,10 @@ class TsConfigApiClient:
         try:
             response = await self.client.post(endpoint, json=json_data, **kwargs)
             response.raise_for_status()
+            self._succeeded(f"POST {endpoint}")
             return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"HTTP POST error for {endpoint}: {e}")
+            self._failed(f"POST {endpoint}", e)
             raise _request_error(e) from e
 
     async def _put(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -133,9 +158,10 @@ class TsConfigApiClient:
         try:
             response = await self.client.put(endpoint, json=json_data)
             response.raise_for_status()
+            self._succeeded(f"PUT {endpoint}")
             return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"HTTP PUT error for {endpoint}: {e}")
+            self._failed(f"PUT {endpoint}", e)
             raise
 
     # System Service endpoints
@@ -222,9 +248,10 @@ class TsConfigApiClient:
             # follow=false: a bounded plain-text answer instead of the endless stream
             response = await self.client.get(f"/api/systemd/logs/{service}", params={"lines": lines, "follow": "false"})
             response.raise_for_status()
+            self._succeeded(f"GET /api/systemd/logs/{service}")
             return response.text
         except httpx.HTTPError as e:
-            logger.error(f"HTTP GET error for logs/{service}: {e}")
+            self._failed(f"GET /api/systemd/logs/{service}", e)
             raise _request_error(e) from e
 
     # Config Service endpoints (upload and download)
@@ -278,9 +305,10 @@ class TsConfigApiClient:
 
             response = await self.client.post("/api/configs/update", files=files, data=data)
             response.raise_for_status()
+            self._succeeded("POST /api/configs/update")
             return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"HTTP POST error for upload: {e}")
+            self._failed("POST /api/configs/update", e)
             raise _request_error(e) from e
 
     async def upload_zip(
@@ -322,9 +350,10 @@ class TsConfigApiClient:
 
             response = await self.client.post("/api/configs.zip", files=files, data=data)
             response.raise_for_status()
+            self._succeeded("POST /api/configs.zip")
             return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"HTTP POST error for upload/zip: {e}")
+            self._failed("POST /api/configs.zip", e)
             raise _request_error(e) from e
 
     async def download_config(self, filename: str) -> dict[str, Any]:
@@ -340,6 +369,7 @@ class TsConfigApiClient:
         try:
             response = await self.client.get(f"/api/configs/{filename}")
             response.raise_for_status()
+            self._succeeded(f"GET /api/configs/{filename}")
 
             result = {
                 "content": response.text,
@@ -352,7 +382,7 @@ class TsConfigApiClient:
 
             return result
         except httpx.HTTPError as e:
-            logger.error(f"HTTP GET error for download config: {e}")
+            self._failed(f"GET /api/configs/{filename}", e)
             raise
 
     async def download_zip(self) -> dict[str, Any]:
@@ -365,6 +395,7 @@ class TsConfigApiClient:
         try:
             response = await self.client.get("/api/configs.zip")
             response.raise_for_status()
+            self._succeeded("GET /api/configs.zip")
 
             # Extract filename from Content-Disposition header if present
             filename = "tsconfig.zip"  # Default fallback
@@ -388,7 +419,7 @@ class TsConfigApiClient:
 
             return result
         except httpx.HTTPError as e:
-            logger.error(f"HTTP GET error for download zip: {e}")
+            self._failed("GET /api/configs.zip", e)
             raise
 
     async def close(self):

@@ -39,7 +39,7 @@ def get_user_shell() -> str:
         return "/bin/sh"
 
     except (KeyError, OSError) as e:  # KeyError: uid has no passwd entry
-        logger.warning(f"Failed to detect user shell: {e}, falling back to /bin/bash")
+        logger.warning("Failed to detect user shell: %s, falling back to /bin/bash", e)
         return "/bin/bash"
 
 
@@ -51,7 +51,7 @@ def get_user_home() -> str:
         if home and os.path.isdir(home):
             return home
     except (KeyError, OSError) as e:  # KeyError: uid has no passwd entry
-        logger.warning(f"Failed to detect the user's home directory: {e}")
+        logger.warning("Failed to detect the user's home directory: %s", e)
     return "/"
 
 
@@ -106,7 +106,7 @@ class PtyProcess:
                 return True
 
         except OSError as e:
-            logger.error(f"Failed to start pty process: {e}")
+            logger.error("Cannot start the shell process: %s", e)
             return False
 
     def write(self, data: str):
@@ -166,12 +166,12 @@ class PtyProcess:
                 else:
                     # Process was killed by signal
                     self.exit_code = -1
-                logger.info(f"Shell process {self.pid} exited with status {status}, exit code: {self.exit_code}")
+                logger.debug("Shell process %s exited with status %s, exit code: %s", self.pid, status, self.exit_code)
                 self.running = False
                 return False
         except (OSError, ChildProcessError) as e:
             # Process doesn't exist or other error
-            logger.info(f"Shell process {self.pid} is no longer alive: {e}")
+            logger.debug("Shell process %s is no longer alive: %s", self.pid, e)
             self.running = False
             self.exit_code = -1  # Unknown exit code
             return False
@@ -197,7 +197,7 @@ class PtyProcess:
                     os.kill(self.pid, signal.SIGWINCH)
 
             except (OSError, ImportError) as e:
-                logger.warning(f"Failed to resize terminal: {e}")
+                logger.warning("Failed to resize terminal: %s", e)
 
     async def wait(self, timeout: float) -> bool:
         """Wait up to `timeout` seconds for the shell to exit (and reap it)."""
@@ -267,7 +267,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         return
 
     active_sessions[session_id] = pty_process
-    logger.info(f"Shell session {session_id} started (shell: {pty_process.command})")
+    logger.info("Shell session %s started (shell: %s)", session_id, pty_process.command)
 
     # Send initial prompt
     await websocket.send_text(
@@ -296,7 +296,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             await websocket.close(code=1000, reason="Shell process exited")
         except Exception as e:
             # Usually the browser is already gone
-            logger.debug(f"Error sending exit notification: {e}", exc_info=True)
+            logger.debug("Cannot send the exit notification: %s", e, exc_info=True)
 
     read_task = asyncio.create_task(read_from_pty())
     try:
@@ -320,13 +320,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     except (WebSocketDisconnect, RuntimeError):
         # RuntimeError: receive after the reader closed the websocket
-        logger.info(f"Shell session {session_id} disconnected")
+        logger.info("Shell session %s ended", session_id)
     except Exception:
-        logger.exception(f"Error in shell session {session_id}")
+        logger.exception("Error in shell session %s", session_id)
     finally:
         # Stop reading before the pty is closed, then hang up and reap the shell
         read_task.cancel()
         await asyncio.gather(read_task, return_exceptions=True)
         await pty_process.terminate()
         active_sessions.pop(session_id, None)
-        logger.info(f"Shell session {session_id} cleaned up")
+        logger.debug("Shell session %s cleaned up", session_id)

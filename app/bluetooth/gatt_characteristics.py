@@ -6,6 +6,7 @@ for each tsconfig API endpoint exposed via BLE GATT.
 
 import asyncio
 import contextvars
+import logging
 import time
 from collections.abc import Callable
 from typing import Any
@@ -30,8 +31,12 @@ from app.bluetooth.protocol import (
 )
 from app.identity import OPERATOR_USER, STAFF_USER
 from app.logging_config import get_logger
+from app.utils.failures import FailureLog
 
 logger = get_logger(__name__)
+
+# BLE clients may poll: a read that keeps failing (tsconfig down) is logged once
+_read_failures = FailureLog(logger, level=logging.ERROR)
 
 # BlueZ D-Bus constants
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
@@ -135,7 +140,7 @@ class Characteristic(dbus.service.Object):
             mtu = self.get_mtu(options)
             if self._mtus.get(device) != mtu:
                 self._mtus[device] = mtu
-                logger.debug(f"MTU of {device} is {mtu} for {self.uuid}")
+                logger.debug("MTU of %s is %s for %s", device, mtu, self.uuid)
         return device
 
     def chunker_for(self, device: str | None) -> BinaryChunker:
@@ -163,13 +168,13 @@ class Characteristic(dbus.service.Object):
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
         """D-Bus ReadValue method - to be overridden by subclasses."""
-        logger.warning(f"ReadValue called on {self.uuid} but not implemented")
+        logger.warning("ReadValue called on %s but not implemented", self.uuid)
         return []
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="aya{sv}")
     def WriteValue(self, value, options):
         """D-Bus WriteValue method - to be overridden by subclasses."""
-        logger.warning(f"WriteValue called on {self.uuid} but not implemented")
+        logger.warning("WriteValue called on %s but not implemented", self.uuid)
 
     @dbus.service.method(GATT_CHRC_IFACE)
     def StartNotify(self):
@@ -177,7 +182,7 @@ class Characteristic(dbus.service.Object):
         if self.notifying:
             return
         self.notifying = True
-        logger.debug(f"Notifications started for {self.uuid}")
+        logger.debug("Notifications started for %s", self.uuid)
 
     @dbus.service.method(GATT_CHRC_IFACE)
     def StopNotify(self):
@@ -185,7 +190,7 @@ class Characteristic(dbus.service.Object):
         if not self.notifying:
             return
         self.notifying = False
-        logger.debug(f"Notifications stopped for {self.uuid}")
+        logger.debug("Notifications stopped for %s", self.uuid)
 
     @dbus.service.signal(DBUS_PROP_IFACE, signature="sa{sv}as")
     def PropertiesChanged(self, interface, changed_properties, invalidated_properties):
@@ -212,19 +217,19 @@ class Characteristic(dbus.service.Object):
             device: Connection the response is for; its MTU sets the chunk size
         """
         if not self.notifying:
-            logger.warning(f"Cannot send chunked response on {self.uuid}: not notifying")
+            logger.warning("Cannot send the response on %s: notifications are off", self.uuid)
             return
 
         # Convert string to bytes and chunk
         data_bytes = data.encode("utf-8")
         chunks = self.chunker_for(device).chunk_data(data_bytes)
 
-        logger.debug(f"Sending {len(data_bytes)} bytes in {len(chunks)} chunks for {self.uuid}")
+        logger.debug("Sending %s bytes in %s chunks for %s", len(data_bytes), len(chunks), self.uuid)
 
         # Send chunks sequentially (no delays - rely on BlueZ queuing)
         for i, chunk in enumerate(chunks):
             self.send_notification(chunk)
-            logger.debug(f"Sent chunk {i + 1}/{len(chunks)} ({len(chunk)} bytes)")
+            logger.debug("Sent chunk %s/%s (%s bytes)", i + 1, len(chunks), len(chunk))
 
     def is_authorized(self, options: dict[str, Any]) -> bool:
         """Whether the requesting connection may use this characteristic.
@@ -293,7 +298,7 @@ class ReadOnlyCharacteristic(Characteristic):
             return
 
         if not self.notifying:
-            logger.warning(f"Read attempt on {self.uuid} without notifications enabled")
+            logger.warning("Refused a read of %s: notifications are not enabled", self.uuid)
             reply_cb(self._error_metadata("Notifications must be enabled to receive data"))
             return
 
@@ -303,17 +308,18 @@ class ReadOnlyCharacteristic(Characteristic):
         def done(data, error):
             try:
                 if self._epoch.get(device or "", 0) != epoch:
-                    logger.debug(f"Dropping read result for {device}: it disconnected meanwhile")
+                    logger.debug("Dropping read result for %s: it disconnected meanwhile", device)
                     reply_cb(self._error_metadata("Connection closed"))
                     return
                 if error is not None:
                     if isinstance(error, asyncio.TimeoutError):
-                        logger.error(f"Reading {self.uuid} timed out after {READ_TIMEOUT_S} s")
+                        _read_failures.failed(f"Reading {self.uuid}", f"timed out after {READ_TIMEOUT_S} s")
                         reply_cb(self._error_metadata("Request timed out"))
                     else:
-                        logger.error(f"Error reading {self.uuid}: {error}")
+                        _read_failures.failed(f"Reading {self.uuid}", error)
                         reply_cb(self._error_metadata(str(error)))
                     return
+                _read_failures.succeeded(f"Reading {self.uuid}")
 
                 response = formatter.success(data)
                 response_bytes = response.encode("utf-8")
@@ -323,7 +329,7 @@ class ReadOnlyCharacteristic(Characteristic):
                 # The data follows as notifications AFTER this reply, so that the notification
                 # does not overwrite the read response value
                 logger.debug(
-                    f"Preparing {len(response_bytes)} bytes in {chunk_count} notification chunks for {self.uuid}"
+                    "Preparing %s bytes in %s notification chunks for %s", len(response_bytes), chunk_count, self.uuid
                 )
                 reply_cb(
                     dbus.Array(
@@ -337,8 +343,8 @@ class ReadOnlyCharacteristic(Characteristic):
                     )
                 )
                 ble_executor.get_executor().defer(lambda: self.send_chunked_response(response, device))
-            except Exception as e:  # noqa: BLE001 - the caller is waiting for a reply
-                logger.error(f"Error replying to read of {self.uuid}: {e}")
+            except Exception as e:
+                logger.exception("Cannot reply to the read of %s", self.uuid)
                 reply_cb(self._error_metadata(str(e)))
 
         ble_executor.get_executor().submit(self.read_handler(), done, key=device or "", timeout=READ_TIMEOUT_S)
@@ -381,7 +387,7 @@ class WriteOnlyCharacteristic(Characteristic):
         """Discard the half-received request of a connection that ended."""
         super().on_disconnect(device)
         if self.write_buffers.pop(device, None):
-            logger.warning(f"Discarded incomplete write on {self.uuid}: {device} disconnected")
+            logger.warning("Discarded incomplete write on %s: %s disconnected", self.uuid, device)
         self._last_write.pop(device, None)
 
     def _buffer_for(self, device: str) -> bytearray:
@@ -389,7 +395,7 @@ class WriteOnlyCharacteristic(Characteristic):
         now = time.monotonic()
         buffer = self.write_buffers.get(device)
         if buffer and now - self._last_write.get(device, now) > WRITE_IDLE_TIMEOUT:
-            logger.warning(f"Discarded {len(buffer)} bytes of stale incomplete write on {self.uuid} ({device})")
+            logger.warning("Discarded %s bytes of stale incomplete write on %s (%s)", len(buffer), self.uuid, device)
             buffer.clear()
         if buffer is None:
             buffer = self.write_buffers[device] = bytearray()
@@ -414,14 +420,14 @@ class WriteOnlyCharacteristic(Characteristic):
 
         def done(result, error):
             if self._epoch.get(device or "", 0) != epoch:
-                logger.warning(f"Dropping response on {self.uuid}: {device} disconnected meanwhile")
+                logger.warning("Dropping response on %s: %s disconnected meanwhile", self.uuid, device)
                 return
             if error is None:
                 response = formatter.success(result)
             elif isinstance(error, BleRequestError):
                 response = formatter.error(str(error), error.code, **error.extra)
             else:
-                logger.error(f"Error writing to {self.uuid}: {error}")
+                logger.error("Request on %s failed: %s", self.uuid, error)
                 response = formatter.error(str(error))
             self.send_chunked_response(response, device)
 
@@ -450,7 +456,7 @@ class WriteOnlyCharacteristic(Characteristic):
             data_bytes = bytes(value)
             buffer.extend(data_bytes)
 
-            logger.debug(f"Received {len(data_bytes)} bytes for {self.uuid}, buffer now {len(buffer)} bytes")
+            logger.debug("Received %s bytes for %s, buffer now %s bytes", len(data_bytes), self.uuid, len(buffer))
 
             if len(buffer) > MAX_WRITE_BUFFER:
                 raise BleRequestError("Request too large", 413)
@@ -459,15 +465,17 @@ class WriteOnlyCharacteristic(Characteristic):
 
             if state == "complete":
                 # Successfully parsed - process the request
-                logger.debug(f"Successfully parsed {len(buffer)} bytes of JSON for {self.uuid}")
+                logger.debug("Successfully parsed %s bytes of JSON for %s", len(buffer), self.uuid)
                 buffer.clear()
                 self._dispatch(parsed_data, device)
             elif state == "incomplete":
                 # Not yet complete JSON - wait for more data
-                logger.debug(f"Incomplete JSON, waiting for more data (buffer: {len(buffer)} bytes)")
+                logger.debug(
+                    "Incomplete JSON request on %s, waiting for more data (buffer: %s bytes)", self.uuid, len(buffer)
+                )
             else:
                 # Can never become valid (garbage, or leftovers of an aborted request)
-                logger.warning(f"Invalid JSON request on {self.uuid} ({len(buffer)} bytes), discarding")
+                logger.warning("Invalid JSON request on %s (%s bytes), discarding", self.uuid, len(buffer))
                 raise BleRequestError("Invalid JSON request", 400)
 
         except BleRequestError as e:
@@ -475,7 +483,7 @@ class WriteOnlyCharacteristic(Characteristic):
             self.send_chunked_response(formatter.error(str(e), e.code, **e.extra), device)
         except Exception as e:
             # D-Bus method handler: any failure becomes an error response
-            logger.exception(f"Error writing to {self.uuid}")
+            logger.exception("Cannot handle the write to %s", self.uuid)
             # Clear buffer on error
             buffer.clear()
             self.send_chunked_response(formatter.error(str(e)), device)

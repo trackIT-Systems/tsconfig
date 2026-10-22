@@ -101,11 +101,11 @@ class NoInputNoOutputAgent(dbus.service.Object):
 
     @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="")
     def RequestAuthorization(self, device):
-        logger.debug(f"Accepting Just Works pairing request from {device}")
+        logger.debug("Accepting Just Works pairing request from %s", device)
 
     @dbus.service.method(AGENT_IFACE, in_signature="ou", out_signature="")
     def RequestConfirmation(self, device, passkey):
-        logger.debug(f"Accepting pairing confirmation from {device}")
+        logger.debug("Accepting pairing confirmation from %s", device)
 
     @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="s")
     def RequestPinCode(self, device):
@@ -159,7 +159,7 @@ class Application(dbus.service.Object):
         self.add_service(SystemdService(bus, 1, self.path, api_client, authenticator))
         self.add_service(UploadService(bus, 2, self.path, api_client, authenticator))
 
-        logger.debug(f"GATT Application created with {len(self.services)} services")
+        logger.debug("GATT Application created with %s services", len(self.services))
 
     def get_path(self) -> str:
         """Get the D-Bus object path."""
@@ -255,7 +255,7 @@ class Advertisement(dbus.service.Object):
             data: Binary data to include in advertisement
         """
         self.service_data[uuid] = data
-        logger.debug(f"Set service data for UUID {uuid}: {len(data)} bytes")
+        logger.debug("Set service data for UUID %s: %s bytes", uuid, len(data))
 
     def get_properties(self) -> dict[str, Any]:
         """Get advertisement properties for D-Bus."""
@@ -287,7 +287,7 @@ class Advertisement(dbus.service.Object):
     @dbus.service.method(LE_ADVERTISEMENT_IFACE, in_signature="", out_signature="")
     def Release(self):
         """BlueZ no longer advertises this (bluetoothd stopping, adapter reset, ...)."""
-        logger.info(f"Advertisement {self.path} released")
+        logger.debug("Advertisement %s released", self.path)
         if self.on_release:
             self.on_release()
 
@@ -340,7 +340,7 @@ class BleGattServer:
         self._active_instances: int | None = None  # last ActiveInstances read from BlueZ
         self._owner_reported = False
 
-        logger.info(f"BLE GATT Server initialized for device: {self.device_name}")
+        logger.debug("BLE GATT server initialized for device %s", self.device_name)
 
     @staticmethod
     def _schedule(delay: float, fn: Callable[[], None]) -> None:
@@ -361,17 +361,17 @@ class BleGattServer:
 
         for path, interfaces in objects.items():
             if ADAPTER_IFACE in interfaces:
-                logger.debug(f"Found Bluetooth adapter: {path}")
+                logger.debug("Found Bluetooth adapter: %s", path)
                 return path
 
         raise AdapterNotFoundError("No Bluetooth adapter found")
 
     def setup(self):
         """Create what the gateway exports and subscribe to BlueZ events (nothing is registered yet)."""
-        logger.debug("Setting up BLE GATT server...")
+        logger.debug("Setting up the BLE GATT server")
 
         # Initialize D-Bus
-        logger.debug("Initializing D-Bus connection...")
+        logger.debug("Connecting to the D-Bus system bus")
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         self.bus = dbus.SystemBus()
 
@@ -380,16 +380,16 @@ class BleGattServer:
         ble_executor.set_executor(self.executor)
 
         # Create API client
-        logger.debug("Creating API client...")
+        logger.debug("Creating the API client")
         self.api_client = TsConfigApiClient(base_url=self.api_url)
 
         # Create GATT application
-        logger.debug("Creating GATT application...")
+        logger.debug("Creating the GATT application")
         app_path = "/org/bluez/tsconfig/app"
         self.application = Application(self.bus, app_path, self.api_client, self.authenticator)
 
         # Create advertisement
-        logger.debug("Creating BLE advertisement...")
+        logger.debug("Creating the BLE advertisement")
         self.advertisement = Advertisement(
             self.bus, 0, "peripheral", self.device_name, on_release=self.supervisor.advertisement_released
         )
@@ -399,7 +399,7 @@ class BleGattServer:
         from app.bluetooth.protocol import TSOS_SERVICE_UUID_16BIT
 
         self.advertisement.add_service_uuid(TSOS_SERVICE_UUID_16BIT)
-        logger.debug(f"Advertising with tsOS service UUID: {TSOS_SERVICE_UUID_16BIT}")
+        logger.debug("Advertising with tsOS service UUID: %s", TSOS_SERVICE_UUID_16BIT)
 
         # Get serial number and add to service data (last 8 hex chars → 4 bytes)
         try:
@@ -407,10 +407,10 @@ class BleGattServer:
             serial_short = hardware_info.get("serial_short", "00000000")
             serial_bytes = bytes.fromhex(serial_short)
             self.advertisement.set_service_data(TSOS_SERVICE_UUID_16BIT, serial_bytes)
-            logger.debug(f"Advertising serial: {serial_short} ({len(serial_bytes)} bytes)")
+            logger.debug("Advertising serial: %s (%s bytes)", serial_short, len(serial_bytes))
         except (ValueError, TypeError) as e:
             # TypeError: no serial in /proc/cpuinfo (not a Raspberry Pi)
-            logger.warning(f"Could not add serial to advertisement: {e}")
+            logger.warning("Could not add serial to advertisement: %s", e)
             # Continue without serial - device will still be discoverable
 
         if self.require_auth:
@@ -427,7 +427,7 @@ class BleGattServer:
         # Called with the current owner right away and whenever bluetoothd (re)starts or stops
         self.bus.watch_name_owner(BLUEZ_SERVICE_NAME, self._on_bluez_owner)
 
-        logger.info("BLE GATT Server setup complete")
+        logger.debug("BLE GATT server set up")
 
     # --- registration with BlueZ (driven by the supervisor) -------------------
 
@@ -457,7 +457,7 @@ class BleGattServer:
         self.gatt_manager = dbus.Interface(adapter_obj, GATT_MANAGER_IFACE)
 
         # Set adapter properties
-        logger.debug("Configuring adapter properties...")
+        logger.debug("Configuring the adapter properties")
         self.adapter_props.Set(ADAPTER_IFACE, "Powered", dbus.Boolean(True))
         self.adapter_props.Set(ADAPTER_IFACE, "Discoverable", dbus.Boolean(self.discoverable))
 
@@ -475,20 +475,20 @@ class BleGattServer:
             self.adapter_props.Set(ADAPTER_IFACE, "Pairable", dbus.Boolean(True))
             self.adapter_props.Set(ADAPTER_IFACE, "PairableTimeout", dbus.UInt32(0))
         except dbus.exceptions.DBusException as e:
-            logger.warning(f"Could not make the adapter pairable: {e}")
+            logger.warning("Could not make the adapter pairable: %s", e)
 
         try:
             agent_manager = dbus.Interface(self.bus.get_object(BLUEZ_SERVICE_NAME, "/org/bluez"), AGENT_MANAGER_IFACE)
             agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
             agent_manager.RequestDefaultAgent(AGENT_PATH)
             self.supervisor.agent_registered = True
-            logger.info("Registered NoInputNoOutput pairing agent")
+            logger.debug("Registered the NoInputNoOutput pairing agent")
         except dbus.exceptions.DBusException as e:
             if BLUEZ_ALREADY_EXISTS in str(e):
                 self.supervisor.agent_registered = True
                 return
             # Encrypted characteristics cannot be used without a way to pair.
-            logger.error(f"Could not register the pairing agent: {e}")
+            logger.error("Could not register the pairing agent: %s", e)
 
     def _on_device_properties_changed(self, interface, changed, invalidated, path=None):
         """A connection's login and half-received writes end when its device disconnects."""
@@ -500,14 +500,14 @@ class BleGattServer:
 
     def register_application(self):
         """Register the GATT application with BlueZ."""
-        logger.info("Registering GATT application...")
+        logger.debug("Registering the GATT application")
         self._app_inflight = True
 
         def done():
             self._app_inflight = False
             self.supervisor.app_registered = True
-            self.supervisor.registration_ok()
-            logger.info("GATT application registered successfully")
+            self.supervisor.registration_ok("GATT application")
+            logger.debug("GATT application registered")
 
         def failed(error):
             self._app_inflight = False
@@ -520,15 +520,15 @@ class BleGattServer:
 
     def register_advertisement(self):
         """Register the BLE advertisement with BlueZ."""
-        logger.debug("Registering BLE advertisement...")
+        logger.debug("Registering the BLE advertisement")
         self._adv_inflight = True
 
         def done():
             self._adv_inflight = False
             self.supervisor.adv_registered = True
-            self.supervisor.registration_ok()
+            self.supervisor.registration_ok("BLE advertisement")
             self._active_instances = None  # what we read before this is out of date
-            logger.info(f"BLE advertisement registered successfully as '{self.device_name}'")
+            logger.info("BLE advertisement registered as '%s'", self.device_name)
 
         def failed(error):
             self._adv_inflight = False
@@ -558,7 +558,7 @@ class BleGattServer:
 
     def start(self):
         """Start the BLE GATT server."""
-        logger.info("Starting BLE GATT server...")
+        logger.debug("Starting the BLE GATT server")
 
         try:
             self.setup()
@@ -568,21 +568,18 @@ class BleGattServer:
             # Start GLib main loop; registration with BlueZ is done by the supervisor
             self.mainloop = GLib.MainLoop()
             sd_notify("READY=1")
-            logger.info("BLE GATT server running. Press Ctrl+C to stop.")
+            logger.debug("BLE GATT server running")
 
             try:
                 self.mainloop.run()
             except KeyboardInterrupt:
                 logger.info("Received interrupt signal")
-        except Exception as e:
-            logger.error(f"Failed to start BLE GATT server: {e}")
-            raise
         finally:
             self.stop()
 
     def stop(self):
         """Stop the BLE GATT server."""
-        logger.info("Stopping BLE GATT server...")
+        logger.debug("Stopping the BLE GATT server")
         sd_notify("STOPPING=1")
 
         # Unregister advertisement
@@ -591,7 +588,7 @@ class BleGattServer:
                 self.ad_manager.UnregisterAdvertisement(self.advertisement.get_path())
                 logger.debug("BLE advertisement unregistered")
             except Exception:
-                logger.exception("Error unregistering advertisement")
+                logger.exception("Cannot unregister the BLE advertisement")
 
         # Unregister application
         if self.gatt_manager and self.application:
@@ -599,7 +596,7 @@ class BleGattServer:
                 self.gatt_manager.UnregisterApplication(self.application.get_path())
                 logger.debug("GATT application unregistered")
             except Exception:
-                logger.exception("Error unregistering application")
+                logger.exception("Cannot unregister the GATT application")
 
         # Close API client and stop the executor
         if self.executor:
@@ -607,7 +604,7 @@ class BleGattServer:
                 if self.api_client:
                     self.executor.run_blocking(self.api_client.close())
             except Exception as e:
-                logger.debug(f"Error closing API client: {e}", exc_info=True)
+                logger.debug("Cannot close the API client: %s", e, exc_info=True)
             self.executor.shutdown()
 
         # Quit mainloop
