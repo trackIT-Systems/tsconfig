@@ -16,6 +16,7 @@ const DETECTOR_COLORS = {
     birdedge: COLORS[3],
     yolobat: COLORS[4],
     audioprotopnet: COLORS[1],
+    koreabird: COLORS[6],
     lure: COLORS[5],
     schedule: COLORS[7],
 };
@@ -168,7 +169,7 @@ export function configuredDetectors(config) {
 
 /**
  * The names of the species the models know (`GET /api/soundscapepipe/species`), by what a detection
- * calls them: birdedge and AudioProtoPNet by the scientific name, yolobat by its code (`Nnoc`).
+ * calls them: birdedge, AudioProtoPNet and koreabird by the scientific name, yolobat by its code (`Nnoc`).
  * @returns {Object<string, {scientific: string, english: string, german: string}>}
  */
 export function speciesNames(species) {

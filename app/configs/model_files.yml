@@ -16,3 +16,9 @@ audioprotopnet:
   - /home/pi/audioprotopnet/models/audioprotopnet_trackit_atto_7m.onnx
   - /home/pi/audioprotopnet/models/audioprotopnet_trackit_nano_23m.onnx
   - /home/pi/audioprotopnet/models/audioprotopnet_trackit_tiny_37m.onnx
+
+koreabird:
+  - /opt/koreabird/v3_edge1_effb0_tP2/student_convstft.onnx
+  - /opt/koreabird/v3_edge2_effb0_tC2/student_convstft.onnx
+  - /opt/koreabird/v3_edge3_effb0_tBN3/student_convstft.onnx
+  - /opt/koreabird/v3_edge4_effb1_tBN3/student_convstft.onnx

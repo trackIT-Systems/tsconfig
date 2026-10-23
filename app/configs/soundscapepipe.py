@@ -178,13 +178,13 @@ class SoundscapepipeConfig(BaseConfig):
                         except (ValueError, TypeError):
                             errors.append(f"Detector '{detector_name}' {threshold_key} must be a valid number")
 
-                # Validate channel_strategy for detectors that support it (birdedge, yolobat, audioprotopnet)
-                if detector_name in ["birdedge", "yolobat", "audioprotopnet"]:
+                # Validate channel_strategy for detectors that support it (birdedge, yolobat, audioprotopnet, koreabird)
+                if detector_name in ["birdedge", "yolobat", "audioprotopnet", "koreabird"]:
                     channel_strategy = detector_config.get("channel_strategy")
                     if channel_strategy is not None:
                         if isinstance(channel_strategy, str):
                             # Define valid strategies for each detector
-                            if detector_name in ("yolobat", "audioprotopnet"):
+                            if detector_name in ("yolobat", "audioprotopnet", "koreabird"):
                                 valid_strategies = ["mix", "all"]
                             else:  # birdedge
                                 valid_strategies = ["mix", "all", "or", "and"]
@@ -198,7 +198,7 @@ class SoundscapepipeConfig(BaseConfig):
                                             f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number"
                                         )
                                 except (ValueError, TypeError):
-                                    if detector_name in ("yolobat", "audioprotopnet"):
+                                    if detector_name in ("yolobat", "audioprotopnet", "koreabird"):
                                         errors.append(
                                             f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number"
                                         )
@@ -215,7 +215,7 @@ class SoundscapepipeConfig(BaseConfig):
                                         f"Detector '{detector_name}' channel_strategy must be non-negative if specified as a channel number"
                                     )
                             except (ValueError, TypeError):
-                                if detector_name in ("yolobat", "audioprotopnet"):
+                                if detector_name in ("yolobat", "audioprotopnet", "koreabird"):
                                     errors.append(
                                         f"Detector '{detector_name}' channel_strategy must be 'mix', 'all', or a valid channel number"
                                     )

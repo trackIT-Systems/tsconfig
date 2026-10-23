@@ -42,6 +42,12 @@ export function soundscapepipeConfig() {
                     channel_strategy: "mix",
                     tasks: []
                 },
+                koreabird: {
+                    class_threshold: 0.55,
+                    model_path: "",
+                    channel_strategy: "mix",
+                    tasks: []
+                },
                 schedule: {
                     enabled: false,
                     tasks: []
@@ -186,6 +192,27 @@ export function soundscapepipeConfig() {
                         }
                     } else {
                         detectors.audioprotopnet = { enabled: false, class_threshold: 0.3, vocalization_threshold: 0.3, model_path: "", channel_strategy: "mix", tasks: [] };
+                    }
+
+                    // Korean bird detector - enabled if present in config, disabled if not present
+                    if (detectors.koreabird) {
+                        detectors.koreabird.enabled = detectors.koreabird.enabled !== undefined ? detectors.koreabird.enabled : true;
+                        detectors.koreabird.tasks = detectors.koreabird.tasks || [];
+                        if (!Array.isArray(detectors.koreabird.tasks)) {
+                            detectors.koreabird.tasks = [];
+                        }
+                        detectors.koreabird.tasks.forEach(task => {
+                            this.parseDetectorTaskTimeString(task, task.start, 'start');
+                            this.parseDetectorTaskTimeString(task, task.stop, 'stop');
+                        });
+                        if (detectors.koreabird.class_threshold === undefined) {
+                            detectors.koreabird.class_threshold = 0.55;
+                        }
+                        if (detectors.koreabird.channel_strategy === undefined) {
+                            detectors.koreabird.channel_strategy = "mix";
+                        }
+                    } else {
+                        detectors.koreabird = { enabled: false, class_threshold: 0.55, model_path: "", channel_strategy: "mix", tasks: [] };
                     }
                     
                     // Static detector (schedule) - enabled if present in config, disabled if not present
@@ -342,6 +369,17 @@ export function soundscapepipeConfig() {
                 delete configToSave.detectors.audioprotopnet.enabled;
                 if (configToSave.detectors.audioprotopnet.tasks) {
                     configToSave.detectors.audioprotopnet.tasks = configToSave.detectors.audioprotopnet.tasks.map(task => {
+                        const cleanTask = { name: task.name, start: task.start, stop: task.stop };
+                        return cleanTask;
+                    });
+                }
+            }
+
+            if (this.config.detectors.koreabird && this.config.detectors.koreabird.enabled) {
+                configToSave.detectors.koreabird = { ...this.config.detectors.koreabird };
+                delete configToSave.detectors.koreabird.enabled;
+                if (configToSave.detectors.koreabird.tasks) {
+                    configToSave.detectors.koreabird.tasks = configToSave.detectors.koreabird.tasks.map(task => {
                         const cleanTask = { name: task.name, start: task.start, stop: task.stop };
                         return cleanTask;
                     });
@@ -508,7 +546,8 @@ export function soundscapepipeConfig() {
             const preferredPatterns = {
                 'yolobat': 'yolobat11_2025.3.2',
                 'birdedge': 'MarBird_EFL0_GER.onnx',
-                'audioprotopnet': 'audioprotopnet_trackit_nano_23m.onnx'
+                'audioprotopnet': 'audioprotopnet_trackit_nano_23m.onnx',
+                'koreabird': 'v3_edge3_effb0_tBN3'
             };
 
             const preferredPattern = preferredPatterns[detectorType];
@@ -542,7 +581,7 @@ export function soundscapepipeConfig() {
             }
 
             // Check each detector type
-            ['birdedge', 'yolobat', 'audioprotopnet'].forEach(detectorType => {
+            ['birdedge', 'yolobat', 'audioprotopnet', 'koreabird'].forEach(detectorType => {
                 const detector = this.config.detectors[detectorType];
                 if (detector && detector.enabled && !detector.model_path) {
                     this.selectDefaultModel(detectorType);
@@ -592,6 +631,19 @@ export function soundscapepipeConfig() {
                     }
                 }
             });
+
+            // Watch for koreabird detector enabled state changes
+            this.$watch('config.detectors.koreabird.enabled', (enabled, oldEnabled) => {
+                if (enabled) {
+                    const shouldAutoSelect = !this.config.detectors.koreabird.model_path || 
+                                           (this.modelFiles.koreabird && 
+                                            !this.modelFiles.koreabird.includes(this.config.detectors.koreabird.model_path));
+                    
+                    if (shouldAutoSelect) {
+                        this.selectDefaultModel('koreabird');
+                    }
+                }
+            });
         },
 
         async loadLureFiles() {
@@ -621,14 +673,14 @@ export function soundscapepipeConfig() {
                     this.speciesData = await response.json();
                 } else {
                     console.error('Failed to load species data');
-                    this.speciesData = { birdedge: [], yolobat: [], audioprotopnet: [] };
+                    this.speciesData = { birdedge: [], yolobat: [], audioprotopnet: [], koreabird: [] };
                 }
                 
                 // Load YoloBat labels if a model is selected
                 await this.loadYoloBatLabels();
             } catch (error) {
                 console.error('Error loading species data:', error);
-                this.speciesData = { birdedge: [], yolobat: [], audioprotopnet: [] };
+                this.speciesData = { birdedge: [], yolobat: [], audioprotopnet: [], koreabird: [] };
             } finally {
                 this.loadingSpecies = false;
             }
@@ -976,7 +1028,7 @@ export function soundscapepipeConfig() {
         getConsistentSpeciesDisplayText(species, classifier) {
             if (!species) return '';
             
-            // Format: "Scientific name, English name, German name (Classifier)"
+            // Format: "Scientific name, English name, German name, Korean name [eBird code] (Classifier)"
             let parts = [species.scientific];
             
             if (species.english) {
@@ -986,8 +1038,15 @@ export function soundscapepipeConfig() {
             if (species.german) {
                 parts.push(species.german);
             }
+
+            if (species.korean) {
+                parts.push(species.korean);
+            }
             
             let display = parts.join(', ');
+            if (species.ebird) {
+                display += ` [${species.ebird}]`;
+            }
             display += ` (${classifier})`;
             
             return display;
@@ -995,13 +1054,13 @@ export function soundscapepipeConfig() {
 
         /**
          * Returns a merged, deduplicated species list for the species group dropdown.
-         * BirdEdge and AudioProtoPNet both use scientific names and share many species,
+         * BirdEdge, AudioProtoPNet and KoreaBird all use scientific names and share many species,
          * so we merge duplicates and show which detectors support each species.
          * YoloBat uses modelLabel (bat abbreviations) and has no overlap.
          */
         getMergedSpeciesList() {
             const byValue = new Map(); // value -> { value, display, types[] }
-            const detectorDisplayNames = { birdedge: 'BirdEdge', yolobat: 'YoloBat', audioprotopnet: 'AudioProtoPNet' };
+            const detectorDisplayNames = { birdedge: 'BirdEdge', yolobat: 'YoloBat', audioprotopnet: 'AudioProtoPNet', koreabird: 'KoreaBird' };
 
             const addOrMerge = (value, display, detectorType) => {
                 if (byValue.has(value)) {
@@ -1031,6 +1090,11 @@ export function soundscapepipeConfig() {
                     addOrMerge(s.scientific, this.getConsistentSpeciesDisplayText(s, 'AudioProtoPNet'), 'audioprotopnet');
                 });
             }
+            if (this.config.detectors.koreabird?.enabled && this.speciesData.koreabird) {
+                this.speciesData.koreabird.forEach(s => {
+                    addOrMerge(s.scientific, this.getConsistentSpeciesDisplayText(s, 'KoreaBird'), 'koreabird');
+                });
+            }
 
             return Array.from(byValue.values()).map(({ value, display }) => ({ value, display }));
         },
@@ -1046,6 +1110,7 @@ export function soundscapepipeConfig() {
             const validBirdEdgeSpecies = new Set();
             const validYoloBatSpecies = new Set();
             const validAudioProtoPNetSpecies = new Set();
+            const validKoreaBirdSpecies = new Set();
             
             if (this.config.detectors.birdedge?.enabled && this.speciesData.birdedge) {
                 this.speciesData.birdedge.forEach(species => {
@@ -1065,6 +1130,12 @@ export function soundscapepipeConfig() {
                 });
             }
             
+            if (this.config.detectors.koreabird?.enabled && this.speciesData.koreabird) {
+                this.speciesData.koreabird.forEach(species => {
+                    validKoreaBirdSpecies.add(species.scientific);
+                });
+            }
+            
             // Check each group
             for (const [groupName, group] of Object.entries(this.config.groups)) {
                 if (!group.species || !Array.isArray(group.species)) {
@@ -1080,13 +1151,15 @@ export function soundscapepipeConfig() {
                     const isValidBirdEdge = validBirdEdgeSpecies.has(species);
                     const isValidYoloBat = validYoloBatSpecies.has(species);
                     const isValidAudioProtoPNet = validAudioProtoPNetSpecies.has(species);
+                    const isValidKoreaBird = validKoreaBirdSpecies.has(species);
                     
-                    if (!isValidBirdEdge && !isValidYoloBat && !isValidAudioProtoPNet) {
+                    if (!isValidBirdEdge && !isValidYoloBat && !isValidAudioProtoPNet && !isValidKoreaBird) {
                         // Check which detectors are enabled to provide helpful error message
                         const enabledDetectors = [];
                         if (this.config.detectors.birdedge?.enabled) enabledDetectors.push('BirdEdge');
                         if (this.config.detectors.yolobat?.enabled) enabledDetectors.push('YoloBat');
                         if (this.config.detectors.audioprotopnet?.enabled) enabledDetectors.push('AudioProtoPNet');
+                        if (this.config.detectors.koreabird?.enabled) enabledDetectors.push('KoreaBird');
                         
                         if (enabledDetectors.length === 0) {
                             errors.push(`Group "${groupName}": Species "${species}" is invalid because no detectors are enabled.`);

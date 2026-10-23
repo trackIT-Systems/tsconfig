@@ -155,7 +155,7 @@ test('analysisBlock: the window being analysed, delay_max before the edge and wi
 });
 
 test('each detector has its own colour', () => {
-    const colors = ['birdedge', 'yolobat', 'audioprotopnet', 'lure', 'schedule'].map(detectorColor);
+    const colors = ['birdedge', 'yolobat', 'audioprotopnet', 'koreabird', 'lure', 'schedule'].map(detectorColor);
     assert.equal(new Set(colors).size, colors.length);
     assert.equal(detectorColor('somethingnew'), colorFor('somethingnew'));
 });

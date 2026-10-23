@@ -19,6 +19,7 @@ map:
 # Feature flags
 features:
   audioprotopnet: false  # set true to enable AudioProtoPNet detector UI
+  koreabird: false  # set true to enable the Korean bird detector UI
 
 services:
   - name: multi-user.target

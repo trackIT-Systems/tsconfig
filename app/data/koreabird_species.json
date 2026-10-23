@@ -1,0 +1,2324 @@
+{
+  "0": {
+    "scientific": "Prunella collaris",
+    "english": "Alpine Accentor",
+    "korean": "바위종다리",
+    "ebird": "alpacc1"
+  },
+  "1": {
+    "scientific": "Anthus rubescens",
+    "english": "American Pipit",
+    "korean": "밭종다리",
+    "ebird": "amepip"
+  },
+  "2": {
+    "scientific": "Mareca americana",
+    "english": "American Wigeon",
+    "korean": "아메리카홍머리오리",
+    "ebird": "amewig"
+  },
+  "3": {
+    "scientific": "Falco amurensis",
+    "english": "Amur Falcon",
+    "korean": "비둘기조롱이",
+    "ebird": "amufal1"
+  },
+  "4": {
+    "scientific": "Synthliboramphus antiquus",
+    "english": "Ancient Murrelet",
+    "korean": "바다쇠오리",
+    "ebird": "ancmur"
+  },
+  "5": {
+    "scientific": "Gavia arctica",
+    "english": "Arctic Loon",
+    "korean": "큰회색머리아비",
+    "ebird": "arcloo"
+  },
+  "6": {
+    "scientific": "Phylloscopus borealis",
+    "english": "Arctic Warbler",
+    "korean": "쇠솔새",
+    "ebird": "arcwar1"
+  },
+  "7": {
+    "scientific": "Phylloscopus examinandus",
+    "english": "Kamchatka Leaf Warbler",
+    "korean": "큰솔새",
+    "ebird": "arcwar2"
+  },
+  "8": {
+    "scientific": "Phylloscopus xanthodryas",
+    "english": "Japanese Leaf Warbler",
+    "korean": "솔새",
+    "ebird": "arcwar3"
+  },
+  "9": {
+    "scientific": "Muscicapa dauurica",
+    "english": "Asian Brown Flycatcher",
+    "korean": "쇠솔딱새",
+    "ebird": "asbfly"
+  },
+  "10": {
+    "scientific": "Delichon dasypus",
+    "english": "Asian House-Martin",
+    "korean": "흰털발제비",
+    "ebird": "ashmar1"
+  },
+  "11": {
+    "scientific": "Pericrocotus divaricatus",
+    "english": "Ashy Minivet",
+    "korean": "할미새사촌",
+    "ebird": "ashmin1"
+  },
+  "12": {
+    "scientific": "Limnodromus semipalmatus",
+    "english": "Asian Dowitcher",
+    "korean": "큰부리도요",
+    "ebird": "asidow1"
+  },
+  "13": {
+    "scientific": "Urosphena squameiceps",
+    "english": "Asian Stubtail",
+    "korean": "숲새",
+    "ebird": "asistu1"
+  },
+  "14": {
+    "scientific": "Leucosticte arctoa",
+    "english": "Asian Rosy-Finch",
+    "korean": "갈색양진이",
+    "ebird": "asrfin1"
+  },
+  "15": {
+    "scientific": "Cyanopica cyanus",
+    "english": "Azure-winged Magpie",
+    "korean": "물까치",
+    "ebird": "azwmag2"
+  },
+  "16": {
+    "scientific": "Zapornia paykullii",
+    "english": "Band-bellied Crake",
+    "korean": "한국뜸부기",
+    "ebird": "babcra1"
+  },
+  "17": {
+    "scientific": "Zapornia pusilla",
+    "english": "Baillon's Crake",
+    "korean": "쇠뜸부기",
+    "ebird": "baicra1"
+  },
+  "18": {
+    "scientific": "Sibirionetta formosa",
+    "english": "Baikal Teal",
+    "korean": "가창오리",
+    "ebird": "baitea"
+  },
+  "19": {
+    "scientific": "Riparia riparia",
+    "english": "Bank Swallow",
+    "korean": "갈색제비",
+    "ebird": "banswa"
+  },
+  "20": {
+    "scientific": "Hirundo rustica",
+    "english": "Barn Swallow",
+    "korean": "제비",
+    "ebird": "barswa"
+  },
+  "21": {
+    "scientific": "Limosa lapponica",
+    "english": "Bar-tailed Godwit",
+    "korean": "큰뒷부리도요",
+    "ebird": "batgod"
+  },
+  "22": {
+    "scientific": "Cyanoptila cyanomelana",
+    "english": "Blue-and-white Flycatcher",
+    "korean": "큰유리새",
+    "ebird": "bawfly2"
+  },
+  "23": {
+    "scientific": "Acrocephalus bistrigiceps",
+    "english": "Black-browed Reed Warbler",
+    "korean": "쇠개개비",
+    "ebird": "bbrwar1"
+  },
+  "24": {
+    "scientific": "Nycticorax nycticorax",
+    "english": "Black-crowned Night Heron",
+    "korean": "해오라기",
+    "ebird": "bcnher"
+  },
+  "25": {
+    "scientific": "Rhopophilus pekinensis",
+    "english": "Beijing Babbler",
+    "korean": "꼬리치레",
+    "ebird": "beibab1"
+  },
+  "26": {
+    "scientific": "Pluvialis squatarola",
+    "english": "Black-bellied Plover",
+    "korean": "개꿩",
+    "ebird": "bkbplo"
+  },
+  "27": {
+    "scientific": "Chroicocephalus ridibundus",
+    "english": "Black-headed Gull",
+    "korean": "붉은부리갈매기",
+    "ebird": "bkhgul"
+  },
+  "28": {
+    "scientific": "Rissa tridactyla",
+    "english": "Black-legged Kittiwake",
+    "korean": "세가락갈매기",
+    "ebird": "bklkit"
+  },
+  "29": {
+    "scientific": "Limosa limosa",
+    "english": "Black-tailed Godwit",
+    "korean": "흑꼬리도요",
+    "ebird": "bktgod"
+  },
+  "30": {
+    "scientific": "Larus crassirostris",
+    "english": "Black-tailed Gull",
+    "korean": "괭이갈매기",
+    "ebird": "bktgul"
+  },
+  "31": {
+    "scientific": "Himantopus himantopus",
+    "english": "Black-winged Stilt",
+    "korean": "장다리물떼새",
+    "ebird": "bkwsti"
+  },
+  "32": {
+    "scientific": "Dicrurus macrocercus",
+    "english": "Black Drongo",
+    "korean": "검은바람까마귀",
+    "ebird": "bladro1"
+  },
+  "33": {
+    "scientific": "Lyrurus tetrix",
+    "english": "Black Grouse",
+    "korean": "멧닭",
+    "ebird": "blagro1"
+  },
+  "34": {
+    "scientific": "Milvus migrans",
+    "english": "Black Kite",
+    "korean": "솔개",
+    "ebird": "blakit1"
+  },
+  "35": {
+    "scientific": "Phoenicurus ochruros",
+    "english": "Black Redstart",
+    "korean": "검은머리딱새",
+    "ebird": "blared1"
+  },
+  "36": {
+    "scientific": "Ciconia nigra",
+    "english": "Black Stork",
+    "korean": "먹황새",
+    "ebird": "blasto1"
+  },
+  "37": {
+    "scientific": "Dryocopus martius",
+    "english": "Black Woodpecker",
+    "korean": "까막딱다구리",
+    "ebird": "blawoo1"
+  },
+  "38": {
+    "scientific": "Halcyon pileata",
+    "english": "Black-capped Kingfisher",
+    "korean": "청호반새",
+    "ebird": "blckin1"
+  },
+  "39": {
+    "scientific": "Platalea minor",
+    "english": "Black-faced Spoonbill",
+    "korean": "저어새",
+    "ebird": "blfspo1"
+  },
+  "40": {
+    "scientific": "Melanitta americana",
+    "english": "Black Scoter",
+    "korean": "검둥오리",
+    "ebird": "blksco2"
+  },
+  "41": {
+    "scientific": "Luscinia svecica",
+    "english": "Bluethroat",
+    "korean": "흰눈썹울새",
+    "ebird": "blueth"
+  },
+  "42": {
+    "scientific": "Anthus godlewskii",
+    "english": "Blyth's Pipit",
+    "korean": "쇠밭종다리",
+    "ebird": "blypip1"
+  },
+  "43": {
+    "scientific": "Rallus indicus",
+    "english": "Brown-cheeked Rail",
+    "korean": "흰눈썹뜸부기",
+    "ebird": "bncrai1"
+  },
+  "44": {
+    "scientific": "Bombycilla garrulus",
+    "english": "Bohemian Waxwing",
+    "korean": "황여새",
+    "ebird": "bohwax"
+  },
+  "45": {
+    "scientific": "Fringilla montifringilla",
+    "english": "Brambling",
+    "korean": "되새",
+    "ebird": "brambl"
+  },
+  "46": {
+    "scientific": "Branta bernicla",
+    "english": "Brant",
+    "korean": "흑기러기",
+    "ebird": "brant"
+  },
+  "47": {
+    "scientific": "Calidris falcinellus",
+    "english": "Broad-billed Sandpiper",
+    "korean": "송곳부리도요",
+    "ebird": "brbsan"
+  },
+  "48": {
+    "scientific": "Hypsipetes amaurotis",
+    "english": "Brown-eared Bulbul",
+    "korean": "직박구리",
+    "ebird": "brebul1"
+  },
+  "49": {
+    "scientific": "Turdus chrysolaus",
+    "english": "Brown-headed Thrush",
+    "korean": "붉은배지빠귀",
+    "ebird": "brhthr1"
+  },
+  "50": {
+    "scientific": "Lanius cristatus",
+    "english": "Brown Shrike",
+    "korean": "노랑때까치",
+    "ebird": "brnshr"
+  },
+  "51": {
+    "scientific": "Cinclus pallasii",
+    "english": "Brown Dipper",
+    "korean": "물까마귀",
+    "ebird": "brodip1"
+  },
+  "52": {
+    "scientific": "Lanius bucephalus",
+    "english": "Bull-headed Shrike",
+    "korean": "때까치",
+    "ebird": "buhshr1"
+  },
+  "53": {
+    "scientific": "Monticola solitarius",
+    "english": "Blue Rock-Thrush",
+    "korean": "바다직박구리",
+    "ebird": "burthr"
+  },
+  "54": {
+    "scientific": "Corvus corone",
+    "english": "Carrion Crow",
+    "korean": "까마귀",
+    "ebird": "carcro1"
+  },
+  "55": {
+    "scientific": "Larus cachinnans",
+    "english": "Caspian Gull",
+    "korean": "한국재갈매기",
+    "ebird": "casgul2"
+  },
+  "56": {
+    "scientific": "Ardea ibis/coromanda",
+    "english": "Western/Eastern Cattle-Egret",
+    "korean": "황로",
+    "ebird": "categr"
+  },
+  "57": {
+    "scientific": "Zosterops erythropleurus",
+    "english": "Chestnut-flanked White-eye",
+    "korean": "한국동박새",
+    "ebird": "cfweye1"
+  },
+  "58": {
+    "scientific": "Agropsar philippensis",
+    "english": "Chestnut-cheeked Starling",
+    "korean": "쇠찌르레기",
+    "ebird": "chcsta1"
+  },
+  "59": {
+    "scientific": "Thalasseus bernsteini",
+    "english": "Chinese Crested Tern",
+    "korean": "뿔제비갈매기",
+    "ebird": "chcter2"
+  },
+  "60": {
+    "scientific": "Emberiza fucata",
+    "english": "Chestnut-eared Bunting",
+    "korean": "붉은뺨멧새",
+    "ebird": "chebun2"
+  },
+  "61": {
+    "scientific": "Turdus mandarinus",
+    "english": "Chinese Blackbird",
+    "korean": "대륙검은지빠귀",
+    "ebird": "chibla1"
+  },
+  "62": {
+    "scientific": "Ardeola bacchus",
+    "english": "Chinese Pond-Heron",
+    "korean": "흰날개해오라기",
+    "ebird": "chpher1"
+  },
+  "63": {
+    "scientific": "Remiz consobrinus",
+    "english": "Chinese Penduline-Tit",
+    "korean": "스윈호오목눈이",
+    "ebird": "chptit1"
+  },
+  "64": {
+    "scientific": "Aegypius monachus",
+    "english": "Cinereous Vulture",
+    "korean": "독수리",
+    "ebird": "cinvul1"
+  },
+  "65": {
+    "scientific": "Motacilla citreola",
+    "english": "Citrine Wagtail",
+    "korean": "노랑머리할미새",
+    "ebird": "citwag"
+  },
+  "66": {
+    "scientific": "Periparus ater",
+    "english": "Coal Tit",
+    "korean": "진박새",
+    "ebird": "coatit2"
+  },
+  "67": {
+    "scientific": "Buteo japonicus",
+    "english": "Eastern Buzzard",
+    "korean": "말똥가리",
+    "ebird": "combuz6"
+  },
+  "68": {
+    "scientific": "Grus grus",
+    "english": "Common Crane",
+    "korean": "검은목두루미",
+    "ebird": "comcra"
+  },
+  "69": {
+    "scientific": "Cuculus canorus",
+    "english": "Common Cuckoo",
+    "korean": "뻐꾸기",
+    "ebird": "comcuc"
+  },
+  "70": {
+    "scientific": "Bucephala clangula",
+    "english": "Common Goldeneye",
+    "korean": "흰뺨오리",
+    "ebird": "comgol"
+  },
+  "71": {
+    "scientific": "Tringa nebularia",
+    "english": "Common Greenshank",
+    "korean": "청다리도요",
+    "ebird": "comgre"
+  },
+  "72": {
+    "scientific": "Delichon lagopodum",
+    "english": "Siberian House-Martin",
+    "korean": "흰턱제비",
+    "ebird": "comhom2"
+  },
+  "73": {
+    "scientific": "Alcedo atthis",
+    "english": "Common Kingfisher",
+    "korean": "물총새",
+    "ebird": "comkin1"
+  },
+  "74": {
+    "scientific": "Mergus merganser",
+    "english": "Common Merganser",
+    "korean": "비오리",
+    "ebird": "commer"
+  },
+  "75": {
+    "scientific": "Gallinula chloropus",
+    "english": "Eurasian Moorhen",
+    "korean": "쇠물닭",
+    "ebird": "commoo3"
+  },
+  "76": {
+    "scientific": "Uria aalge",
+    "english": "Common Murre",
+    "korean": "바다오리",
+    "ebird": "commur"
+  },
+  "77": {
+    "scientific": "Aythya ferina",
+    "english": "Common Pochard",
+    "korean": "흰죽지",
+    "ebird": "compoc"
+  },
+  "78": {
+    "scientific": "Acanthis flammea flammea/rostrata/islandica",
+    "english": "Redpoll (Common)",
+    "korean": "홍방울새",
+    "ebird": "comred"
+  },
+  "79": {
+    "scientific": "Tringa totanus",
+    "english": "Common Redshank",
+    "korean": "붉은발도요",
+    "ebird": "comred1"
+  },
+  "80": {
+    "scientific": "Carpodacus erythrinus",
+    "english": "Common Rosefinch",
+    "korean": "붉은양진이",
+    "ebird": "comros"
+  },
+  "81": {
+    "scientific": "Actitis hypoleucos",
+    "english": "Common Sandpiper",
+    "korean": "깝작도요",
+    "ebird": "comsan"
+  },
+  "82": {
+    "scientific": "Tadorna tadorna",
+    "english": "Common Shelduck",
+    "korean": "혹부리오리",
+    "ebird": "comshe"
+  },
+  "83": {
+    "scientific": "Gallinago gallinago",
+    "english": "Common Snipe",
+    "korean": "꺅도요",
+    "ebird": "comsni"
+  },
+  "84": {
+    "scientific": "Sterna hirundo",
+    "english": "Common Tern",
+    "korean": "제비갈매기",
+    "ebird": "comter"
+  },
+  "85": {
+    "scientific": "Charadrius hiaticula",
+    "english": "Common Ringed Plover",
+    "korean": "흰죽지꼬마물떼새",
+    "ebird": "corplo"
+  },
+  "86": {
+    "scientific": "Nipponia nippon",
+    "english": "Crested Ibis",
+    "korean": "따오기",
+    "ebird": "creibi1"
+  },
+  "87": {
+    "scientific": "Calidris ferruginea",
+    "english": "Curlew Sandpiper",
+    "korean": "붉은갯도요",
+    "ebird": "cursan"
+  },
+  "88": {
+    "scientific": "Muscicapa sibirica",
+    "english": "Dark-sided Flycatcher",
+    "korean": "솔딱새",
+    "ebird": "dasfly"
+  },
+  "89": {
+    "scientific": "Turdus atrogularis",
+    "english": "Black-throated Thrush",
+    "korean": "검은목지빠귀",
+    "ebird": "datthr1"
+  },
+  "90": {
+    "scientific": "Coloeus dauuricus",
+    "english": "Daurian Jackdaw",
+    "korean": "갈까마귀",
+    "ebird": "daujac1"
+  },
+  "91": {
+    "scientific": "Phoenicurus auroreus",
+    "english": "Daurian Redstart",
+    "korean": "딱새",
+    "ebird": "daured1"
+  },
+  "92": {
+    "scientific": "Agropsar sturninus",
+    "english": "Daurian Starling",
+    "korean": "북방쇠찌르레기",
+    "ebird": "dausta1"
+  },
+  "93": {
+    "scientific": "Eurystomus orientalis",
+    "english": "Dollarbird",
+    "korean": "파랑새",
+    "ebird": "dollar1"
+  },
+  "94": {
+    "scientific": "Calidris alpina",
+    "english": "Dunlin",
+    "korean": "민물도요",
+    "ebird": "dunlin"
+  },
+  "95": {
+    "scientific": "Turdus naumanni",
+    "english": "Naumann's Thrush",
+    "korean": "노랑지빠귀",
+    "ebird": "dusthr1"
+  },
+  "96": {
+    "scientific": "Turdus eunomus",
+    "english": "Dusky Thrush",
+    "korean": "개똥지빠귀",
+    "ebird": "dusthr2"
+  },
+  "97": {
+    "scientific": "Phylloscopus fuscatus",
+    "english": "Dusky Warbler",
+    "korean": "솔새사촌",
+    "ebird": "duswar"
+  },
+  "98": {
+    "scientific": "Phylloscopus coronatus",
+    "english": "Eastern Crowned Warbler",
+    "korean": "산솔새",
+    "ebird": "eacwar1"
+  },
+  "99": {
+    "scientific": "Podiceps nigricollis",
+    "english": "Eared Grebe",
+    "korean": "검은목논병아리",
+    "ebird": "eargre"
+  },
+  "100": {
+    "scientific": "Circus spilonotus",
+    "english": "Eastern Marsh Harrier",
+    "korean": "개구리매",
+    "ebird": "easmah1"
+  },
+  "101": {
+    "scientific": "Motacilla tschutschensis",
+    "english": "Eastern Yellow Wagtail",
+    "korean": "긴발톱할미새",
+    "ebird": "eaywag"
+  },
+  "102": {
+    "scientific": "Picoides tridactylus",
+    "english": "Eurasian Three-toed Woodpecker",
+    "korean": "세가락딱다구리",
+    "ebird": "ettwoo1"
+  },
+  "103": {
+    "scientific": "Streptopelia decaocto",
+    "english": "Eurasian Collared-Dove",
+    "korean": "염주비둘기",
+    "ebird": "eucdov"
+  },
+  "104": {
+    "scientific": "Bubo bubo",
+    "english": "Eurasian Eagle-Owl",
+    "korean": "수리부엉이",
+    "ebird": "eueowl1"
+  },
+  "105": {
+    "scientific": "Pyrrhula pyrrhula",
+    "english": "Eurasian Bullfinch",
+    "korean": "멋쟁이새",
+    "ebird": "eurbul"
+  },
+  "106": {
+    "scientific": "Fulica atra",
+    "english": "Eurasian Coot",
+    "korean": "물닭",
+    "ebird": "eurcoo"
+  },
+  "107": {
+    "scientific": "Numenius arquata",
+    "english": "Eurasian Curlew",
+    "korean": "마도요",
+    "ebird": "eurcur"
+  },
+  "108": {
+    "scientific": "Falco subbuteo",
+    "english": "Eurasian Hobby",
+    "korean": "새호리기",
+    "ebird": "eurhob"
+  },
+  "109": {
+    "scientific": "Garrulus glandarius",
+    "english": "Eurasian Jay",
+    "korean": "어치",
+    "ebird": "eurjay1"
+  },
+  "110": {
+    "scientific": "Falco tinnunculus",
+    "english": "Eurasian Kestrel",
+    "korean": "황조롱이",
+    "ebird": "eurkes"
+  },
+  "111": {
+    "scientific": "Nucifraga caryocatactes/hemispila",
+    "english": "Northern/Southern Nutcracker",
+    "korean": "잣까마귀",
+    "ebird": "eurnut1"
+  },
+  "112": {
+    "scientific": "Sitta europaea",
+    "english": "Eurasian Nuthatch",
+    "korean": "동고비",
+    "ebird": "eurnut2"
+  },
+  "113": {
+    "scientific": "Haematopus ostralegus",
+    "english": "Eurasian Oystercatcher",
+    "korean": "검은머리물떼새",
+    "ebird": "euroys1"
+  },
+  "114": {
+    "scientific": "Spinus spinus",
+    "english": "Eurasian Siskin",
+    "korean": "검은머리방울새",
+    "ebird": "eursis"
+  },
+  "115": {
+    "scientific": "Accipiter nisus",
+    "english": "Eurasian Sparrowhawk",
+    "korean": "새매",
+    "ebird": "eurspa1"
+  },
+  "116": {
+    "scientific": "Platalea leucorodia",
+    "english": "Eurasian Spoonbill",
+    "korean": "노랑부리저어새",
+    "ebird": "eurspo1"
+  },
+  "117": {
+    "scientific": "Sturnus vulgaris",
+    "english": "European Starling",
+    "korean": "흰점찌르레기",
+    "ebird": "eursta"
+  },
+  "118": {
+    "scientific": "Certhia familiaris",
+    "english": "Eurasian Treecreeper",
+    "korean": "나무발발이",
+    "ebird": "eurtre1"
+  },
+  "119": {
+    "scientific": "Mareca penelope",
+    "english": "Eurasian Wigeon",
+    "korean": "홍머리오리",
+    "ebird": "eurwig"
+  },
+  "120": {
+    "scientific": "Scolopax rusticola",
+    "english": "Eurasian Woodcock",
+    "korean": "멧도요",
+    "ebird": "eurwoo"
+  },
+  "121": {
+    "scientific": "Jynx torquilla",
+    "english": "Eurasian Wryneck",
+    "korean": "개미잡이",
+    "ebird": "eurwry"
+  },
+  "122": {
+    "scientific": "Passer montanus",
+    "english": "Eurasian Tree Sparrow",
+    "korean": "참새",
+    "ebird": "eutspa"
+  },
+  "123": {
+    "scientific": "Turdus obscurus",
+    "english": "Eyebrowed Thrush",
+    "korean": "흰눈썹붉은배지빠귀",
+    "ebird": "eyethr"
+  },
+  "124": {
+    "scientific": "Numenius madagascariensis",
+    "english": "Far Eastern Curlew",
+    "korean": "알락꼬리마도요",
+    "ebird": "faecur"
+  },
+  "125": {
+    "scientific": "Pitta nympha",
+    "english": "Fairy Pitta",
+    "korean": "팔색조",
+    "ebird": "faipit1"
+  },
+  "126": {
+    "scientific": "Mareca falcata",
+    "english": "Falcated Duck",
+    "korean": "청머리오리",
+    "ebird": "falduc"
+  },
+  "127": {
+    "scientific": "Ardenna carneipes",
+    "english": "Flesh-footed Shearwater",
+    "korean": "붉은발슴새",
+    "ebird": "flfshe"
+  },
+  "128": {
+    "scientific": "Dendronanthus indicus",
+    "english": "Forest Wagtail",
+    "korean": "물레새",
+    "ebird": "forwag1"
+  },
+  "129": {
+    "scientific": "Apus pacificus",
+    "english": "Pacific Swift",
+    "korean": "칼새",
+    "ebird": "fotswi"
+  },
+  "130": {
+    "scientific": "Mareca strepera",
+    "english": "Gadwall",
+    "korean": "알락오리",
+    "ebird": "gadwal"
+  },
+  "131": {
+    "scientific": "Spatula querquedula",
+    "english": "Garganey",
+    "korean": "발구지",
+    "ebird": "gargan"
+  },
+  "132": {
+    "scientific": "Larus hyperboreus",
+    "english": "Glaucous Gull",
+    "korean": "흰갈매기",
+    "ebird": "glagul"
+  },
+  "133": {
+    "scientific": "Larus glaucescens",
+    "english": "Glaucous-winged Gull",
+    "korean": "수리갈매기",
+    "ebird": "glwgul"
+  },
+  "134": {
+    "scientific": "Regulus regulus",
+    "english": "Goldcrest",
+    "korean": "상모솔새",
+    "ebird": "goldcr1"
+  },
+  "135": {
+    "scientific": "Aquila chrysaetos",
+    "english": "Golden Eagle",
+    "korean": "검독수리",
+    "ebird": "goleag"
+  },
+  "136": {
+    "scientific": "Ardea cinerea",
+    "english": "Gray Heron",
+    "korean": "왜가리",
+    "ebird": "graher1"
+  },
+  "137": {
+    "scientific": "Podiceps cristatus",
+    "english": "Great Crested Grebe",
+    "korean": "뿔논병아리",
+    "ebird": "grcgre1"
+  },
+  "138": {
+    "scientific": "Botaurus stellaris",
+    "english": "Eurasian Bittern",
+    "korean": "알락해오라기",
+    "ebird": "grebit1"
+  },
+  "139": {
+    "scientific": "Otis tarda",
+    "english": "Great Bustard",
+    "korean": "느시",
+    "ebird": "grebus1"
+  },
+  "140": {
+    "scientific": "Phalacrocorax carbo",
+    "english": "Great Cormorant",
+    "korean": "민물가마우지",
+    "ebird": "grecor"
+  },
+  "141": {
+    "scientific": "Ardea alba",
+    "english": "Great Egret",
+    "korean": "중대백로",
+    "ebird": "greegr"
+  },
+  "142": {
+    "scientific": "Calidris tenuirostris",
+    "english": "Great Knot",
+    "korean": "붉은어깨도요",
+    "ebird": "grekno"
+  },
+  "143": {
+    "scientific": "Aythya marila",
+    "english": "Greater Scaup",
+    "korean": "검은머리흰죽지",
+    "ebird": "gresca"
+  },
+  "144": {
+    "scientific": "Parus cinereus [cinereus Group]",
+    "english": "Asian Tit (Cinereous)",
+    "korean": "박새",
+    "ebird": "gretit2"
+  },
+  "145": {
+    "scientific": "Phylloscopus plumbeitarsus",
+    "english": "Two-barred Warbler",
+    "korean": "버들솔새",
+    "ebird": "grewar2"
+  },
+  "146": {
+    "scientific": "Tachyspiza soloensis",
+    "english": "Chinese Sparrowhawk",
+    "korean": "붉은배새매",
+    "ebird": "grfhaw1"
+  },
+  "147": {
+    "scientific": "Helopsaltes fasciolatus",
+    "english": "Gray's Grasshopper Warbler",
+    "korean": "붉은허리개개비",
+    "ebird": "grgwar1"
+  },
+  "148": {
+    "scientific": "Tringa ochropus",
+    "english": "Green Sandpiper",
+    "korean": "삑삑도요",
+    "ebird": "grnsan"
+  },
+  "149": {
+    "scientific": "Rostratula benghalensis",
+    "english": "Greater Painted-Snipe",
+    "korean": "호사도요",
+    "ebird": "grpsni1"
+  },
+  "150": {
+    "scientific": "Clanga clanga",
+    "english": "Greater Spotted Eagle",
+    "korean": "항라머리검독수리",
+    "ebird": "grseag1"
+  },
+  "151": {
+    "scientific": "Anarhynchus leschenaultii",
+    "english": "Greater Sand-Plover",
+    "korean": "큰왕눈물떼새",
+    "ebird": "grsplo"
+  },
+  "152": {
+    "scientific": "Dendrocopos major",
+    "english": "Great Spotted Woodpecker",
+    "korean": "오색딱다구리",
+    "ebird": "grswoo"
+  },
+  "153": {
+    "scientific": "Emberiza variabilis",
+    "english": "Gray Bunting",
+    "korean": "검은멧새",
+    "ebird": "grybun"
+  },
+  "154": {
+    "scientific": "Caprimulgus jotaka",
+    "english": "Gray Nightjar",
+    "korean": "쏙독새",
+    "ebird": "grynig1"
+  },
+  "155": {
+    "scientific": "Motacilla cinerea",
+    "english": "Gray Wagtail",
+    "korean": "노랑할미새",
+    "ebird": "grywag"
+  },
+  "156": {
+    "scientific": "Anser albifrons",
+    "english": "Greater White-fronted Goose",
+    "korean": "쇠기러기",
+    "ebird": "gwfgoo"
+  },
+  "157": {
+    "scientific": "Turdus hortulorum",
+    "english": "Gray-backed Thrush",
+    "korean": "되지빠귀",
+    "ebird": "gybthr1"
+  },
+  "158": {
+    "scientific": "Yungipicus canicapillus",
+    "english": "Gray-capped Pygmy Woodpecker",
+    "korean": "아물쇠딱다구리",
+    "ebird": "gycwoo1"
+  },
+  "159": {
+    "scientific": "Butastur indicus",
+    "english": "Gray-faced Buzzard",
+    "korean": "왕새매",
+    "ebird": "gyfbuz1"
+  },
+  "160": {
+    "scientific": "Picus canus",
+    "english": "Gray-headed Woodpecker",
+    "korean": "청딱다구리",
+    "ebird": "gyfwoo1"
+  },
+  "161": {
+    "scientific": "Vanellus cinereus",
+    "english": "Gray-headed Lapwing",
+    "korean": "민댕기물떼새",
+    "ebird": "gyhlap1"
+  },
+  "162": {
+    "scientific": "Muscicapa griseisticta",
+    "english": "Gray-streaked Flycatcher",
+    "korean": "제비딱새",
+    "ebird": "gysfly1"
+  },
+  "163": {
+    "scientific": "Tringa brevipes",
+    "english": "Gray-tailed Tattler",
+    "korean": "노랑발도요",
+    "ebird": "gyttat1"
+  },
+  "164": {
+    "scientific": "Histrionicus histrionicus",
+    "english": "Harlequin Duck",
+    "korean": "흰줄박이오리",
+    "ebird": "harduc"
+  },
+  "165": {
+    "scientific": "Coccothraustes coccothraustes",
+    "english": "Hawfinch",
+    "korean": "콩새",
+    "ebird": "hawfin"
+  },
+  "166": {
+    "scientific": "Tetrastes bonasia",
+    "english": "Hazel Grouse",
+    "korean": "들꿩",
+    "ebird": "hazgro1"
+  },
+  "167": {
+    "scientific": "Columba rupestris",
+    "english": "Hill Pigeon",
+    "korean": "낭비둘기",
+    "ebird": "hilpig1"
+  },
+  "168": {
+    "scientific": "Strix nivicolum",
+    "english": "Himalayan Owl",
+    "korean": "올빼미",
+    "ebird": "himowl1"
+  },
+  "169": {
+    "scientific": "Acanthis flammea hornemanni/exilipes",
+    "english": "Redpoll (Hoary)",
+    "korean": "쇠홍방울새",
+    "ebird": "hoared"
+  },
+  "170": {
+    "scientific": "Grus monacha",
+    "english": "Hooded Crane",
+    "korean": "흑두루미",
+    "ebird": "hoocra1"
+  },
+  "171": {
+    "scientific": "Upupa epops",
+    "english": "Common Hoopoe",
+    "korean": "후투티",
+    "ebird": "hoopoe"
+  },
+  "172": {
+    "scientific": "Podiceps auritus",
+    "english": "Horned Grebe",
+    "korean": "귀뿔논병아리",
+    "ebird": "horgre"
+  },
+  "173": {
+    "scientific": "Apus nipalensis",
+    "english": "House Swift",
+    "korean": "쇠칼새",
+    "ebird": "houswi1"
+  },
+  "174": {
+    "scientific": "Aquila heliaca",
+    "english": "Imperial Eagle",
+    "korean": "흰죽지수리",
+    "ebird": "impeag1"
+  },
+  "175": {
+    "scientific": "Cuculus micropterus",
+    "english": "Indian Cuckoo",
+    "korean": "검은등뻐꾸기",
+    "ebird": "indcuc1"
+  },
+  "176": {
+    "scientific": "Horornis diphone",
+    "english": "Japanese Bush Warbler",
+    "korean": "섬휘파람새",
+    "ebird": "jabwar"
+  },
+  "177": {
+    "scientific": "Gorsachius goisagi",
+    "english": "Japanese Night Heron",
+    "korean": "붉은해오라기",
+    "ebird": "janher1"
+  },
+  "178": {
+    "scientific": "Terpsiphone atrocaudata",
+    "english": "Black Paradise-Flycatcher",
+    "korean": "긴꼬리딱새",
+    "ebird": "japfly1"
+  },
+  "179": {
+    "scientific": "Synthliboramphus wumizusume",
+    "english": "Japanese Murrelet",
+    "korean": "뿔쇠오리",
+    "ebird": "japmur1"
+  },
+  "180": {
+    "scientific": "Coturnix japonica",
+    "english": "Japanese Quail",
+    "korean": "메추라기",
+    "ebird": "japqua"
+  },
+  "181": {
+    "scientific": "Tachyspiza gularis",
+    "english": "Japanese Sparrowhawk",
+    "korean": "조롱이",
+    "ebird": "japspa1"
+  },
+  "182": {
+    "scientific": "Turdus cardis",
+    "english": "Japanese Thrush",
+    "korean": "검은지빠귀",
+    "ebird": "japthr1"
+  },
+  "183": {
+    "scientific": "Motacilla grandis",
+    "english": "Japanese Wagtail",
+    "korean": "검은등할미새",
+    "ebird": "japwag1"
+  },
+  "184": {
+    "scientific": "Bombycilla japonica",
+    "english": "Japanese Waxwing",
+    "korean": "홍여새",
+    "ebird": "japwax1"
+  },
+  "185": {
+    "scientific": "Otus semitorques",
+    "english": "Japanese Scops-Owl",
+    "korean": "큰소쩍새",
+    "ebird": "jasowl1"
+  },
+  "186": {
+    "scientific": "Columba janthina",
+    "english": "Black Wood-Pigeon",
+    "korean": "흑비둘기",
+    "ebird": "jawpig1"
+  },
+  "187": {
+    "scientific": "Anarhynchus alexandrinus",
+    "english": "Kentish Plover",
+    "korean": "흰물떼새",
+    "ebird": "kenplo1"
+  },
+  "188": {
+    "scientific": "Ficedula zanthopygia",
+    "english": "Yellow-rumped Flycatcher",
+    "korean": "흰눈썹황금새",
+    "ebird": "korfly1"
+  },
+  "189": {
+    "scientific": "Corvus macrorhynchos",
+    "english": "Large-billed Crow",
+    "korean": "큰부리까마귀",
+    "ebird": "labcro1"
+  },
+  "190": {
+    "scientific": "Locustella lanceolata",
+    "english": "Lanceolated Warbler",
+    "korean": "쥐발귀개개비",
+    "ebird": "lanwar"
+  },
+  "191": {
+    "scientific": "Calcarius lapponicus",
+    "english": "Lapland Longspur",
+    "korean": "긴발톱멧새",
+    "ebird": "laplon"
+  },
+  "192": {
+    "scientific": "Gallinago hardwickii",
+    "english": "Latham's Snipe",
+    "korean": "큰꺅도요",
+    "ebird": "latsni1"
+  },
+  "193": {
+    "scientific": "Aethia pusilla",
+    "english": "Least Auklet",
+    "korean": "작은바다오리",
+    "ebird": "leaauk"
+  },
+  "194": {
+    "scientific": "Cuculus poliocephalus",
+    "english": "Lesser Cuckoo",
+    "korean": "두견이",
+    "ebird": "lescuc1"
+  },
+  "195": {
+    "scientific": "Anarhynchus mongolus/atrifrons",
+    "english": "Siberian/Tibetan Sand-Plover",
+    "korean": "왕눈물떼새",
+    "ebird": "lesplo"
+  },
+  "196": {
+    "scientific": "Dryobates minor",
+    "english": "Lesser Spotted Woodpecker",
+    "korean": "쇠오색딱다구리",
+    "ebird": "leswoo1"
+  },
+  "197": {
+    "scientific": "Thinornis dubius",
+    "english": "Little Ringed Plover",
+    "korean": "꼬마물떼새",
+    "ebird": "lirplo"
+  },
+  "198": {
+    "scientific": "Emberiza pusilla",
+    "english": "Little Bunting",
+    "korean": "쇠붉은뺨멧새",
+    "ebird": "litbun"
+  },
+  "199": {
+    "scientific": "Numenius minutus",
+    "english": "Little Curlew",
+    "korean": "쇠부리도요",
+    "ebird": "litcur"
+  },
+  "200": {
+    "scientific": "Egretta garzetta",
+    "english": "Little Egret",
+    "korean": "쇠백로",
+    "ebird": "litegr"
+  },
+  "201": {
+    "scientific": "Tachybaptus ruficollis",
+    "english": "Little Grebe",
+    "korean": "논병아리",
+    "ebird": "litgre1"
+  },
+  "202": {
+    "scientific": "Athene noctua",
+    "english": "Little Owl",
+    "korean": "금눈쇠올빼미",
+    "ebird": "litowl1"
+  },
+  "203": {
+    "scientific": "Sternula albifrons",
+    "english": "Little Tern",
+    "korean": "쇠제비갈매기",
+    "ebird": "litter1"
+  },
+  "204": {
+    "scientific": "Pycnonotus sinensis",
+    "english": "Light-vented Bulbul",
+    "korean": "검은이마직박구리",
+    "ebird": "livbul1"
+  },
+  "205": {
+    "scientific": "Thinornis placidus",
+    "english": "Long-billed Plover",
+    "korean": "흰목물떼새",
+    "ebird": "lobplo1"
+  },
+  "206": {
+    "scientific": "Asio otus",
+    "english": "Long-eared Owl",
+    "korean": "칡부엉이",
+    "ebird": "loeowl"
+  },
+  "207": {
+    "scientific": "Clangula hyemalis",
+    "english": "Long-tailed Duck",
+    "korean": "바다꿩",
+    "ebird": "lotduc"
+  },
+  "208": {
+    "scientific": "Carpodacus sibiricus",
+    "english": "Long-tailed Rosefinch",
+    "korean": "긴꼬리홍양진이",
+    "ebird": "lotros1"
+  },
+  "209": {
+    "scientific": "Calidris subminuta",
+    "english": "Long-toed Stint",
+    "korean": "종달도요",
+    "ebird": "lotsti"
+  },
+  "210": {
+    "scientific": "Aegithalos caudatus",
+    "english": "Long-tailed Tit",
+    "korean": "오목눈이",
+    "ebird": "lottit1"
+  },
+  "211": {
+    "scientific": "Alaudala cheleensis",
+    "english": "Asian Short-toed Lark",
+    "korean": "북방쇠종다리",
+    "ebird": "lstlar2"
+  },
+  "212": {
+    "scientific": "Anser erythropus",
+    "english": "Lesser White-fronted Goose",
+    "korean": "흰이마기러기",
+    "ebird": "lwfgoo"
+  },
+  "213": {
+    "scientific": "Anas platyrhynchos",
+    "english": "Mallard",
+    "korean": "청둥오리",
+    "ebird": "mallar3"
+  },
+  "214": {
+    "scientific": "Horornis canturians",
+    "english": "Manchurian Bush Warbler",
+    "korean": "휘파람새",
+    "ebird": "manbuw1"
+  },
+  "215": {
+    "scientific": "Aix galericulata",
+    "english": "Mandarin Duck",
+    "korean": "원앙",
+    "ebird": "manduc"
+  },
+  "216": {
+    "scientific": "Tringa stagnatilis",
+    "english": "Marsh Sandpiper",
+    "korean": "쇠청다리도요",
+    "ebird": "marsan"
+  },
+  "217": {
+    "scientific": "Poecile palustris",
+    "english": "Marsh Tit",
+    "korean": "쇠박새",
+    "ebird": "martit2"
+  },
+  "218": {
+    "scientific": "Emberiza cioides",
+    "english": "Meadow Bunting",
+    "korean": "멧새",
+    "ebird": "meabun1"
+  },
+  "219": {
+    "scientific": "Anthus pratensis",
+    "english": "Meadow Pipit",
+    "korean": "풀밭종다리",
+    "ebird": "meapip1"
+  },
+  "220": {
+    "scientific": "Falco columbarius",
+    "english": "Merlin",
+    "korean": "쇠황조롱이",
+    "ebird": "merlin"
+  },
+  "221": {
+    "scientific": "Larus canus",
+    "english": "Common Gull",
+    "korean": "갈매기",
+    "ebird": "mewgul"
+  },
+  "222": {
+    "scientific": "Helopsaltes ochotensis",
+    "english": "Middendorff's Grasshopper Warbler",
+    "korean": "알락꼬리쥐발귀",
+    "ebird": "migwar"
+  },
+  "223": {
+    "scientific": "Ficedula mugimaki",
+    "english": "Mugimaki Flycatcher",
+    "korean": "노랑딱새",
+    "ebird": "mugfly"
+  },
+  "224": {
+    "scientific": "Cygnus olor",
+    "english": "Mute Swan",
+    "korean": "혹고니",
+    "ebird": "mutswa"
+  },
+  "225": {
+    "scientific": "Hierococcyx hyperythrus",
+    "english": "Northern Hawk-Cuckoo",
+    "korean": "매사촌",
+    "ebird": "nohcuc1"
+  },
+  "226": {
+    "scientific": "Ninox japonica",
+    "english": "Northern Boobook",
+    "korean": "솔부엉이",
+    "ebird": "norboo1"
+  },
+  "227": {
+    "scientific": "Astur atricapillus",
+    "english": "American Goshawk",
+    "korean": "참매",
+    "ebird": "norgos"
+  },
+  "228": {
+    "scientific": "Tringa guttifer",
+    "english": "Nordmann's Greenshank",
+    "korean": "청다리도요사촌",
+    "ebird": "norgre1"
+  },
+  "229": {
+    "scientific": "Circus cyaneus",
+    "english": "Hen Harrier",
+    "korean": "잿빛개구리매",
+    "ebird": "norhar1"
+  },
+  "230": {
+    "scientific": "Vanellus vanellus",
+    "english": "Northern Lapwing",
+    "korean": "댕기물떼새",
+    "ebird": "norlap"
+  },
+  "231": {
+    "scientific": "Anas acuta",
+    "english": "Northern Pintail",
+    "korean": "고방오리",
+    "ebird": "norpin"
+  },
+  "232": {
+    "scientific": "Spatula clypeata",
+    "english": "Northern Shoveler",
+    "korean": "넓적부리",
+    "ebird": "norsho"
+  },
+  "233": {
+    "scientific": "Lanius borealis",
+    "english": "Northern Shrike",
+    "korean": "재때까치",
+    "ebird": "norshr4"
+  },
+  "234": {
+    "scientific": "Emberiza yessoensis",
+    "english": "Ochre-rumped Bunting",
+    "korean": "쇠검은머리쑥새",
+    "ebird": "ocrbun1"
+  },
+  "235": {
+    "scientific": "Anthus hodgsoni",
+    "english": "Olive-backed Pipit",
+    "korean": "힝둥새",
+    "ebird": "olbpip"
+  },
+  "236": {
+    "scientific": "Cuculus optatus",
+    "english": "Oriental Cuckoo",
+    "korean": "벙어리뻐꾸기",
+    "ebird": "oricuc2"
+  },
+  "237": {
+    "scientific": "Chloris sinica",
+    "english": "Oriental Greenfinch",
+    "korean": "방울새",
+    "ebird": "origre"
+  },
+  "238": {
+    "scientific": "Pernis ptilorhynchus",
+    "english": "Oriental Honey-buzzard",
+    "korean": "벌매",
+    "ebird": "orihob2"
+  },
+  "239": {
+    "scientific": "Pica serica",
+    "english": "Oriental Magpie",
+    "korean": "까치",
+    "ebird": "orimag1"
+  },
+  "240": {
+    "scientific": "Anarhynchus veredus",
+    "english": "Oriental Plover",
+    "korean": "큰물떼새",
+    "ebird": "oriplo1"
+  },
+  "241": {
+    "scientific": "Glareola maldivarum",
+    "english": "Oriental Pratincole",
+    "korean": "제비물떼새",
+    "ebird": "oripra"
+  },
+  "242": {
+    "scientific": "Ciconia boyciana",
+    "english": "Oriental Stork",
+    "korean": "황새",
+    "ebird": "oristo1"
+  },
+  "243": {
+    "scientific": "Acrocephalus orientalis",
+    "english": "Oriental Reed Warbler",
+    "korean": "개개비",
+    "ebird": "orrwar1"
+  },
+  "244": {
+    "scientific": "Otus sunia",
+    "english": "Oriental Scops-Owl",
+    "korean": "소쩍새",
+    "ebird": "orsowl"
+  },
+  "245": {
+    "scientific": "Streptopelia orientalis",
+    "english": "Oriental Turtle-Dove",
+    "korean": "멧비둘기",
+    "ebird": "ortdov"
+  },
+  "246": {
+    "scientific": "Pandion haliaetus",
+    "english": "Osprey",
+    "korean": "물수리",
+    "ebird": "osprey"
+  },
+  "247": {
+    "scientific": "Gavia pacifica",
+    "english": "Pacific Loon",
+    "korean": "회색머리아비",
+    "ebird": "pacloo"
+  },
+  "248": {
+    "scientific": "Egretta sacra",
+    "english": "Pacific Reef-Heron",
+    "korean": "흑로",
+    "ebird": "pacreh1"
+  },
+  "249": {
+    "scientific": "Pluvialis fulva",
+    "english": "Pacific Golden-Plover",
+    "korean": "검은가슴물떼새",
+    "ebird": "pagplo"
+  },
+  "250": {
+    "scientific": "Helopsaltes certhiola",
+    "english": "Pallas's Grasshopper Warbler",
+    "korean": "북방개개비",
+    "ebird": "pagwar1"
+  },
+  "251": {
+    "scientific": "Emberiza pallasi",
+    "english": "Pallas's Bunting",
+    "korean": "북방검은머리쑥새",
+    "ebird": "palbun"
+  },
+  "252": {
+    "scientific": "Carpodacus roseus",
+    "english": "Pallas's Rosefinch",
+    "korean": "양진이",
+    "ebird": "palros2"
+  },
+  "253": {
+    "scientific": "Turdus pallidus",
+    "english": "Pale Thrush",
+    "korean": "흰배지빠귀",
+    "ebird": "palthr1"
+  },
+  "254": {
+    "scientific": "Phylloscopus proregulus",
+    "english": "Pallas's Leaf Warbler",
+    "korean": "노랑허리솔새",
+    "ebird": "palwar5"
+  },
+  "255": {
+    "scientific": "Stercorarius parasiticus",
+    "english": "Parasitic Jaeger",
+    "korean": "북극도둑갈매기",
+    "ebird": "parjae"
+  },
+  "256": {
+    "scientific": "Anthus gustavi",
+    "english": "Pechora Pipit",
+    "korean": "흰등밭종다리",
+    "ebird": "pecpip"
+  },
+  "257": {
+    "scientific": "Calidris melanotos",
+    "english": "Pectoral Sandpiper",
+    "korean": "아메리카메추라기도요",
+    "ebird": "pecsan"
+  },
+  "258": {
+    "scientific": "Urile pelagicus",
+    "english": "Pelagic Cormorant",
+    "korean": "쇠가마우지",
+    "ebird": "pelcor"
+  },
+  "259": {
+    "scientific": "Falco peregrinus",
+    "english": "Peregrine Falcon",
+    "korean": "매",
+    "ebird": "perfal"
+  },
+  "260": {
+    "scientific": "Hydrophasianus chirurgus",
+    "english": "Pheasant-tailed Jacana",
+    "korean": "물꿩",
+    "ebird": "phtjac1"
+  },
+  "261": {
+    "scientific": "Recurvirostra avosetta",
+    "english": "Pied Avocet",
+    "korean": "뒷부리장다리물떼새",
+    "ebird": "pieavo1"
+  },
+  "262": {
+    "scientific": "Circus melanoleucos",
+    "english": "Pied Harrier",
+    "korean": "알락개구리매",
+    "ebird": "piehar1"
+  },
+  "263": {
+    "scientific": "Emberiza leucocephalos",
+    "english": "Pine Bunting",
+    "korean": "흰머리멧새",
+    "ebird": "pinbun"
+  },
+  "264": {
+    "scientific": "Gallinago stenura",
+    "english": "Pin-tailed Snipe",
+    "korean": "바늘꼬리도요",
+    "ebird": "pitsni"
+  },
+  "265": {
+    "scientific": "Helopsaltes pleskei",
+    "english": "Pleske's Grasshopper Warbler",
+    "korean": "섬개개비",
+    "ebird": "plewar1"
+  },
+  "266": {
+    "scientific": "Phylloscopus tenellipes",
+    "english": "Pale-legged Leaf Warbler",
+    "korean": "되솔새",
+    "ebird": "pllwar1"
+  },
+  "267": {
+    "scientific": "Phoenicurus fuliginosus",
+    "english": "Plumbeous Redstart",
+    "korean": "부채꼬리바위딱새",
+    "ebird": "plured1"
+  },
+  "268": {
+    "scientific": "Stercorarius pomarinus",
+    "english": "Pomarine Jaeger",
+    "korean": "넓적꼬리도둑갈매기",
+    "ebird": "pomjae"
+  },
+  "269": {
+    "scientific": "Ardea purpurea",
+    "english": "Purple Heron",
+    "korean": "붉은왜가리",
+    "ebird": "purher1"
+  },
+  "270": {
+    "scientific": "Yungipicus kizuki",
+    "english": "Japanese Pygmy Woodpecker",
+    "korean": "쇠딱다구리",
+    "ebird": "pygwoo1"
+  },
+  "271": {
+    "scientific": "Phylloscopus schwarzi",
+    "english": "Radde's Warbler",
+    "korean": "긴다리솔새사촌",
+    "ebird": "radwar1"
+  },
+  "272": {
+    "scientific": "Mergus serrator",
+    "english": "Red-breasted Merganser",
+    "korean": "바다비오리",
+    "ebird": "rebmer"
+  },
+  "273": {
+    "scientific": "Spodiopsar sericeus",
+    "english": "Red-billed Starling",
+    "korean": "붉은부리찌르레기",
+    "ebird": "rebsta1"
+  },
+  "274": {
+    "scientific": "Grus japonensis",
+    "english": "Red-crowned Crane",
+    "korean": "두루미",
+    "ebird": "reccra1"
+  },
+  "275": {
+    "scientific": "Streptopelia tranquebarica",
+    "english": "Red Collared-Dove",
+    "korean": "홍비둘기",
+    "ebird": "recdov1"
+  },
+  "276": {
+    "scientific": "Loxia curvirostra",
+    "english": "Red Crossbill",
+    "korean": "솔잣새",
+    "ebird": "redcro"
+  },
+  "277": {
+    "scientific": "Calidris canutus",
+    "english": "Red Knot",
+    "korean": "붉은가슴도요",
+    "ebird": "redkno"
+  },
+  "278": {
+    "scientific": "Emberiza schoeniclus",
+    "english": "Reed Bunting",
+    "korean": "검은머리쑥새",
+    "ebird": "reebun"
+  },
+  "279": {
+    "scientific": "Tarsiger cyanurus/albocoeruleus",
+    "english": "Red-flanked/Qilian Bluetail",
+    "korean": "유리딱새",
+    "ebird": "refblu"
+  },
+  "280": {
+    "scientific": "Podiceps grisegena",
+    "english": "Red-necked Grebe",
+    "korean": "큰논병아리",
+    "ebird": "rengre"
+  },
+  "281": {
+    "scientific": "Phalaropus lobatus",
+    "english": "Red-necked Phalarope",
+    "korean": "지느러미발도요",
+    "ebird": "renpha"
+  },
+  "282": {
+    "scientific": "Calidris ruficollis",
+    "english": "Red-necked Stint",
+    "korean": "좀도요",
+    "ebird": "rensti"
+  },
+  "283": {
+    "scientific": "Cecropis rufula/melanocrissus/daurica",
+    "english": "European/African/Eastern Red-rumped Swallow",
+    "korean": "귀제비",
+    "ebird": "rerswa1"
+  },
+  "284": {
+    "scientific": "Gavia stellata",
+    "english": "Red-throated Loon",
+    "korean": "아비",
+    "ebird": "retloo"
+  },
+  "285": {
+    "scientific": "Anthus cervinus",
+    "english": "Red-throated Pipit",
+    "korean": "붉은가슴밭종다리",
+    "ebird": "retpip"
+  },
+  "286": {
+    "scientific": "Turdus ruficollis",
+    "english": "Red-throated Thrush",
+    "korean": "붉은목지빠귀",
+    "ebird": "retthr1"
+  },
+  "287": {
+    "scientific": "Anthus richardi",
+    "english": "Richard's Pipit",
+    "korean": "큰밭종다리",
+    "ebird": "ricpip1"
+  },
+  "288": {
+    "scientific": "Buteo lagopus",
+    "english": "Rough-legged Hawk",
+    "korean": "털발말똥가리",
+    "ebird": "rolhaw"
+  },
+  "289": {
+    "scientific": "Corvus frugilegus",
+    "english": "Rook",
+    "korean": "떼까마귀",
+    "ebird": "rook1"
+  },
+  "290": {
+    "scientific": "Anthus roseatus",
+    "english": "Rosy Pipit",
+    "korean": "한국밭종다리",
+    "ebird": "rospip1"
+  },
+  "291": {
+    "scientific": "Zapornia fusca",
+    "english": "Ruddy-breasted Crake",
+    "korean": "쇠뜸부기사촌",
+    "ebird": "rubcra1"
+  },
+  "292": {
+    "scientific": "Dendrocopos hyperythrus",
+    "english": "Rufous-bellied Woodpecker",
+    "korean": "붉은배오색딱다구리",
+    "ebird": "rubwoo1"
+  },
+  "293": {
+    "scientific": "Halcyon coromanda",
+    "english": "Ruddy Kingfisher",
+    "korean": "호반새",
+    "ebird": "rudkin1"
+  },
+  "294": {
+    "scientific": "Tadorna ferruginea",
+    "english": "Ruddy Shelduck",
+    "korean": "황오리",
+    "ebird": "rudshe"
+  },
+  "295": {
+    "scientific": "Arenaria interpres",
+    "english": "Ruddy Turnstone",
+    "korean": "꼬까도요",
+    "ebird": "rudtur"
+  },
+  "296": {
+    "scientific": "Calidris pugnax",
+    "english": "Ruff",
+    "korean": "목도리도요",
+    "ebird": "ruff"
+  },
+  "297": {
+    "scientific": "Emberiza rustica",
+    "english": "Rustic Bunting",
+    "korean": "쑥새",
+    "ebird": "rusbun"
+  },
+  "298": {
+    "scientific": "Passer cinnamomeus",
+    "english": "Russet Sparrow",
+    "korean": "섬참새",
+    "ebird": "russpa2"
+  },
+  "299": {
+    "scientific": "Larvivora sibilans",
+    "english": "Rufous-tailed Robin",
+    "korean": "울새",
+    "ebird": "rutrob1"
+  },
+  "300": {
+    "scientific": "Phylloscopus borealoides",
+    "english": "Sakhalin Leaf Warbler",
+    "korean": "사할린되솔새",
+    "ebird": "salwar1"
+  },
+  "301": {
+    "scientific": "Calidris alba",
+    "english": "Sanderling",
+    "korean": "세가락도요",
+    "ebird": "sander"
+  },
+  "302": {
+    "scientific": "Saundersilarus saundersi",
+    "english": "Saunders's Gull",
+    "korean": "검은머리갈매기",
+    "ebird": "saugul2"
+  },
+  "303": {
+    "scientific": "Zoothera aurea",
+    "english": "White's Thrush",
+    "korean": "호랑지빠귀",
+    "ebird": "scathr2"
+  },
+  "304": {
+    "scientific": "Botaurus eurhythmus",
+    "english": "Schrenck's Bittern",
+    "korean": "큰덤불해오라기",
+    "ebird": "schbit1"
+  },
+  "305": {
+    "scientific": "Mergus squamatus",
+    "english": "Scaly-sided Merganser",
+    "korean": "호사비오리",
+    "ebird": "scsmer1"
+  },
+  "306": {
+    "scientific": "Asio flammeus",
+    "english": "Short-eared Owl",
+    "korean": "쇠부엉이",
+    "ebird": "sheowl"
+  },
+  "307": {
+    "scientific": "Calidris acuminata",
+    "english": "Sharp-tailed Sandpiper",
+    "korean": "메추라기도요",
+    "ebird": "shtsan"
+  },
+  "308": {
+    "scientific": "Ardenna tenuirostris",
+    "english": "Short-tailed Shearwater",
+    "korean": "쇠부리슴새",
+    "ebird": "shtshe"
+  },
+  "309": {
+    "scientific": "Prunella montanella",
+    "english": "Siberian Accentor",
+    "korean": "멧종다리",
+    "ebird": "sibacc"
+  },
+  "310": {
+    "scientific": "Larvivora cyane",
+    "english": "Siberian Blue Robin",
+    "korean": "쇠유리새",
+    "ebird": "sibrob"
+  },
+  "311": {
+    "scientific": "Calliope calliope",
+    "english": "Siberian Rubythroat",
+    "korean": "진홍가슴",
+    "ebird": "sibrub"
+  },
+  "312": {
+    "scientific": "Geokichla sibirica",
+    "english": "Siberian Thrush",
+    "korean": "흰눈썹지빠귀",
+    "ebird": "sibthr1"
+  },
+  "313": {
+    "scientific": "Alauda arvensis",
+    "english": "Eurasian Skylark",
+    "korean": "종다리",
+    "ebird": "skylar"
+  },
+  "314": {
+    "scientific": "Larus schistisagus",
+    "english": "Slaty-backed Gull",
+    "korean": "큰재갈매기",
+    "ebird": "slbgul"
+  },
+  "315": {
+    "scientific": "Mergellus albellus",
+    "english": "Smew",
+    "korean": "흰비오리",
+    "ebird": "smew"
+  },
+  "316": {
+    "scientific": "Sitta villosa",
+    "english": "Snowy-browed Nuthatch",
+    "korean": "쇠동고비",
+    "ebird": "snbnut1"
+  },
+  "317": {
+    "scientific": "Anser caerulescens",
+    "english": "Snow Goose",
+    "korean": "흰기러기",
+    "ebird": "snogoo"
+  },
+  "318": {
+    "scientific": "Gallinago solitaria",
+    "english": "Solitary Snipe",
+    "korean": "청도요",
+    "ebird": "solsni1"
+  },
+  "319": {
+    "scientific": "Anas zonorhyncha",
+    "english": "Eastern Spot-billed Duck",
+    "korean": "흰뺨검둥오리",
+    "ebird": "spbduc"
+  },
+  "320": {
+    "scientific": "Calidris pygmaea",
+    "english": "Spoon-billed Sandpiper",
+    "korean": "넓적부리도요",
+    "ebird": "spbsan1"
+  },
+  "321": {
+    "scientific": "Locustella davidi",
+    "english": "Baikal Bush Warbler",
+    "korean": "점무늬가슴쥐발귀",
+    "ebird": "spobuw1"
+  },
+  "322": {
+    "scientific": "Tringa erythropus",
+    "english": "Spotted Redshank",
+    "korean": "학도요",
+    "ebird": "spored"
+  },
+  "323": {
+    "scientific": "Calandrella dukhunensis",
+    "english": "Mongolian Short-toed Lark",
+    "korean": "쇠종다리",
+    "ebird": "sstlar4"
+  },
+  "324": {
+    "scientific": "Saxicola stejnegeri",
+    "english": "Amur Stonechat",
+    "korean": "검은딱새",
+    "ebird": "stonec7"
+  },
+  "325": {
+    "scientific": "Butorides striata",
+    "english": "Striated Heron",
+    "korean": "검은댕기해오라기",
+    "ebird": "strher"
+  },
+  "326": {
+    "scientific": "Calonectris leucomelas",
+    "english": "Streaked Shearwater",
+    "korean": "슴새",
+    "ebird": "strshe"
+  },
+  "327": {
+    "scientific": "Haliaeetus pelagicus",
+    "english": "Steller's Sea-Eagle",
+    "korean": "참수리",
+    "ebird": "stseag"
+  },
+  "328": {
+    "scientific": "Anser cygnoides",
+    "english": "Swan Goose",
+    "korean": "개리",
+    "ebird": "swagoo1"
+  },
+  "329": {
+    "scientific": "Coturnicops exquisitus",
+    "english": "Swinhoe's Rail",
+    "korean": "알락뜸부기",
+    "ebird": "swirai1"
+  },
+  "330": {
+    "scientific": "Gallinago megala",
+    "english": "Swinhoe's Snipe",
+    "korean": "꺅도요사촌",
+    "ebird": "swisni1"
+  },
+  "331": {
+    "scientific": "Zosterops simplex",
+    "english": "Swinhoe's White-eye",
+    "korean": "작은동박새",
+    "ebird": "swiwhe1"
+  },
+  "332": {
+    "scientific": "Hydrobates monorhis",
+    "english": "Swinhoe's Storm-Petrel",
+    "korean": "바다제비",
+    "ebird": "swspet"
+  },
+  "333": {
+    "scientific": "Anser fabalis",
+    "english": "Taiga Bean-Goose",
+    "korean": "큰부리큰기러기",
+    "ebird": "taibeg1"
+  },
+  "334": {
+    "scientific": "Ficedula albicilla",
+    "english": "Taiga Flycatcher",
+    "korean": "흰꼬리딱새",
+    "ebird": "taifly1"
+  },
+  "335": {
+    "scientific": "Calidris temminckii",
+    "english": "Temminck's Stint",
+    "korean": "흰꼬리좀도요",
+    "ebird": "temsti"
+  },
+  "336": {
+    "scientific": "Xenus cinereus",
+    "english": "Terek Sandpiper",
+    "korean": "뒷부리도요",
+    "ebird": "tersan"
+  },
+  "337": {
+    "scientific": "Uria lomvia",
+    "english": "Thick-billed Murre",
+    "korean": "큰부리바다오리",
+    "ebird": "thbmur"
+  },
+  "338": {
+    "scientific": "Arundinax aedon",
+    "english": "Thick-billed Warbler",
+    "korean": "큰부리개개비",
+    "ebird": "thbwar1"
+  },
+  "339": {
+    "scientific": "Lanius tigrinus",
+    "english": "Tiger Shrike",
+    "korean": "칡때까치",
+    "ebird": "tigshr1"
+  },
+  "340": {
+    "scientific": "Emberiza tristrami",
+    "english": "Tristram's Bunting",
+    "korean": "흰배멧새",
+    "ebird": "tribun1"
+  },
+  "341": {
+    "scientific": "Aythya fuligula",
+    "english": "Tufted Duck",
+    "korean": "댕기흰죽지",
+    "ebird": "tufduc"
+  },
+  "342": {
+    "scientific": "Anser serrirostris",
+    "english": "Tundra Bean-Goose",
+    "korean": "큰기러기",
+    "ebird": "tunbeg1"
+  },
+  "343": {
+    "scientific": "Cygnus columbianus",
+    "english": "Tundra Swan",
+    "korean": "고니",
+    "ebird": "tunswa"
+  },
+  "344": {
+    "scientific": "Buteo hemilasius",
+    "english": "Upland Buzzard",
+    "korean": "큰말똥가리",
+    "ebird": "uplbuz1"
+  },
+  "345": {
+    "scientific": "Strix uralensis",
+    "english": "Ural Owl",
+    "korean": "긴점박이올빼미",
+    "ebird": "uraowl1"
+  },
+  "346": {
+    "scientific": "Sittiparus varius",
+    "english": "Varied Tit",
+    "korean": "곤줄박이",
+    "ebird": "vartit1"
+  },
+  "347": {
+    "scientific": "Larus vegae",
+    "english": "Vega Gull",
+    "korean": "재갈매기",
+    "ebird": "veggul1"
+  },
+  "348": {
+    "scientific": "Suthora webbiana",
+    "english": "Vinous-throated Parrotbill",
+    "korean": "붉은머리오목눈이",
+    "ebird": "vitpar1"
+  },
+  "349": {
+    "scientific": "Zosterops japonicus",
+    "english": "Warbling White-eye",
+    "korean": "동박새",
+    "ebird": "warwhe1"
+  },
+  "350": {
+    "scientific": "Gallicrex cinerea",
+    "english": "Watercock",
+    "korean": "뜸부기",
+    "ebird": "waterc1"
+  },
+  "351": {
+    "scientific": "Anthus spinoletta",
+    "english": "Water Pipit",
+    "korean": "옅은밭종다리",
+    "ebird": "watpip1"
+  },
+  "352": {
+    "scientific": "Amaurornis phoenicurus",
+    "english": "White-breasted Waterhen",
+    "korean": "흰배뜸부기",
+    "ebird": "whbwat1"
+  },
+  "353": {
+    "scientific": "Dendrocopos leucotos",
+    "english": "White-backed Woodpecker",
+    "korean": "큰오색딱다구리",
+    "ebird": "whbwoo1"
+  },
+  "354": {
+    "scientific": "Dryocopus javensis",
+    "english": "White-bellied Woodpecker",
+    "korean": "크낙새",
+    "ebird": "whbwoo2"
+  },
+  "355": {
+    "scientific": "Spodiopsar cineraceus",
+    "english": "White-cheeked Starling",
+    "korean": "찌르레기",
+    "ebird": "whcsta1"
+  },
+  "356": {
+    "scientific": "Numenius hudsonicus/phaeopus",
+    "english": "Hudsonian/Eurasian Whimbrel",
+    "korean": "중부리도요",
+    "ebird": "whimbr"
+  },
+  "357": {
+    "scientific": "Chlidonias hybrida",
+    "english": "Whiskered Tern",
+    "korean": "구레나룻제비갈매기",
+    "ebird": "whiter2"
+  },
+  "358": {
+    "scientific": "Motacilla alba",
+    "english": "White Wagtail",
+    "korean": "알락할미새",
+    "ebird": "whiwag"
+  },
+  "359": {
+    "scientific": "Antigone vipio",
+    "english": "White-naped Crane",
+    "korean": "재두루미",
+    "ebird": "whncra1"
+  },
+  "360": {
+    "scientific": "Cygnus cygnus",
+    "english": "Whooper Swan",
+    "korean": "큰고니",
+    "ebird": "whoswa"
+  },
+  "361": {
+    "scientific": "Sturnia sinensis",
+    "english": "White-shouldered Starling",
+    "korean": "잿빛쇠찌르레기",
+    "ebird": "whssta2"
+  },
+  "362": {
+    "scientific": "Haliaeetus albicilla",
+    "english": "White-tailed Eagle",
+    "korean": "흰꼬리수리",
+    "ebird": "whteag"
+  },
+  "363": {
+    "scientific": "Hirundapus caudacutus",
+    "english": "White-throated Needletail",
+    "korean": "바늘꼬리칼새",
+    "ebird": "whtnee"
+  },
+  "364": {
+    "scientific": "Melanitta stejnegeri",
+    "english": "Stejneger's Scoter",
+    "korean": "검둥오리사촌",
+    "ebird": "whwsco1"
+  },
+  "365": {
+    "scientific": "Chlidonias leucopterus",
+    "english": "White-winged Tern",
+    "korean": "흰죽지제비갈매기",
+    "ebird": "whwter"
+  },
+  "366": {
+    "scientific": "Poecile montanus",
+    "english": "Willow Tit",
+    "korean": "북방쇠박새",
+    "ebird": "wiltit1"
+  },
+  "367": {
+    "scientific": "Troglodytes troglodytes",
+    "english": "Eurasian Wren",
+    "korean": "굴뚝새",
+    "ebird": "winwre4"
+  },
+  "368": {
+    "scientific": "Tringa glareola",
+    "english": "Wood Sandpiper",
+    "korean": "알락도요",
+    "ebird": "woosan"
+  },
+  "369": {
+    "scientific": "Monticola gularis",
+    "english": "White-throated Rock-Thrush",
+    "korean": "꼬까직박구리",
+    "ebird": "wtrthr1"
+  },
+  "370": {
+    "scientific": "Larus glaucoides",
+    "english": "Iceland Gull",
+    "korean": "작은흰갈매기",
+    "ebird": "y00478"
+  },
+  "371": {
+    "scientific": "Emberiza chrysophrys",
+    "english": "Yellow-browed Bunting",
+    "korean": "노랑눈썹멧새",
+    "ebird": "yebbun1"
+  },
+  "372": {
+    "scientific": "Gavia adamsii",
+    "english": "Yellow-billed Loon",
+    "korean": "흰부리아비",
+    "ebird": "yebloo"
+  },
+  "373": {
+    "scientific": "Periparus venustulus",
+    "english": "Yellow-bellied Tit",
+    "korean": "노랑배진박새",
+    "ebird": "yebtit4"
+  },
+  "374": {
+    "scientific": "Phylloscopus inornatus",
+    "english": "Yellow-browed Warbler",
+    "korean": "노랑눈썹솔새",
+    "ebird": "yebwar3"
+  },
+  "375": {
+    "scientific": "Botaurus sinensis",
+    "english": "Yellow Bittern",
+    "korean": "덤불해오라기",
+    "ebird": "yelbit"
+  },
+  "376": {
+    "scientific": "Emberiza sulphurata",
+    "english": "Yellow Bunting",
+    "korean": "무당새",
+    "ebird": "yelbun1"
+  },
+  "377": {
+    "scientific": "Turnix tanki",
+    "english": "Yellow-legged Buttonquail",
+    "korean": "세가락메추라기",
+    "ebird": "yelbut1"
+  },
+  "378": {
+    "scientific": "Emberiza elegans",
+    "english": "Yellow-throated Bunting",
+    "korean": "노랑턱멧새",
+    "ebird": "yetbun1"
+  },
+  "379": {
+    "scientific": "Cisticola juncidis",
+    "english": "Zitting Cisticola",
+    "korean": "개개비사촌",
+    "ebird": "zitcis1"
+  },
+  "380": {
+    "scientific": "Phasianus colchicus",
+    "english": "Ring-necked Pheasant",
+    "korean": "꿩",
+    "ebird": "rinphe1"
+  },
+  "381": {
+    "scientific": "Anas crecca",
+    "english": "Green-winged Teal",
+    "korean": "쇠오리",
+    "ebird": "gnwtea"
+  },
+  "382": {
+    "scientific": "Galerida cristata",
+    "english": "Crested Lark",
+    "korean": "뿔종다리",
+    "ebird": "crelar1"
+  },
+  "383": {
+    "scientific": "Emberiza spodocephala",
+    "english": "Black-faced Bunting",
+    "korean": "촉새",
+    "ebird": "bkfbun1"
+  },
+  "384": {
+    "scientific": "Ficedula narcissina",
+    "english": "Narcissus Flycatcher",
+    "korean": "황금새",
+    "ebird": "narfly2"
+  },
+  "385": {
+    "scientific": "Larvivora akahige",
+    "english": "Japanese Robin",
+    "korean": "붉은가슴울새",
+    "ebird": "japrob2"
+  },
+  "386": {
+    "scientific": "Lanius sphenocercus",
+    "english": "Chinese Gray Shrike",
+    "korean": "물때까치",
+    "ebird": "chgshr1"
+  }
+}

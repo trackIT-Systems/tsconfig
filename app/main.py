@@ -957,6 +957,7 @@ async def home(request: Request, config_group: str | None = None):
             "config_loader": config_loader,
             "available_services": available_services,
             "audioprotopnet_enabled": config_loader.is_feature_enabled("audioprotopnet"),
+            "koreabird_enabled": config_loader.is_feature_enabled("koreabird"),
             "mapbox_token": config_loader.get_mapbox_token(),
         },
     )

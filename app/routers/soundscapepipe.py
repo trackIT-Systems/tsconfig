@@ -175,9 +175,9 @@ def _load_model_files_config() -> dict[str, Any]:
     config_file = Path(__file__).parent.parent / "configs" / "model_files.yml"
     try:
         with open(config_file, "r") as f:
-            return yaml.safe_load(f) or {"birdedge": [], "yolobat": [], "audioprotopnet": []}
+            return yaml.safe_load(f) or {"birdedge": [], "yolobat": [], "audioprotopnet": [], "koreabird": []}
     except FileNotFoundError:
-        return {"birdedge": [], "yolobat": [], "audioprotopnet": []}
+        return {"birdedge": [], "yolobat": [], "audioprotopnet": [], "koreabird": []}
     except (OSError, ValueError, yaml.YAMLError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model files config: {e!s}")
 
@@ -465,7 +465,7 @@ async def get_model_files() -> dict[str, list[str]]:
         return _load_model_files_config()
 
     # Tracker mode: scan filesystem for model files
-    model_files = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
+    model_files = {"birdedge": [], "yolobat": [], "audioprotopnet": [], "koreabird": []}
 
     # Look for BirdEdge models (only in subfolders, not root models directory)
     birdedge_paths = [str(OPERATOR_HOME / "pybirdedge/birdedge/models"), "/opt/pybirdedge/models"]
@@ -501,6 +501,16 @@ async def get_model_files() -> dict[str, list[str]]:
                 for file in files:
                     if file.endswith(".onnx"):
                         model_files["audioprotopnet"].append(os.path.join(root, file))
+
+    # Look for Korean bird models (every version is <version>/student_convstft.onnx)
+    koreabird_paths = [str(OPERATOR_HOME / "koreabird"), "/opt/koreabird"]
+
+    for base_path in koreabird_paths:
+        if os.path.exists(base_path):
+            for root, dirs, files in os.walk(base_path):
+                for file in files:
+                    if file.endswith(".onnx"):
+                        model_files["koreabird"].append(os.path.join(root, file))
 
     return model_files
 
@@ -544,7 +554,7 @@ async def get_species() -> dict[str, Any]:
 
 def _load_species_data() -> dict[str, Any]:
     """Load the species lists of all detection models (blocking file reads)."""
-    species_data = {"birdedge": [], "yolobat": [], "audioprotopnet": []}
+    species_data = {"birdedge": [], "yolobat": [], "audioprotopnet": [], "koreabird": []}
 
     # Load BirdEdge species with multi-language support
     base_paths = [str(OPERATOR_HOME / "pybirdedge/birdedge/etc") + "/", "/opt/pybirdedge/etc/"]
@@ -707,6 +717,38 @@ def _load_species_data() -> dict[str, Any]:
             species_data["audioprotopnet"] = sorted(audioprotopnet_species_list, key=lambda x: x["scientific"])
     except (OSError, json.JSONDecodeError):
         species_data["audioprotopnet"] = []
+
+    # Load the Korean bird species (scientific, English and Korean name, eBird code)
+    try:
+        koreabird_species_path = os.path.join(os.path.dirname(__file__), "..", "data", "koreabird_species.json")
+        if os.path.exists(koreabird_species_path):
+            with open(koreabird_species_path, "r", encoding="utf-8") as f:
+                koreabird_species_mapping = json.load(f)
+
+            koreabird_species_list = []
+            for data in koreabird_species_mapping.values():
+                scientific = data.get("scientific", "")
+                english = data.get("english", "")
+                korean = data.get("korean", "")
+                ebird = data.get("ebird", "")
+
+                species_entry = {
+                    "scientific": scientific,
+                    "english": english,
+                    "german": "",
+                    "korean": korean,
+                    "ebird": ebird,
+                    "display": f"{scientific}"
+                    + (f" ({english})" if english else "")
+                    + (f" / {korean}" if korean else "")
+                    + (f" [{ebird}]" if ebird else ""),
+                    "searchable": " ".join(filter(None, [scientific, english, korean, ebird])).lower(),
+                }
+                koreabird_species_list.append(species_entry)
+
+            species_data["koreabird"] = sorted(koreabird_species_list, key=lambda x: x["scientific"])
+    except (OSError, json.JSONDecodeError):
+        species_data["koreabird"] = []
 
     return species_data
 

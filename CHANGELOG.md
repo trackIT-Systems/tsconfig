@@ -40,6 +40,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 - `GET /api/systemd/logs/{service}` takes `follow=false` (a bounded plain-text answer, no stream) and `lines` (1 to 5000, default 200)
 - BLE config upload takes optional `mtime`, `force` and `encoding` (`base64` or `utf-8`)
 - Verification of file modification times (`mtime`) and filesystem synchronization (`sync`) on configuration updates
+- Korean bird detector (`koreabird`, soundscapepipe's Korean bird classifier) on the Soundscapepipe page, behind the feature flag `koreabird`: class threshold (default 0.55), model from `/opt/koreabird/<version>/student_convstft.onnx` (default `v3_edge3_effb0_tBN3`), channel strategy and tasks. Its 387 species (`app/data/koreabird_species.json`, with English and Korean name and eBird code) can be used in species groups and are searchable by eBird code
 
 ### Changed
 
