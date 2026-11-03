@@ -8,7 +8,7 @@ import { serverModeManager } from '../managers/serverModeManager.js';
 
 /**
  * Trigger deployment for a configuration group
- * @param {string} configGroupId - The ID of the configuration group to deploy
+ * @param {string} configGroupId - The configuration group to deploy, as "{project}/{group}" key
  * @returns {Promise<Object>} Deployment result with station details
  * @throws {Error} If deployment fails
  */

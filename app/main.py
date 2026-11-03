@@ -71,7 +71,7 @@ BASE_URL = os.environ.get("TSCONFIG_BASE_URL", "/").rstrip("/")
 if not BASE_URL:
     BASE_URL = ""
 
-# In server mode, we use query parameter routing: /tsconfig/?config_group={groupname}
+# In server mode, we use query parameter routing: /tsconfig/?project={project}&config_group={groupname}
 # In tracker mode, we use the BASE_URL directly without config_group parameter
 
 # OpenAPI tags metadata for better API documentation organization
@@ -262,12 +262,13 @@ Get server mode status and available config groups.
 
 Returns:
 - `enabled`: Whether server mode is active (default is tracker mode)
-- `config_groups`: List of available config groups (empty in tracker mode)
+- `config_groups`: List of available config groups as `{project}/{group}` keys (empty in tracker mode),
+  limited to one project if `project` is given
 - `config_root`: Root directory for config groups (null in tracker mode)
     """,
     response_description="Server mode configuration information",
 )
-async def get_server_mode():
+async def get_server_mode(project: str | None = None):
     """Get server mode configuration."""
     is_server_mode = config_loader.is_server_mode()
     config_root = config_loader.get_config_root()
@@ -283,29 +284,32 @@ async def get_server_mode():
                 all_dirs = [item.name for item in config_root.iterdir() if item.is_dir()]
                 debug_info["all_subdirectories"] = sorted(all_dirs)
 
-                # Check each directory for latest subdirectory and config files
+                # Check each {project}/{group} directory for latest subdirectory and config files
                 dir_details = {}
-                for item in config_root.iterdir():
+                project_dirs = [item for item in config_root.iterdir() if item.is_dir()]
+                group_dirs = [item for project_dir in project_dirs for item in project_dir.iterdir()]
+                for item in group_dirs:
                     if item.is_dir():
+                        key = f"{item.parent.name}/{item.name}"
                         latest_dir = item / "latest"
-                        dir_details[item.name] = {
+                        dir_details[key] = {
                             "has_latest": latest_dir.exists() and latest_dir.is_dir(),
                             "config_files": [],
                         }
                         if latest_dir.exists() and latest_dir.is_dir():
                             if (latest_dir / "radiotracking.ini").exists():
-                                dir_details[item.name]["config_files"].append("radiotracking.ini")
+                                dir_details[key]["config_files"].append("radiotracking.ini")
                             if (latest_dir / "schedule.yml").exists():
-                                dir_details[item.name]["config_files"].append("schedule.yml")
+                                dir_details[key]["config_files"].append("schedule.yml")
                             if (latest_dir / "soundscapepipe.yml").exists():
-                                dir_details[item.name]["config_files"].append("soundscapepipe.yml")
+                                dir_details[key]["config_files"].append("soundscapepipe.yml")
                 debug_info["directory_details"] = dir_details
             except OSError as e:
                 debug_info["error"] = str(e)
 
     return {
         "enabled": is_server_mode,
-        "config_groups": config_loader.list_config_groups() if is_server_mode else [],
+        "config_groups": config_loader.list_config_groups(project or None) if is_server_mode else [],
         "config_root": str(config_root) if is_server_mode and config_root else None,
         "oidc_enabled": is_server_mode and oidc_config.is_configured(),
         "debug": debug_info if is_server_mode else None,
@@ -924,24 +928,30 @@ async def _get_available_services_for_template(config_group: str | None = None) 
     include_in_schema=False,
     summary="Web Interface Home Page",
 )
-async def home(request: Request, config_group: str | None = None):
+async def home(request: Request, config_group: str | None = None, project: str | None = None):
     """Render the main configuration page with status integration.
 
-    In server mode, accepts optional config_group query parameter to display
-    configuration for a specific group.
+    In server mode, accepts optional project and config_group query parameters to display
+    configuration for a specific group. Without a project, no group is opened and the
+    page lists all groups by project.
     """
     # In server mode, validate config_group if provided
     if config_loader.is_server_mode() and config_group:
-        available_groups = config_loader.list_config_groups()
-        if config_group not in available_groups:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "error": f"Config group '{config_group}' not found",
-                    "requested": config_group,
-                    "available": available_groups,
-                },
-            )
+        if not project:
+            # A group id alone is ambiguous across projects; fall back to the group list
+            config_group = None
+        else:
+            config_group = f"{project}/{config_group}"
+            available_groups = config_loader.list_config_groups(project)
+            if config_group not in available_groups:
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "error": f"Config group '{config_group}' not found",
+                        "requested": config_group,
+                        "available": available_groups,
+                    },
+                )
 
     # Get available services for conditional rendering
     available_services = await _get_available_services_for_template(config_group)

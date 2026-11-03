@@ -88,7 +88,7 @@ class TestVersionedConfigFilesIncludesUserconf:
         the copy-forward list lived separately (and had drifted) in
         app/routers/base.py and app/routers/authorized_keys.py.
         """
-        group_root = tmp_path / "mygroup"
+        group_root = tmp_path / "p1" / "mygroup"
         old_versioned_dir = group_root / "20200101_000000"
         old_versioned_dir.mkdir(parents=True)
         (old_versioned_dir / "userconf.txt").write_text(VALID_HASH)
@@ -106,7 +106,7 @@ class TestVersionedConfigFilesIncludesUserconf:
                     "button_delay": "00:05",
                     "schedule": [],
                 },
-                config_group="mygroup",
+                config_group="p1/mygroup",
             )
 
         new_latest = group_root / "latest"

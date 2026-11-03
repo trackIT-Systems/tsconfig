@@ -1,6 +1,7 @@
 """Configuration loader for tsOS main configuration."""
 
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,11 @@ VERSIONED_CONFIG_FILES: list[str] = [
     "userconf.txt",
     "hotspot.nmconnection",
 ]
+
+# One path segment of a server-mode config group key: a project id or a group id
+# (ecohub ids are [0-9a-z]+; default groups use underscores, e.g. default_audio).
+CONFIG_GROUP_SEGMENT_PATTERN = r"^[0-9A-Za-z_-]+$"
+_CONFIG_GROUP_SEGMENT = re.compile(CONFIG_GROUP_SEGMENT_PATTERN)
 
 
 # The tsconfig.yml shipped with the code. Devices read a copy made when the
@@ -130,11 +136,31 @@ class ConfigLoader:
             return Path(config_root)
         return None
 
-    def list_config_groups(self) -> list[str]:
-        """List available config groups in server mode.
+    def resolve_config_group_root(self, config_group: str) -> Path | None:
+        """Resolve a server-mode config group key ("{project}/{group}") to its group directory.
+
+        Returns None in tracker mode (default), without a config root, or if the key is not
+        exactly two plain path segments.
+        """
+        if not self.is_server_mode():
+            return None
+
+        config_root = self.get_config_root()
+        if not config_root:
+            return None
+
+        parts = config_group.split("/")
+        if len(parts) != 2 or not all(_CONFIG_GROUP_SEGMENT.fullmatch(part) for part in parts):
+            return None
+
+        return config_root / parts[0] / parts[1]
+
+    def list_config_groups(self, project: str | None = None) -> list[str]:
+        """List available config groups in server mode as "{project}/{group}" keys.
 
         Returns empty list in tracker mode (default).
-        Config groups must have a 'latest' subdirectory.
+        Config groups live in {config_root}/{project}/{group}/ and must have a 'latest'
+        subdirectory with config files. If project is given, only that project's groups are listed.
         """
         if not self.is_server_mode():
             return []
@@ -145,10 +171,13 @@ class ConfigLoader:
 
         # Return only directories that contain a 'latest' subdirectory with config files
         config_groups = []
-        for item in config_root.iterdir():
-            if item.is_dir():
-                latest_dir = item / "latest"
-                if latest_dir.exists() and latest_dir.is_dir():
+        for project_dir in config_root.iterdir():
+            if not project_dir.is_dir() or (project is not None and project_dir.name != project):
+                continue
+            for item in project_dir.iterdir():
+                key = f"{project_dir.name}/{item.name}"
+                latest_dir = self.get_config_group_dir(key) if item.is_dir() else None
+                if latest_dir:
                     # Check if latest directory contains any config files
                     has_config = (
                         (latest_dir / "radiotracking.ini").exists()
@@ -156,24 +185,21 @@ class ConfigLoader:
                         or (latest_dir / "soundscapepipe.yml").exists()
                     )
                     if has_config:
-                        config_groups.append(item.name)
+                        config_groups.append(key)
 
         return sorted(config_groups)
 
     def get_config_group_dir(self, config_group: str) -> Path | None:
-        """Get the config directory for a specific config group.
+        """Get the config directory for a specific config group ("{project}/{group}").
 
         Returns the 'latest' subdirectory within the config group.
         Returns None in tracker mode (default).
         """
-        if not self.is_server_mode():
+        group_root = self.resolve_config_group_root(config_group)
+        if not group_root:
             return None
 
-        config_root = self.get_config_root()
-        if not config_root:
-            return None
-
-        group_dir = config_root / config_group / "latest"
+        group_dir = group_root / "latest"
         if group_dir.exists() and group_dir.is_dir():
             return group_dir
 
@@ -183,13 +209,13 @@ class ConfigLoader:
         """Create a new timestamped config directory and update the 'latest' symlink.
 
         Args:
-            config_group: The name of the config group
+            config_group: The config group key ("{project}/{group}")
 
         Returns:
             Path to the newly created versioned directory
 
         Raises:
-            ValueError: If not in server mode or config_root is not set
+            ValueError: If not in server mode, config_root is not set or the config group key is invalid
             OSError: If directory creation or symlink update fails
         """
         if not self.is_server_mode():
@@ -199,8 +225,11 @@ class ConfigLoader:
         if not config_root:
             raise ValueError("TSCONFIG_CONFIG_ROOT environment variable is not set")
 
+        group_root = self.resolve_config_group_root(config_group)
+        if not group_root:
+            raise ValueError(f"Invalid config group '{config_group}', expected '<project>/<group>'")
+
         # Create the group directory if it doesn't exist
-        group_root = config_root / config_group
         group_root.mkdir(parents=True, exist_ok=True)
 
         # Create timestamped directory (format: YYYYMMDD_HHMMSS)

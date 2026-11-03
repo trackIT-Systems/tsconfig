@@ -2,6 +2,31 @@
 
 {% block content %}
 <div>
+    <!-- Config Group List (Server Mode, no config group selected) -->
+    <template x-if="initialized && serverMode && !currentConfigGroup">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-folder me-2"></i>Select a config group
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-0" x-show="configGroupsByProject.length === 0">No config groups available.</p>
+                <template x-for="entry in configGroupsByProject" :key="entry.project">
+                    <div class="mb-3">
+                        <h6 x-text="entry.project"></h6>
+                        <div class="list-group">
+                            <template x-for="group in entry.groups" :key="group">
+                                <a class="list-group-item list-group-item-action"
+                                   href="#"
+                                   @click.prevent="window.serverModeManager.setCurrentConfigGroup(group)"
+                                   x-text="group.split('/')[1]"></a>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
     <!-- Status Section - hidden in server mode, only render after initialization -->
     <template x-if="initialized && activeConfig === 'status' && !serverMode">
         <div>

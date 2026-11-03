@@ -12,15 +12,22 @@
                 <span x-text="currentConfigGroup || 'Select Config'"></span>
             </button>
             <ul class="dropdown-menu" aria-labelledby="configGroupDropdown">
-                <template x-for="group in configGroups" :key="group">
+                <template x-for="entry in configGroupsByProject" :key="entry.project">
                     <li>
-                        <a class="dropdown-item" 
-                           href="#" 
-                           @click.prevent="window.serverModeManager.setCurrentConfigGroup(group)"
-                           :class="{ 'active': group === currentConfigGroup }">
-                            <i class="fas fa-check me-2" x-show="group === currentConfigGroup"></i>
-                            <span x-text="group"></span>
-                        </a>
+                        <h6 class="dropdown-header" x-text="entry.project"></h6>
+                        <ul class="list-unstyled">
+                            <template x-for="group in entry.groups" :key="group">
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="#" 
+                                       @click.prevent="window.serverModeManager.setCurrentConfigGroup(group)"
+                                       :class="{ 'active': group === currentConfigGroup }">
+                                        <i class="fas fa-check me-2" x-show="group === currentConfigGroup"></i>
+                                        <span x-text="group.split('/')[1]"></span>
+                                    </a>
+                                </li>
+                            </template>
+                        </ul>
                     </li>
                 </template>
             </ul>

@@ -6,15 +6,18 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Path, Request
 
+from app.config_loader import CONFIG_GROUP_SEGMENT_PATTERN
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/deploy", tags=["deployment"])
 
 
-@router.post("/{config_group_id}", summary="Deploy configuration to tracker stations")
+@router.post("/{project_id}/{config_group_id}", summary="Deploy configuration to tracker stations")
 async def deploy_config(
-    request: Request, config_group_id: str = Path(..., description="Configuration group ID to deploy")
+    request: Request,
+    project_id: str = Path(..., pattern=CONFIG_GROUP_SEGMENT_PATTERN, description="Project owning the config group"),
+    config_group_id: str = Path(..., pattern=CONFIG_GROUP_SEGMENT_PATTERN, description="Configuration group ID"),
 ) -> dict[str, Any]:
     """Proxy endpoint to trigger deployment of a configuration group to tracker stations.
 
@@ -22,6 +25,7 @@ async def deploy_config(
     which is now behind a firewall and only accessible from localhost.
 
     Args:
+        project_id: The ID of the project owning the configuration group
         config_group_id: The ID of the configuration group to deploy
 
     Returns:
@@ -34,9 +38,9 @@ async def deploy_config(
     deployment_api_url = os.environ.get("DEPLOYMENT_API_URL", "http://localhost:8000")
 
     # Construct the full deployment endpoint URL
-    deploy_url = f"{deployment_api_url}/api/config-groups/{config_group_id}/deploy"
+    deploy_url = f"{deployment_api_url}/api/projects/{project_id}/config-groups/{config_group_id}/deploy"
 
-    logger.info("Deployment request for config group: %s", config_group_id)
+    logger.info("Deployment request for config group: %s/%s", project_id, config_group_id)
     logger.debug("Deployment API URL: %s", deploy_url)
 
     # Extract authentication token from the incoming request to forward it
@@ -69,7 +73,7 @@ async def deploy_config(
             if response.status_code == 404:
                 error_data = response.json() if response.content else {}
                 error_message = error_data.get(
-                    "error", f"Config group '{config_group_id}' not found in deployment system"
+                    "error", f"Config group '{project_id}/{config_group_id}' not found in deployment system"
                 )
                 logger.error("Deployment API 404: %s", error_data)
                 raise HTTPException(status_code=404, detail=error_message)

@@ -55,7 +55,10 @@ let serverModeInfo = null;
  */
 export function getServerModeInfo() {
     if (!serverModeInfo) {
-        serverModeInfo = fetch(apiUrl('/api/server-mode'))
+        // A page opened for one project (?project=<pid>) lists only that project's config groups
+        const project = new URLSearchParams(window.location.search).get('project');
+        const query = project ? `?project=${encodeURIComponent(project)}` : '';
+        serverModeInfo = fetch(apiUrl(`/api/server-mode${query}`))
             .then(response => (response.ok ? response.json() : null))
             .catch(error => {
                 console.error('Failed to fetch server mode configuration:', error);

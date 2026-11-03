@@ -10,7 +10,8 @@ export function configManager() {
         servicesLoaded: false,  // Track if services have been loaded
         hostname: 'Loading...',  // Dynamic hostname loaded via AJAX
         serverMode: false,  // Server mode state
-        configGroups: [],  // Available config groups in server mode
+        configGroups: [],  // Available config groups in server mode ("{project}/{group}" keys)
+        configGroupsByProject: [],  // Available config groups in server mode, grouped by project
         currentConfigGroup: null,  // Current config group in server mode
         initialized: false,  // Track if initialization is complete
 
@@ -38,6 +39,7 @@ export function configManager() {
             await serverModeManager.initialize();
             this.serverMode = serverModeManager.isEnabled();
             this.configGroups = serverModeManager.getConfigGroups();
+            this.configGroupsByProject = serverModeManager.getConfigGroupsByProject();
             this.currentConfigGroup = serverModeManager.getCurrentConfigGroup();
             
             // Load available services and hostname
@@ -95,9 +97,11 @@ export function configManager() {
                 if (this.serverMode && value && value !== oldValue && oldValue !== undefined) {
                     serverModeManager.currentConfigGroup = value;
                     
-                    // Update URL query parameter to reflect new config group
+                    // Update URL query parameters to reflect new config group
+                    const [project, group] = value.split('/');
                     const urlParams = new URLSearchParams(window.location.search);
-                    urlParams.set('config_group', value);
+                    urlParams.set('project', project);
+                    urlParams.set('config_group', group);
                     const newUrl = `${window.location.pathname}?${urlParams.toString()}${window.location.hash}`;
                     window.history.replaceState({}, '', newUrl);
                     
