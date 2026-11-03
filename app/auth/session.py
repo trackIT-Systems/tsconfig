@@ -1,26 +1,33 @@
 """Operator sessions for tracker mode: signed cookie, login backoff, and the
 "trusted local request" rule.
 
-Everything here is in-memory by design: the signing key is generated when the
-process starts and never written to disk, so a tsconfig restart or reboot logs
-everybody out (which also invalidates sessions after a config bundle changed
-the `pi` password, since that takes effect at reboot).
+The signing key never reaches persistent storage: it is kept in systemd's
+RuntimeDirectory= (/run/tsconfig, tmpfs, readable by pi only), so sessions
+survive a tsconfig restart, but a reboot logs everybody out (which also
+invalidates sessions after a config bundle changed the `pi` password, since
+that takes effect at reboot). Without a runtime directory (tests, the BLE
+gateway) the key lives in memory only. Everything else here is in memory.
 """
 
 import base64
 import binascii
 import hmac
+import os
 import re
 import secrets
 import time
 from dataclasses import dataclass, field
 from hashlib import sha256
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
 from app.identity import OPERATOR_USER, STAFF_USER
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 SESSION_COOKIE = "tsconfig_session"
 # Issued instead of SESSION_COOKIE when the login arrived over HTTPS. `Secure`
@@ -32,7 +39,39 @@ SESSION_TTL_SECONDS = 8 * 60 * 60
 # The cookie is re-issued (sliding expiry) when it is older than this.
 SESSION_REFRESH_AFTER_SECONDS = 5 * 60
 
-_signing_key = secrets.token_bytes(32)
+SIGNING_KEY_FILE = "session.key"
+SIGNING_KEY_BYTES = 32
+
+
+def load_signing_key(runtime_dir: str | None) -> bytes:
+    """The key in `runtime_dir`, or a new one written there; in memory only without it."""
+    if not runtime_dir:
+        return secrets.token_bytes(SIGNING_KEY_BYTES)
+    path = Path(runtime_dir) / SIGNING_KEY_FILE
+    try:
+        key = path.read_bytes()
+        if len(key) == SIGNING_KEY_BYTES:
+            return key
+        logger.warning("Ignoring %s: not a signing key", path)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        logger.warning("Cannot read %s, sessions end at restart: %s", path, e)
+        return secrets.token_bytes(SIGNING_KEY_BYTES)
+    key = secrets.token_bytes(SIGNING_KEY_BYTES)
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.unlink(missing_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(key)
+        tmp.replace(path)
+    except OSError as e:
+        logger.warning("Cannot write %s, sessions end at restart: %s", path, e)
+    return key
+
+
+_signing_key = load_signing_key(os.environ.get("RUNTIME_DIRECTORY"))
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1"})
 # Headers Caddy (the only reverse proxy in front of tsconfig) always adds to

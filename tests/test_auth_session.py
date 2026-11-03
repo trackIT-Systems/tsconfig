@@ -13,6 +13,7 @@ from app.auth.session import (
     CredentialCache,
     create_session_token,
     is_trusted_local,
+    load_signing_key,
     parse_basic_auth,
     sanitize_next,
     session_needs_refresh,
@@ -50,6 +51,34 @@ class TestSessionToken:
         now = time.time()
         assert not session_needs_refresh(int(now) - 10, now=now)
         assert session_needs_refresh(int(now) - session.SESSION_REFRESH_AFTER_SECONDS - 10, now=now)
+
+
+class TestSigningKey:
+    def test_without_runtime_directory_every_start_has_a_new_key(self, tmp_path):
+        assert load_signing_key(None) != load_signing_key(None)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_restart_keeps_the_key_of_the_runtime_directory(self, tmp_path):
+        key = load_signing_key(str(tmp_path))
+        assert load_signing_key(str(tmp_path)) == key
+        path = tmp_path / session.SIGNING_KEY_FILE
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert sorted(p.name for p in tmp_path.iterdir()) == [session.SIGNING_KEY_FILE]
+
+    def test_session_survives_a_restart(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(session, "_signing_key", load_signing_key(str(tmp_path)))
+        token = create_session_token()
+        monkeypatch.setattr(session, "_signing_key", load_signing_key(str(tmp_path)))
+        assert verify_session_token(token) is not None
+
+    def test_a_broken_key_file_is_replaced(self, tmp_path):
+        (tmp_path / session.SIGNING_KEY_FILE).write_bytes(b"short")
+        key = load_signing_key(str(tmp_path))
+        assert len(key) == session.SIGNING_KEY_BYTES
+        assert (tmp_path / session.SIGNING_KEY_FILE).read_bytes() == key
+
+    def test_unwritable_runtime_directory_still_gives_a_key(self, tmp_path):
+        assert len(load_signing_key(str(tmp_path / "missing"))) == session.SIGNING_KEY_BYTES
 
 
 def _conn(host, headers=None):
