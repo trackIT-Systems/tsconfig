@@ -22,6 +22,7 @@ VERSIONED_CONFIG_FILES: list[str] = [
     "authorized_keys",
     "userconf.txt",
     "hotspot.nmconnection",
+    "tslocation.yml",
 ]
 
 # One path segment of a server-mode config group key: a project id or a group id

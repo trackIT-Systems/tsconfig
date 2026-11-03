@@ -28,6 +28,7 @@ from app.configs.mosquitto_conf import MosquittoConfConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.configs.tslocation import TslocationConfig
 from app.configs.tsupdate import TsupdateConfig
 from app.configs.userconf import UserconfConfig
 from app.configs.wireguard import WireguardConfig
@@ -51,6 +52,7 @@ CONFIG_TYPES: dict[str, dict[str, Any]] = {
     "mosquitto_conf": {"basename": "server.conf", "cls": MosquittoConfConfig, "kwargs": {}},
     "geolocation": {"basename": "geolocation", "cls": GeolocationConfig, "kwargs": {}},
     "tsupdate": {"basename": "tsupdate.yml", "cls": TsupdateConfig, "kwargs": {}},
+    "tslocation": {"basename": "tslocation.yml", "cls": TslocationConfig, "kwargs": {}},
     "userconf": {"basename": "userconf.txt", "cls": UserconfConfig, "kwargs": {}},
     "hotspot": {"basename": "hotspot.nmconnection", "cls": HotspotConfig, "kwargs": {}},
 }
@@ -81,6 +83,7 @@ SERVICE_MAPPING: dict[str, str] = {
     "mosquitto_cert": "mosquitto",
     "mosquitto_conf": "mosquitto",
     "tsupdate": "tsupdate",
+    "tslocation": "tslocation",
 }
 
 

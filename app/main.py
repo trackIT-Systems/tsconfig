@@ -26,6 +26,7 @@ from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
 from app.configs.tsupdate import TsupdateConfig
+from app.location import server as location_server
 from app.logging_config import get_logger, setup_logging
 from app.proxy_headers import ProxyHeadersMiddleware
 from app.routers import (
@@ -36,6 +37,7 @@ from app.routers import (
     radiotracking,
     schedule,
     soundscapepipe,
+    tslocation,
     tsupdate,
     userconf,
 )
@@ -117,6 +119,10 @@ tags_metadata = [
         "description": "Tsupdate daemon configuration for automatic system updates.",
     },
     {
+        "name": "tslocation",
+        "description": "Location daemon (tslocationd) configuration: mode, fine fixes, tracks.",
+    },
+    {
         "name": "userconf",
         "description": "pi account password (userconf.txt), applied by userconfig.service on next boot.",
     },
@@ -187,6 +193,7 @@ app.include_router(soundscapepipe.router)
 app.include_router(authorized_keys.router)
 app.include_router(configs.router)
 app.include_router(tsupdate.router)
+app.include_router(tslocation.router)
 app.include_router(userconf.router)
 app.include_router(deployment.router)  # Deployment proxy (for server mode)
 
@@ -342,6 +349,61 @@ async def get_geolocation():
     except (FileNotFoundError, ValueError) as e:
         logger.debug("Geolocation not available: %s", e)
         return None
+
+
+LOCATION_FILE = Path("/run/tslocation/location.json")
+
+
+@app.get(
+    "/api/location",
+    tags=["system"],
+    summary="Get the measured and effective location",
+    description="""
+The location daemon's view of the tracker's position, `/run/tslocation/location.json`:
+
+- `mode`: `off`, `stationary` or `mobile`
+- `state`: `unknown`, `confirmed`, `deviating`, `proposed`, `tracking` or `no_fix`
+- `effective`: the position other services use (`lat`, `lon`, `alt`, `accuracy`, `source`: `reference` or `gnss`)
+- `reference`: the configured position (`/boot/firmware/geolocation`), or null
+- `fix`: the latest GNSS fix (`time`, `lat`, `lon`, `alt`, `accuracy`, `sats`, `hdop`), or null
+- `deviation_m`: distance of the fix from the reference in metres, or null
+- `proposed`: the proposed reference in state `proposed`, otherwise null
+
+Returns null if the location daemon (tslocation.service) has not written the file.
+    """,
+    response_description="Location information or null if not available",
+)
+async def get_location():
+    try:
+        return json.loads(LOCATION_FILE.read_text())
+    except (OSError, ValueError) as e:
+        logger.debug("Location not available: %s", e)
+        return None
+
+
+@app.post(
+    "/api/location/fix",
+    tags=["system"],
+    summary="Make a GNSS fix now",
+    description="""
+Asks the location daemon for a fine fix now, over its control socket (`tslocation fix --no-wait`),
+instead of waiting until one is due. Only in `stationary` mode; while it runs, `GET /api/location`
+has `fixing` true. Tracker mode only.
+
+Errors: 409 in another mode, 503 if the location daemon is not running.
+    """,
+    status_code=202,
+)
+async def request_location_fix():
+    if config_loader.is_server_mode():
+        return JSONResponse(status_code=403, content={"detail": "Not available in server mode"})
+    try:
+        return await location_server.request(location_server.SOCKET, "fix", {"wait": False}, timeout=10)
+    except location_server.RequestError as e:
+        return JSONResponse(status_code=409, content={"detail": str(e)})
+    except (OSError, TimeoutError) as e:
+        logger.debug("Cannot reach tslocationd: %r", e)
+        return JSONResponse(status_code=503, content={"detail": "The location daemon is not running"})
 
 
 def _beautify_sensor_name(name: str) -> str:

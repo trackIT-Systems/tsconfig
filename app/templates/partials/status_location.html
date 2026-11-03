@@ -2,17 +2,103 @@
             <div class="row mb-4 mt-4" x-data="geolocationMap(() => systemInfo?.os_release?.NAME)">
                 <div class="col">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-map-marker-alt me-2"></i>Location
                             </h5>
+                            <!-- Measure with GPS: switches the receiver on (stationary mode) -->
+                            <template x-if="location?.mode === 'stationary'">
+                                <button class="btn btn-sm"
+                                        :class="fixRunning() ? 'btn-primary' : 'btn-outline-primary'"
+                                        @click="requestFix()"
+                                        :disabled="fixRunning()"
+                                        title="Switches the GPS on now and measures the position. Takes up to a few minutes and some power.">
+                                    <i class="fas fa-satellite-dish me-1" :class="{ 'fa-beat-fade': fixRunning() }"></i>
+                                    <span x-text="fixRunning() ? 'GPS on – measuring…' : 'Measure with GPS'"></span>
+                                </button>
+                            </template>
+                            <!-- Mobile mode: GPS is always on -->
+                            <template x-if="location?.mode === 'mobile'">
+                                <span class="badge bg-primary"><i class="fas fa-satellite-dish fa-beat-fade me-1"></i>GPS on</span>
+                            </template>
                         </div>
                         <!-- Location Info -->
-                        <template x-if="geolocation">
+                        <template x-if="trackerLatLng()">
                             <div id="geolocationMap" class="map-container"></div>
                         </template>
+                        <!-- Measured position (tslocationd), like Time & Date: what is configured, what GPS
+                             measured, and what follows. The map's symbols are the legend, explanations are tooltips -->
+                        <template x-if="location">
+                            <div class="card-body py-2 border-top">
+                                <div class="row">
+                                    <div class="col-lg-4">
+                                        <h6 class="text-muted small mb-1"><i class="fas fa-map-marker-alt me-2" style="color: var(--bs-purple)"></i>Configured</h6>
+                                        <table class="table table-borderless table-sm small mb-0">
+                                            <tbody>
+                                            <tr>
+                                                <td class="fw-bold">Position:</td>
+                                                <td class="text-end" x-text="location.reference ? formatPosition(location.reference) : 'none set'"></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-bold">Mode:</td>
+                                                <td class="text-end">
+                                                    <span :title="modeText()" x-text="modeLabel()"></span>
+                                                    <a href="#settings/location" class="ms-1" title="Change in System Settings"><i class="fas fa-cog"></i></a>
+                                                </td>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <h6 class="text-muted small mb-1"><i class="fas fa-circle me-2" style="color: #7c3aed"></i>GPS Measurement</h6>
+                                        <table class="table table-borderless table-sm small mb-0">
+                                            <tbody>
+                                            <tr>
+                                                <td class="fw-bold">Position:</td>
+                                                <td class="text-end">
+                                                    <span x-show="location.fix" x-text="location.fix ? `${formatPosition(location.fix)} ±${formatDistance(location.fix.accuracy ?? 0)}` : ''"></span>
+                                                    <span class="text-muted" x-show="!location.fix">not measured yet</span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-bold">Measured:</td>
+                                                <td class="text-end">
+                                                    <span x-show="location.fix" :title="location.fix ? formatFixTime(location.fix.time) : ''"
+                                                          x-text="location.fix ? `${formatAgo(location.fix.time)}, ${location.fix.sats ?? '?'} satellites` : ''"></span>
+                                                    <span class="text-muted" x-show="!location.fix">-</span>
+                                                </td>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <h6 class="text-muted small mb-1"><i class="fas fa-balance-scale me-2"></i>Assessment</h6>
+                                        <table class="table table-borderless table-sm small mb-0">
+                                            <tbody>
+                                            <tr>
+                                                <td class="fw-bold">State:</td>
+                                                <td class="text-end">
+                                                    <span class="badge small" :class="stateInfo().cls" :title="stateInfo().text" x-text="stateInfo().label"></span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-bold">Distance:</td>
+                                                <td class="text-end" title="Between the configured position and the GPS measurement"
+                                                    x-text="location.deviation_m !== null ? formatDistance(location.deviation_m) : '-'"></td>
+                                            </tr>
+                                            <tr x-show="location.proposed">
+                                                <td class="fw-bold">Proposed:</td>
+                                                <td class="text-end" title="Several GPS measurements agree on this position; it can be adopted on the server"
+                                                    x-text="location.proposed ? formatPosition(location.proposed) : ''"></td>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                         <!-- No Location -->
-                        <template x-if="!geolocation && !loading">
+                        <template x-if="!trackerLatLng() && !loading">
                             <div class="card-body">
                                 <div class="text-center py-4 text-muted">
                                     <i class="fas fa-map-marker-slash fa-3x mb-3"></i>
@@ -22,7 +108,7 @@
                             </div>
                         </template>
                         <!-- Loading -->
-                        <template x-if="!geolocation && loading">
+                        <template x-if="!trackerLatLng() && loading">
                             <div class="card-body">
                                 <div class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">

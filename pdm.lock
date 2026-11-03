@@ -5,7 +5,7 @@
 groups = ["default", "ble", "ble-client", "dev", "server", "testclient", "tracker"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:dbf34dba656a0a7cb57deae90a65f615302e692897e64d0e4bc59aad13566d2b"
+content_hash = "sha256:c939bfb36fb54aa01650799e2b39de6f1d71c64507e60f0a8b0fa33d19316f2a"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -1171,6 +1171,17 @@ groups = ["default"]
 files = [
     {file = "python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23"},
     {file = "python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e"},
+]
+
+[[package]]
+name = "pytimeparse"
+version = "1.1.10"
+requires_python = ">=3.11"
+summary = "Time expression parser"
+groups = ["default"]
+files = [
+    {file = "pytimeparse-1.1.10-py3-none-any.whl", hash = "sha256:a9f9117a02eaa32efd268e70af29bc3ec1e84f473d3edef6d9809b36793b1c5d"},
+    {file = "pytimeparse-1.1.10.tar.gz", hash = "sha256:ecf0ee613a72cb0b1d3d5404bd398a64266576fc36ccf3149178af6f2ec6f736"},
 ]
 
 [[package]]

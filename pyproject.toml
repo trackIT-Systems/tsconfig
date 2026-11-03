@@ -20,16 +20,22 @@ dependencies = [
     "python-multipart>=0.0.20",
     "pyyaml>=6.0.2",
     "httpx>=0.28.1",
+    # Durations in tslocation.yml ("7d"), validated by the location daemon and by
+    # tsconfig's Location settings in both modes
+    "pytimeparse>=1.1.5",
 ]
 requires-python = ">=3.12"
 
 [project.scripts]
 tsconfig = "app.cli:main"
 tstelemetry = "app.telemetry.daemon:main"
+tslocationd = "app.location.daemon:main"
+tslocation = "app.location.cli:main"
 
 [project.optional-dependencies]
 # Tracker mode: system status and services (psutil), the web shell
-# (websockets), and the telemetry daemon tstelemetry (cbor2, paho-mqtt)
+# (websockets), and the telemetry and location daemons tstelemetry and
+# tslocationd (cbor2, paho-mqtt)
 tracker = [
     "psutil>=7.0.0",
     "websockets>=15.0.1",

@@ -28,6 +28,7 @@ from app.configs.mosquitto_conf import MosquittoConfConfig
 from app.configs.radiotracking import RadioTrackingConfig
 from app.configs.schedule import ScheduleConfig
 from app.configs.soundscapepipe import SoundscapepipeConfig
+from app.configs.tslocation import TslocationConfig
 from app.configs.tsupdate import TsupdateConfig
 from app.configs.wireguard import WireguardConfig
 from app.logging_config import get_logger
@@ -220,12 +221,15 @@ def create_config_instance(filename: str, config_type: str, content_str: str):
         elif config_type == "tsupdate":
             parsed_config = parse_yaml_file(content_str)
             config_instance = TsupdateConfig()
+        elif config_type == "tslocation":
+            parsed_config = parse_yaml_file(content_str)
+            config_instance = TslocationConfig()
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported configuration file: {filename}. "
                 "Supported files are: radiotracking.ini, schedule.yml, soundscapepipe.yml, authorized_keys, "
-                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml",
+                "cmdline.txt, wireguard.conf, server.crt, server.conf, geolocation, tsupdate.yml, tslocation.yml",
             )
 
         return config_instance, parsed_config
@@ -411,6 +415,7 @@ async def upload_config(
     - server.crt - Mosquitto server certificate
     - server.conf - Mosquitto server configuration
     - geolocation - Geolocation file (geoclue format)
+    - tslocation.yml - Location daemon (tslocationd) configuration
 
     The file will be validated and if valid, will replace the existing configuration.
 
@@ -466,6 +471,7 @@ async def upload_config(
         "server.conf": "mosquitto_conf",
         "geolocation": "geolocation",
         "tsupdate.yml": "tsupdate",
+        "tslocation.yml": "tslocation",
     }
 
     config_type = filename_to_type.get(filename_lower)
@@ -977,6 +983,7 @@ async def upload_config_zip(
     - server.crt - Mosquitto server certificate
     - server.conf - Mosquitto server configuration
     - geolocation - Geolocation file (geoclue format)
+    - tslocation.yml - Location daemon (tslocationd) configuration
 
     All files will be validated before any changes are made. If any file fails validation,
     no files will be modified. If all files are valid, they will be saved based on the mode.
@@ -1442,6 +1449,7 @@ async def download_config(
     - server.crt - Mosquitto server certificate
     - server.conf - Mosquitto server configuration
     - geolocation - Geolocation file (geoclue format)
+    - tslocation.yml - Location daemon (tslocationd) configuration
 
     This endpoint is disabled in server mode.
 
@@ -1489,6 +1497,7 @@ async def head_config(
     - server.crt - Mosquitto server certificate
     - server.conf - Mosquitto server configuration
     - geolocation - Geolocation file (geoclue format)
+    - tslocation.yml - Location daemon (tslocationd) configuration
 
     This endpoint is disabled in server mode.
 

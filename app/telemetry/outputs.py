@@ -88,12 +88,15 @@ class MqttOutput:
 
 
 class CsvFiles:
-    """Daily CSV files per collector, with a spool for readings before the clock sync."""
+    """Daily CSV files per collector, with a spool for readings before the clock sync.
 
-    def __init__(self, path: Path, host: str, clock: Clock):
+    `app` names the directory; tslocationd writes to `<path>/<host>/tslocation`.
+    """
+
+    def __init__(self, path: Path, host: str, clock: Clock, app: str = APP):
         self.host = host
         self.clock = clock
-        self.dir = path / host / APP
+        self.dir = path / host / app
         self.spool_dir = self.dir / ".spool"
         self.boot_id = clock.boot_id()
         self.spool = self.spool_dir / f"{self.boot_id}.jsonl"
@@ -116,7 +119,8 @@ class CsvFiles:
         if not sample.synced:
             self._spool(sample)
             return
-        if self.spool.exists():
+        # A sample can carry its own synced time (a GNSS fix) before the clock is synced
+        if self.spool.exists() and self.clock.synced():
             self.flush_spool()
         self._append(self.daily_file(sample.collector, sample.time), sample.header, sample.row)
 

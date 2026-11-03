@@ -43,6 +43,8 @@ services:
     expert: true
   - name: tsupdate
     expert: true
+  - name: tslocation
+    expert: true
   - name: tsconfig
     expert: true
   - name: tsconfig-ble

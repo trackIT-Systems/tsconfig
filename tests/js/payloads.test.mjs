@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { radiotrackingConfig } from '../../app/static/js/components/radiotrackingConfig.js';
 import { soundscapepipeConfig } from '../../app/static/js/components/soundscapepipeConfig.js';
+import { TSLOCATION_FIELDS, TSLOCATION_GROUPS, formatDuration, tslocationConfig } from '../../app/static/js/components/tslocationConfig.js';
 import { tsupdateConfig } from '../../app/static/js/components/tsupdateConfig.js';
 import { installBrowser } from './helpers.mjs';
 
@@ -95,4 +96,38 @@ test('soundscapepipe: species groups are validated before saving', async t => {
     assert.deepEqual(browser.calls, []);
     assert.equal(browser.toasts[0].type, 'error');
     assert.match(browser.toasts[0].message, /Species validation failed:\n• Group "a"/);
+});
+
+test('tslocation: empty fields are left out, numbers sent as numbers, durations as written', async t => {
+    const browser = installBrowser();
+    t.after(browser.restore);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const component = tslocationConfig();
+    Object.assign(component.config, { mode: 'mobile', fix_max_age: '7d', check_interval: '1800', threshold: '25', settle_count: '' });
+
+    await component.saveConfig();
+
+    const [saved] = browser.calls.filter(c => c.method === 'PUT');
+    assert.deepEqual(saved.body, { mode: 'mobile', fix_max_age: '7d', check_interval: 1800, threshold: 25 });
+});
+
+test('tslocation: a value that is not a number or duration is refused before saving', async t => {
+    const browser = installBrowser();
+    t.after(browser.restore);
+    const component = tslocationConfig();
+    component.config.settle_count = '2.5';
+    await assert.rejects(component.saveConfig());
+    assert.deepEqual(browser.calls.filter(c => c.method === 'PUT'), []);
+});
+
+test('tslocation: defaults are shown in their shortest exact unit', () => {
+    assert.equal(formatDuration(604800), '7d');
+    assert.equal(formatDuration(3600), '1h');
+    assert.equal(formatDuration(300), '5m');
+    assert.equal(formatDuration(90), '90s');
+});
+
+test('tslocation: every setting is in exactly one group', () => {
+    const grouped = TSLOCATION_GROUPS.flatMap(group => group.fields).sort();
+    assert.deepEqual(grouped, TSLOCATION_FIELDS.map(field => field.key).sort());
 });

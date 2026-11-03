@@ -28,11 +28,12 @@ const EXPECTED = {
     sshKeysConfig: ['serverMode', 'sortedKeys', 'serviceStatus', 'streamLogs', 'destroy', 'loadKeys', 'addKey'],
     statusPage: ['initStatus', 'refreshStatus', 'rebootSystem', 'getFilteredDisks', 'mountpointLinks', 'isServiceAvailable', 'formatBytes', 'formatUptime', 'formatDateTime', 'showToast', 'destroy'],
     servicesList: ['services', 'servicesLoading', 'getFilteredServices', 'performAction', 'performStartStopAction', 'getServiceRestartState', 'getServiceStartStopState', 'streamLogs', 'streamAllLogs', 'loadServices', 'destroy'],
-    geolocationMap: ['geolocation', 'loadGeolocation', 'initGeolocationMap', 'updateDistanceLine', 'getTrackerIcon', 'destroy'],
+    geolocationMap: ['geolocation', 'location', 'loadGeolocation', 'trackerLatLng', 'initGeolocationMap', 'updateFixMarker', 'refreshLocation', 'requestFix', 'fitBoth', 'stateInfo', 'modeText', 'gpsOn', 'formatFixTime', 'formatAgo', 'modeLabel', 'referencePopup', 'popupContent', 'updateDistanceLine', 'getTrackerIcon', 'destroy'],
     radiotrackingSummary: ['radiotrackingConfig', 'radiotrackingLoading', 'destroy'],
     powerSummary: ['title', 'powerDevice', 'powerBlock', 'powerReading', 'powerReadError', 'powerGroups', 'formatPowerValue', 'readNow', 'destroy'],
     soundscapepipeSummary: ['soundscapepipeConfig', 'soundscapepipeLoading', 'soundscapepipeService', 'getDetectorTasks', 'getRecordingGroups', 'destroy'],
     audioStreamPlayer: ['streamAvailable', 'checkingStream', 'audioConnected', 'checkStreamAvailability', 'handleAudioPause', 'handleAudioPlay', 'disconnectAudio', 'reconnectAudio', 'destroy'],
+    tslocationConfig: ['serverMode', 'config', 'fields', 'placeholder', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
     tsupdateConfig: ['serverMode', 'saveConfig', 'saveAndRestartService', 'deployConfig', 'serviceStatus', 'streamLogs', 'destroy'],
     userconfConfig: ['serverMode', 'showMessage', 'setPassword'],
 };
