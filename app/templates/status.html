@@ -13,7 +13,8 @@
                         @click="refreshStatus()"
                         :disabled="loading || refreshing">
                     <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading || refreshing }"></i>
-                    <span x-text="(loading || refreshing) ? 'Refreshing...' : 'Refresh'"></span>
+                    <!-- A fixed label: a longer one would re-wrap the header on phones; the icon spins -->
+                    <span>Refresh</span>
                 </button>
             </div>
         </div>
@@ -312,64 +313,30 @@
                                 <span class="d-none d-sm-inline">Shell</span>
                             </button>
                         </div>
-                        <div class="card-body">
-                            <!-- Mobile-friendly OS Release info using definition list -->
+                        <!-- The website is in the footer; tryboot and the boot partition stay in /api/system-info -->
+                        <div class="card-body py-2">
                             <dl class="row mb-0">
                                 <template x-if="systemInfo?.os_release?.PRETTY_NAME">
-                                    <div class="col-sm-6 col-lg-3 mb-2">
-                                        <dt class="text-muted small">OS Name</dt>
+                                    <div class="col-md-4 my-1">
+                                        <dt class="text-muted small fw-normal">OS Name</dt>
                                         <dd class="mb-0" x-text="systemInfo.os_release.PRETTY_NAME"></dd>
                                     </div>
                                 </template>
-                                <template x-if="systemInfo?.os_release?.ID">
-                                    <div class="col-sm-6 col-lg-3 mb-2">
-                                        <dt class="text-muted small">Distribution</dt>
-                                        <dd class="mb-0" x-text="systemInfo.os_release.ID"></dd>
-                                    </div>
-                                </template>
-                                <template x-if="systemInfo?.tsupdate_status">
-                                    <div class="col-sm-6 col-lg-3 mb-2">
-                                        <dt class="text-muted small">Tryboot</dt>
-                                        <dd class="mb-0" x-text="(systemInfo.tsupdate_status.booted_via_tryboot === 'True' || systemInfo.tsupdate_status.booted_via_tryboot === true || String(systemInfo.tsupdate_status.booted_via_tryboot).toLowerCase() === 'true') ? 'True' : 'False'"></dd>
-                                    </div>
-                                </template>
-                                <template x-if="systemInfo?.tsupdate_status">
-                                    <div class="col-sm-6 col-lg-3 mb-2">
-                                        <dt class="text-muted small">Active Partition</dt>
-                                        <dd class="mb-0" x-text="systemInfo.tsupdate_status.active_partition_label || systemInfo.tsupdate_status.active_partition || 'N/A'"></dd>
-                                    </div>
-                                </template>
-                                <!-- URL fields take full width on all screen sizes -->
-                                <template x-if="systemInfo?.os_release?.HOME_URL">
-                                    <div class="col-12 mb-2">
-                                        <dt class="text-muted small">Home URL</dt>
-                                        <dd class="mb-0">
-                                            <a :href="systemInfo.os_release.HOME_URL" 
-                                                target="_blank" 
-                                                class="text-break"
-                                                x-text="systemInfo.os_release.HOME_URL"></a>
-                                        </dd>
-                                    </div>
-                                </template>
                                 <template x-if="systemInfo?.os_release?.SUPPORT_URL">
-                                    <div class="col-12 mb-2">
-                                        <dt class="text-muted small">Support URL</dt>
+                                    <div class="col-md-4 my-1">
+                                        <dt class="text-muted small fw-normal">Support</dt>
                                         <dd class="mb-0">
-                                            <a :href="systemInfo.os_release.SUPPORT_URL" 
-                                                target="_blank" 
-                                                class="text-break"
-                                                x-text="systemInfo.os_release.SUPPORT_URL"></a>
+                                            <a :href="systemInfo.os_release.SUPPORT_URL" target="_blank" class="text-break"
+                                               x-text="systemInfo.os_release.SUPPORT_URL"></a>
                                         </dd>
                                     </div>
                                 </template>
                                 <template x-if="systemInfo?.os_release?.BUG_REPORT_URL">
-                                    <div class="col-12 mb-2">
-                                        <dt class="text-muted small">Bug Reports</dt>
+                                    <div class="col-md-4 my-1">
+                                        <dt class="text-muted small fw-normal">Bug Reports</dt>
                                         <dd class="mb-0">
-                                            <a :href="systemInfo.os_release.BUG_REPORT_URL" 
-                                                target="_blank" 
-                                                class="text-break"
-                                                x-text="systemInfo.os_release.BUG_REPORT_URL"></a>
+                                            <a :href="systemInfo.os_release.BUG_REPORT_URL" target="_blank" class="text-break"
+                                               x-text="systemInfo.os_release.BUG_REPORT_URL"></a>
                                         </dd>
                                     </div>
                                 </template>
