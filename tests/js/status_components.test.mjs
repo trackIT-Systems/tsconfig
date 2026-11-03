@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { audioStreamPlayer } from '../../app/static/js/components/audioStreamPlayer.js';
+import { geolocationMap } from '../../app/static/js/components/geolocationMap.js';
 import { powerSummary, recentBlock } from '../../app/static/js/components/powerSummary.js';
 import { radiotrackingSummary } from '../../app/static/js/components/radiotrackingSummary.js';
 import { servicesList } from '../../app/static/js/components/servicesList.js';
@@ -402,4 +403,50 @@ test('power cards stop listening when destroyed', t => {
     assert.equal(browser.listenerCount('status-refreshed'), 1);
     card.destroy();
     assert.equal(browser.listenerCount('status-refreshed'), 0);
+});
+
+test('location map: "Show all positions" fits the configured position, the GPS fix and the user', () => {
+    const fits = [];
+    const map = { fitBounds: points => fits.push(points) };
+    const component = geolocationMap();
+    Object.assign(component, { geolocationMap: map, geolocation: { lat: 50.81, lon: 8.77 }, location: null });
+    component.fitAll();
+    assert.deepEqual(fits.pop(), [[50.81, 8.77]]);
+    component.location = { fix: { lat: 50.812, lon: 8.77 } };
+    component.userLatLng = { lat: 50.8, lng: 8.76 };
+    component.fitAll();
+    assert.deepEqual(fits.pop(), [[50.81, 8.77], [50.812, 8.77], [50.8, 8.76]]);
+});
+
+test('location map: lines between the configured position, the GPS fix and the user', t => {
+    const drawn = [];
+    globalThis.L = {
+        polyline: () => {
+            const layer = {
+                bindPopup: () => layer, addTo: () => layer, setLatLngs: ends => { layer.ends = ends; },
+                setPopupContent: () => layer, remove: () => { layer.removed = true; },
+            };
+            drawn.push(layer);
+            return layer;
+        },
+    };
+    t.after(() => { delete globalThis.L; });
+    const component = geolocationMap();
+    Object.assign(component, {
+        geolocationMap: { distance: () => 12 },
+        popupContent: () => null,
+        geolocation: { lat: 50.81, lon: 8.77 },
+        location: { fix: { lat: 50.812, lon: 8.77 } },
+    });
+    component.updateLines();
+    assert.deepEqual(Object.keys(component.lines), ['configuredFix']);
+    assert.deepEqual(component.lines.configuredFix.ends, [[50.81, 8.77], [50.812, 8.77]]);
+    component.userLatLng = { lat: 50.8, lng: 8.76 };
+    component.updateLines();
+    assert.deepEqual(Object.keys(component.lines), ['configuredFix', 'userConfigured', 'userFix']);
+    assert.equal(drawn.length, 3);  // the line that was there is moved, not drawn again
+    component.userLatLng = null;
+    component.updateLines();
+    assert.deepEqual(Object.keys(component.lines), ['configuredFix']);
+    assert.equal(drawn.filter(layer => layer.removed).length, 2);
 });
