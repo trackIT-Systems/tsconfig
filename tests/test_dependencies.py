@@ -20,6 +20,7 @@ DISTRIBUTION = {
     "gi": "pygobject",
     "dbus": "dbus-python",
     "paho": "paho-mqtt",
+    "systemd": "systemd-python",
 }
 
 # tsOS packages the image installs next to tsconfig (not on PyPI). Only

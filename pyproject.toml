@@ -53,6 +53,11 @@ ble = [
     "dbus-python>=1.4.0",
     "pygobject>=3.54.5",
 ]
+# Logging to the journal under systemd (python3-systemd on the station). Without
+# it, logs go to stderr; it builds only on Linux with libsystemd's headers
+journal = [
+    "systemd-python>=235",
+]
 
 [build-system]
 requires = ["pdm-backend"]
