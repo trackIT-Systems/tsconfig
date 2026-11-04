@@ -1,6 +1,7 @@
 """tslocationd with fakes for gpsd, ModemManager and chrony: fine fixes, outputs, runtime files."""
 
 import asyncio
+import datetime
 import json
 import subprocess
 from pathlib import Path
@@ -37,7 +38,8 @@ def test_tpv_without_a_fix_is_ignored():
 def test_tpv_with_sky_becomes_a_fix():
     fix = tpv_fix(tpv(), {"class": "SKY", "uSat": 9, "hdop": 0.9})
     assert (fix.lat, fix.lon, fix.alt, fix.accuracy, fix.sats, fix.hdop) == (50.81, 8.77, 212.3, 4.1, 9, 0.9)
-    assert fix.time.timestamp() == local(2026, 10, 22, 14, 0).timestamp()
+    # gpsd gives UTC
+    assert fix.time == datetime.datetime(2026, 10, 22, 12, 0, tzinfo=datetime.UTC)
 
 
 def test_2d_fix_has_no_altitude():
