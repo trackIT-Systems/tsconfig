@@ -17,6 +17,9 @@ collectors:
   system:
     enabled: true
     interval: 60
+  timesync:
+    enabled: true
+    interval: 60
   thermal:
     enabled: true
     interval: 60

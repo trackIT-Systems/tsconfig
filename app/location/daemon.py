@@ -20,7 +20,6 @@ from typing import Any, Protocol
 
 from app import __version__
 from app.bluetooth.supervisor import sd_notify
-from app.location import chrony
 from app.location.geo import Fix, Position, average, distance, read_geoclue
 from app.location.gpsd import Gpsd
 from app.location.modem import Cell, ModemReceiver, ReceiverError
@@ -31,6 +30,7 @@ from app.location.tracker import NO_FIX, TRACKING, UNKNOWN, Tracker
 from app.logging_config import setup_logging
 from app.telemetry.clock import Clock
 from app.telemetry.samples import Sample
+from app.utils import chrony
 
 logger = logging.getLogger(__name__)
 
@@ -576,11 +576,7 @@ async def _serve(settings: LocationSettings, config_path: Path) -> None:
     runtime_dir = _dir("RUNTIME_DIRECTORY", RUNTIME_DIR)
     clock = Clock(runtime_dir)
     outputs: list[Output] = []
-    files = DataFiles(DATA_DIR, host, clock)
-    try:
-        files.recover()
-    except OSError as e:
-        logger.error("Cannot recover earlier spools in %s: %s", files.spool_dir, e)
+    files = DataFiles(DATA_DIR, host)
     outputs.append(files)
     mqtt = MqttOutput(host)
     mqtt.start()

@@ -1,33 +1,27 @@
 """Where samples go: MQTT (CSV, JSON and CBOR topics) and daily CSV files.
 
-Topics are `<host>/tsconfig/<collector>/<format>`, files are
+Topics are `<host>/tsconfig/<collector>/<format>`, QoS 0 and not retained:
+a reading that gets through is current, one that does not is lost. Files are
 `<path>/<host>/tsconfig/<collector>/<host>_<YYYY-MM-DD>_<collector>.csv`.
 
-Files are only written with a synced clock, because a wrong clock would put
-readings into the wrong day's file (or a file dated 1970). Until then samples
-go to a spool per boot, and are re-timed by their CLOCK_BOOTTIME when the clock
-is synced. A spool left from an earlier boot cannot be re-timed; it becomes
-`<host>_unsynced_<boot_id>_<collector>.csv` instead. Nothing is ever deleted.
+File rows are only written with a trusted time: a wrong clock would put
+readings into the wrong day's file (or a file dated 1970), with a time nobody
+can correct. Until chrony has a source (NTP, GNSS or the checked RTC), readings
+only go over MQTT (tsOS-base docs/time.md). Files are never deleted.
 """
 
 import datetime
-import json
 import logging
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from app.telemetry.clock import Clock
-from app.telemetry.samples import ENCODERS, LEADING_COLUMNS, Sample, csv_line
+from app.telemetry.samples import ENCODERS, Sample, csv_line
 from app.telemetry.settings import BrokerSettings
 
 logger = logging.getLogger(__name__)
 
 APP = "tsconfig"
-
-
-def state_topic(host: str) -> str:
-    return f"{host}/{APP}/state"
 
 
 def sample_topic(host: str, collector: str, fmt: str) -> str:
@@ -37,9 +31,8 @@ def sample_topic(host: str, collector: str, fmt: str) -> str:
 class MqttOutput:
     """Publishes every sample in the configured formats, not retained, QoS 0.
 
-    `<host>/tsconfig/state` is retained: online while connected, offline as the
-    last will. The client connects in the background and reconnects by itself, so
-    the daemon also runs while the broker is down (samples are dropped then).
+    The client connects in the background and reconnects by itself, so the
+    daemon also runs while the broker is down (samples are dropped then).
     """
 
     def __init__(self, host: str, broker: BrokerSettings, formats: Iterable[str], client: Any = None):
@@ -51,7 +44,6 @@ class MqttOutput:
 
             client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"{host}-tstelemetry")
         self.client = client
-        self.client.will_set(state_topic(host), json.dumps({"state": "offline"}), qos=1, retain=True)
         self.client.on_connect = self._on_connect
         # The client retries a refused connection every minute: logged once per reason
         self._refused: str | None = None
@@ -66,7 +58,6 @@ class MqttOutput:
             return
         self._refused = None
         logger.info("Connected to MQTT broker %s:%d", self.broker.host, self.broker.port)
-        client.publish(state_topic(self.host), json.dumps({"state": "online"}), qos=1, retain=True)
 
     def start(self) -> None:
         self.client.reconnect_delay_set(min_delay=1, max_delay=60)
@@ -78,34 +69,25 @@ class MqttOutput:
             self.client.publish(sample_topic(self.host, sample.collector, fmt), ENCODERS[fmt](sample), qos=0)
 
     def stop(self) -> None:
-        info = self.client.publish(state_topic(self.host), json.dumps({"state": "offline"}), qos=1, retain=True)
-        try:
-            info.wait_for_publish(timeout=2)
-        except (RuntimeError, ValueError):
-            pass  # not connected
         self.client.disconnect()
         self.client.loop_stop()
 
 
 class CsvFiles:
-    """Daily CSV files per collector, with a spool for readings before the clock sync.
+    """Daily CSV files per collector; rows without a trusted time are dropped.
 
     `app` names the directory; tslocationd writes to `<path>/<host>/tslocation`.
     """
 
-    def __init__(self, path: Path, host: str, clock: Clock, app: str = APP):
+    def __init__(self, path: Path, host: str, app: str = APP):
         self.host = host
-        self.clock = clock
         self.dir = path / host / app
-        self.spool_dir = self.dir / ".spool"
-        self.boot_id = clock.boot_id()
-        self.spool = self.spool_dir / f"{self.boot_id}.jsonl"
+        # Collectors whose rows are being dropped, to log when dropping starts and ends.
+        # Per collector: a GNSS fix has a trusted time while the clock has not.
+        self._dropping: set[str] = set()
 
     def daily_file(self, collector: str, time: datetime.datetime) -> Path:
         return self.dir / collector / f"{self.host}_{time:%Y-%m-%d}_{collector}.csv"
-
-    def unsynced_file(self, collector: str, boot_id: str) -> Path:
-        return self.dir / collector / f"{self.host}_unsynced_{boot_id}_{collector}.csv"
 
     @staticmethod
     def _append(file: Path, header: list[str], row: list[Any]) -> None:
@@ -117,61 +99,12 @@ class CsvFiles:
 
     def write(self, sample: Sample) -> None:
         if not sample.synced:
-            self._spool(sample)
+            if not self._dropping:
+                logger.info("The clock is not trusted yet: readings go to %s once it is", self.dir)
+            self._dropping.add(sample.collector)
             return
-        # A sample can carry its own synced time (a GNSS fix) before the clock is synced
-        if self.spool.exists() and self.clock.synced():
-            self.flush_spool()
-        self._append(self.daily_file(sample.collector, sample.time), sample.header, sample.row)
-
-    def _spool(self, sample: Sample) -> None:
-        entry = {
-            "collector": sample.collector,
-            "columns": sample.columns,
-            "values": sample.values,
-            "time": sample.time.isoformat(),
-            "boottime": sample.boottime,
-        }
-        self.spool_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.spool, "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
-
-    @staticmethod
-    def _read_spool(spool: Path) -> Iterable[dict[str, Any]]:
-        with open(spool) as f:
-            for number, line in enumerate(f, 1):
-                try:
-                    entry = json.loads(line)
-                    yield entry
-                except json.JSONDecodeError:
-                    # e.g. the last line of a spool cut off by a power loss
-                    logger.warning("Skipping unreadable line %d of %s", number, spool)
-
-    def flush_spool(self) -> None:
-        """Re-time this boot's spooled samples with the now synced clock and write them out."""
-        offset = self.clock.time() - self.clock.boottime()
-        count = 0
-        for entry in self._read_spool(self.spool):
-            time = datetime.datetime.fromtimestamp(round(offset + entry["boottime"])).astimezone()
-            header = [*LEADING_COLUMNS, *entry["columns"]]
-            self._append(self.daily_file(entry["collector"], time), header, [time, False, *entry["values"]])
-            count += 1
-        self.spool.unlink()
-        logger.info("Clock synced: wrote %d spooled readings to the daily files", count)
-
-    def recover(self) -> None:
-        """Turn spools of earlier boots into `_unsynced_` files; their times cannot be corrected."""
-        if not self.spool_dir.is_dir():
-            return
-        for spool in sorted(self.spool_dir.glob("*.jsonl")):
-            if spool == self.spool:
-                continue
-            boot_id = spool.stem
-            count = 0
-            for entry in self._read_spool(spool):
-                header = [*LEADING_COLUMNS, *entry["columns"]]
-                row = [entry["time"], False, *entry["values"]]
-                self._append(self.unsynced_file(entry["collector"], boot_id), header, row)
-                count += 1
-            spool.unlink()
-            logger.warning("Boot %s never had a synced clock: wrote %d readings to its unsynced files", boot_id, count)
+        if sample.collector in self._dropping:
+            self._dropping.discard(sample.collector)
+            if not self._dropping:
+                logger.info("The clock is trusted: writing readings to %s", self.dir)
+        self._append(self.daily_file(sample.collector, sample.time), sample.file_header, sample.file_row)

@@ -102,7 +102,6 @@ class Daemon:
 
     async def collect(self, collector: Collector) -> list[Sample]:
         """Read one collector now, as samples stamped with the current time."""
-        boottime = self.clock.boottime()
         time = datetime.datetime.fromtimestamp(round(self.clock.time())).astimezone()
         synced = self.clock.synced()
         try:
@@ -118,7 +117,6 @@ class Daemon:
                 values=make_values(collector.columns, reading),
                 time=time,
                 synced=synced,
-                boottime=boottime,
             )
             for reading in readings
         ]
@@ -185,11 +183,7 @@ async def _serve(settings: TelemetrySettings, collectors: list[Collector], clock
     outputs: list[Output] = []
     files = None
     if settings.files.enabled:
-        files = CsvFiles(Path(settings.files.path), host, clock)
-        try:
-            files.recover()
-        except OSError as e:
-            logger.error("Cannot recover earlier spools in %s: %s", files.spool_dir, e)
+        files = CsvFiles(Path(settings.files.path), host)
         outputs.append(files)
     mqtt = None
     if settings.formats:

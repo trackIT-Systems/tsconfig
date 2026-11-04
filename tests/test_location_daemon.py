@@ -8,14 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from app.location import chrony, modem
+from app.location import modem
 from app.location.daemon import Daemon
 from app.location.geo import Position, geoclue_text
 from app.location.gpsd import Gpsd, tpv_fix
 from app.location.modem import Cell, ModemReceiver, ReceiverError, parse_cell
-from app.location.outputs import DataFiles, RuntimeFiles, cell_sample, fix_sample, state_sample
+from app.location.outputs import DataFiles, MqttOutput, RuntimeFiles, cell_sample, fix_sample, state_sample
 from app.location.server import RequestError
 from app.location.settings import LocationSettings
+from app.telemetry.samples import ENCODERS
 from tests.telemetry_helpers import FakeClock, local
 
 REFERENCE = Position(50.81, 8.77, 210.0, 5.0)
@@ -157,17 +158,6 @@ async def test_receiver_without_modem_or_support_fails(monkeypatch):
     fake_mmcli(monkeypatch, capabilities=("3gpp-lac-ci",))
     with pytest.raises(ReceiverError, match="gps-unmanaged"):
         await ModemReceiver().start()
-
-
-# --- chrony
-
-
-def test_chrony_reference_time():
-    line = "51031B2E,81.3.27.46,3,1793715739.794282105,0.000159037,0.0,0.0,5.2,0.01,0.04,0.02,0.003,1031.5,Normal\n"
-    assert chrony.parse_ref_time(line) == pytest.approx(1793715739.79)
-    assert chrony.parse_ref_time("00000000,,0,0.000000000,0,0,0,0,0,0,0,0,0,Not synchronised\n") is None
-    with pytest.raises(chrony.ChronyError):
-        chrony.parse_ref_time("garbage")
 
 
 # --- the daemon
@@ -503,20 +493,48 @@ async def test_mobile_mode_tracks_and_publishes(tmp_path):
     assert not daemon.receiver.on
 
 
-def test_gnss_fix_before_the_clock_sync_does_not_flush_the_spool(tmp_path):
-    """A fix carries GNSS time: it goes to its day's file, while the clock's samples stay spooled."""
+def test_gnss_fix_before_the_clock_sync_goes_to_its_file(tmp_path):
+    """A fix carries GNSS time: it goes to its day's file, while the clock's cells are dropped."""
     clock = FakeClock(local(1970, 1, 1, 0, 5).timestamp())
-    files = DataFiles(tmp_path, "station", clock)
+    files = DataFiles(tmp_path, "station")
     files.write(cell_sample(CELL, False, clock))
     files.write(fix_sample("fix", gnss_fix(), "modem", None, clock))
-    assert files.spool.exists()
+    assert not (tmp_path / "station" / "tslocation" / "cell").exists()
     fix_files = list((tmp_path / "station" / "tslocation" / "fix").iterdir())
     assert [f.name for f in fix_files] == ["station_2026-10-22_fix.csv"]
 
 
+def test_over_mqtt_only_fixes_carry_a_time():
+    clock = FakeClock(NOW, synced=True)
+    fix = fix_sample("fix", gnss_fix(), "modem", None, clock)
+    cell = cell_sample(CELL, False, clock)
+    assert fix.header[0] == "time"
+    assert "time" not in cell.header and "synced" not in cell.header
+
+
+def test_mqtt_retains_nothing():
+    class Client:
+        def __init__(self):
+            self.published = []
+
+        def publish(self, topic, payload, qos=0, retain=False):
+            self.published.append((topic, retain))
+
+    client = Client()
+    output = MqttOutput("station", client=client)
+    clock = FakeClock(NOW, synced=True)
+    output.write(
+        state_sample(
+            {"mode": "off", "state": "unknown", "effective": None, "deviation_m": None, "proposed": None}, clock
+        )
+    )
+    assert [topic for topic, _ in client.published] == [f"station/tslocation/state/{fmt}" for fmt in ENCODERS]
+    assert not any(retain for _, retain in client.published)
+
+
 def test_state_has_no_file(tmp_path):
     clock = FakeClock(NOW, synced=True)
-    files = DataFiles(tmp_path, "station", clock)
+    files = DataFiles(tmp_path, "station")
     files.write(
         state_sample(
             {"mode": "off", "state": "unknown", "effective": None, "deviation_m": None, "proposed": None}, clock

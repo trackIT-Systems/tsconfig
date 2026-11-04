@@ -1,9 +1,9 @@
-"""Wall clock, boot clock and whether the wall clock can be trusted yet.
+"""Wall clock and whether it can be trusted yet.
 
-A station without RTC boots with a wrong clock (fake-hwclock's last value, or
-worse), and stays that way until chrony syncs, which may take long without a
-network. Telemetry runs anyway; every reading also carries CLOCK_BOOTTIME, so
-readings taken before the sync can be re-timed once the offset is known.
+A station boots with a clock that may be wrong (the image's build date, an
+unchecked RTC), and stays that way until chrony has a source: NTP, GNSS, or the
+RTC once tsscheduled has checked it (tsOS-base docs/time.md). chrony then clears
+the kernel's STA_UNSYNC. Telemetry runs anyway; only its file rows wait.
 """
 
 import ctypes
@@ -52,9 +52,6 @@ class Clock:
 
     def time(self) -> float:
         return time.time()
-
-    def boottime(self) -> float:
-        return time.clock_gettime(getattr(time, "CLOCK_BOOTTIME", time.CLOCK_MONOTONIC))
 
     def boot_id(self) -> str:
         try:

@@ -306,7 +306,7 @@ class JournalSource:
             values=(entry.identifier, entry.message, repeated),
             time=entry.time,
             synced=synced,
-            boottime=entry.monotonic,
+            leading=("time", "synced"),
         )
 
     def handle(self, line: bytes) -> None:

@@ -48,6 +48,7 @@ class JournalStatsSettings(CollectorSettings):
 
 class CollectorsSettings(_Strict):
     system: CollectorSettings = Field(default_factory=CollectorSettings)
+    timesync: CollectorSettings = Field(default_factory=CollectorSettings)
     thermal: CollectorSettings = Field(default_factory=CollectorSettings)
     disk: DiskSettings = Field(default_factory=DiskSettings)
     pmic: CollectorSettings = Field(default_factory=CollectorSettings)

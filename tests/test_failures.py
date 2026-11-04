@@ -220,9 +220,6 @@ def test_a_refused_mqtt_connection_is_warned_about_once(caplog):
     from app.telemetry.settings import BrokerSettings
 
     class Client:
-        def will_set(self, *args, **kwargs):
-            pass
-
         def publish(self, *args, **kwargs):
             pass
 

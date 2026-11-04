@@ -2,13 +2,15 @@
 
 * `/run/tslocation/location.json` and `/run/tslocation/geolocation` (geoclue
   format, the effective position), written atomically on every change.
-* `<host>/tslocation/{fix,track,state,cell}/{csv,json,cbor}` over MQTT, QoS 0;
-  `state` is retained.
+* `<host>/tslocation/{fix,track,state,cell}/{csv,json,cbor}` over MQTT, QoS 0,
+  not retained. `state` is sent when it changes.
 * `/data/<host>/tslocation/{fix,track,cell}/<host>_<YYYY-MM-DD>_<kind>.csv`,
-  through tstelemetry's CsvFiles (same clock handling). `state` has no file.
+  through tstelemetry's CsvFiles (rows only with a trusted time). `state` has no
+  file.
 
-The columns follow the telemetry conventions: `time` and `synced` first. A fix
-carries its GNSS time, so it is always `synced`.
+The columns follow the telemetry conventions: over MQTT, `cell` and `state` are
+a snapshot of now without a time; `fix` and `track` lead with their GNSS time,
+which is always trusted, also in the files before the clock is.
 """
 
 import datetime
@@ -63,12 +65,12 @@ def fix_sample(kind: str, fix: Fix, source: str, deviation: float | None, clock:
         _round(fix.hdop, 2),
         _round(deviation, 1),
     )
-    return Sample(kind, FIX_COLUMNS, values, time, fix.time is not None or clock.synced(), clock.boottime())
+    return Sample(kind, FIX_COLUMNS, values, time, fix.time is not None or clock.synced(), leading=("time",))
 
 
 def cell_sample(cell: Cell, known: bool, clock: Clock) -> Sample:
     values = (cell.mcc, cell.mnc, cell.tac, cell.cell_id, known)
-    return Sample("cell", CELL_COLUMNS, values, _now(clock), clock.synced(), clock.boottime())
+    return Sample("cell", CELL_COLUMNS, values, _now(clock), clock.synced())
 
 
 def state_sample(location: dict[str, Any], clock: Clock) -> Sample:
@@ -85,7 +87,7 @@ def state_sample(location: dict[str, Any], clock: Clock) -> Sample:
         proposed.get("alt"),
         proposed.get("accuracy"),
     )
-    return Sample("state", STATE_COLUMNS, values, _now(clock), clock.synced(), clock.boottime())
+    return Sample("state", STATE_COLUMNS, values, _now(clock), clock.synced())
 
 
 def topic(host: str, kind: str, fmt: str) -> str:
@@ -93,7 +95,7 @@ def topic(host: str, kind: str, fmt: str) -> str:
 
 
 class MqttOutput:
-    """Publishes samples in every format, QoS 0; `state` retained.
+    """Publishes samples in every format, QoS 0, not retained.
 
     The client connects in the background and reconnects by itself, so the
     daemon also runs while the broker is down (messages are dropped then).
@@ -109,8 +111,6 @@ class MqttOutput:
         self.client = client
         self.client.on_connect = self._on_connect
         self._refused: str | None = None
-        # The last state, published again after a reconnect (a retained message the broker may have lost)
-        self._state: Sample | None = None
 
     def _on_connect(self, client, _userdata, _flags, reason_code, _properties=None):
         if getattr(reason_code, "is_failure", False):
@@ -122,8 +122,6 @@ class MqttOutput:
             return
         self._refused = None
         logger.info("Connected to MQTT broker %s:%d", *self.broker)
-        if self._state is not None:
-            self.write(self._state)
 
     def start(self) -> None:
         self.client.reconnect_delay_set(min_delay=1, max_delay=60)
@@ -131,11 +129,8 @@ class MqttOutput:
         self.client.loop_start()
 
     def write(self, sample: Sample) -> None:
-        retain = sample.collector == "state"
-        if retain:
-            self._state = sample
         for fmt, encode in ENCODERS.items():
-            self.client.publish(topic(self.host, sample.collector, fmt), encode(sample), qos=0, retain=retain)
+            self.client.publish(topic(self.host, sample.collector, fmt), encode(sample), qos=0)
 
     def stop(self) -> None:
         self.client.disconnect()
@@ -147,8 +142,8 @@ class DataFiles(CsvFiles):
 
     KINDS = ("fix", "track", "cell")
 
-    def __init__(self, path: Path, host: str, clock: Clock):
-        super().__init__(path, host, clock, app=APP)
+    def __init__(self, path: Path, host: str):
+        super().__init__(path, host, app=APP)
 
     def write(self, sample: Sample) -> None:
         if sample.collector in self.KINDS:

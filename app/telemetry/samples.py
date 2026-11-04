@@ -1,8 +1,14 @@
 """One reading of one collector, and its CSV, JSON and CBOR encodings.
 
-All three encodings carry the same columns in the same order: `time`, `synced`,
-then the collector's own columns. CBOR is a list without key names (smallest
-over cellular); the column order is what the CSV header and the JSON keys show.
+All three encodings carry the same columns in the same order: the sample's
+`leading` columns, then the collector's own. CBOR is a list without key names
+(smallest over cellular); the column order is what the JSON keys show.
+
+Station readings lead with nothing: over MQTT they are a snapshot of now, and
+the receiver stamps them on arrival (tsOS-base docs/time.md). Samples with a
+time of their own lead with it: a GNSS fix with `time`, a journal entry with
+`time` and `synced`. The daily files always lead with `time` (`file_header`,
+`file_row`).
 """
 
 import csv
@@ -14,8 +20,6 @@ from typing import Any
 
 import cbor2
 
-LEADING_COLUMNS = ("time", "synced")
-
 
 @dataclass(frozen=True)
 class Sample:
@@ -23,18 +27,27 @@ class Sample:
     columns: tuple[str, ...]
     values: tuple[Any, ...]
     time: datetime.datetime
-    # Whether the wall clock was synced when `time` was taken
+    # Whether `time` can be trusted: the clock was synced, or the time is a GNSS fix's
     synced: bool
-    # CLOCK_BOOTTIME at `time`; only used to re-time readings taken before the sync
-    boottime: float
+    # Columns before the collector's in the encodings: none, or some of "time" and "synced"
+    leading: tuple[str, ...] = ()
 
     @property
     def header(self) -> list[str]:
-        return [*LEADING_COLUMNS, *self.columns]
+        return [*self.leading, *self.columns]
 
     @property
     def row(self) -> list[Any]:
-        return [self.time, self.synced, *self.values]
+        stamp = {"time": self.time, "synced": self.synced}
+        return [*(stamp[column] for column in self.leading), *self.values]
+
+    @property
+    def file_header(self) -> list[str]:
+        return ["time", *self.columns]
+
+    @property
+    def file_row(self) -> list[Any]:
+        return [self.time, *self.values]
 
 
 def make_values(columns: tuple[str, ...], reading: dict[str, Any]) -> tuple[Any, ...]:

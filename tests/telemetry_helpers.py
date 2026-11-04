@@ -6,22 +6,18 @@ from app.telemetry.samples import Sample
 
 
 class FakeClock:
-    """Wall clock and boot clock that only move when told to.
+    """A wall clock that only moves when told to.
 
-    `time` starts wrong (as on a station without RTC) until `sync()` sets it.
+    `time` starts wrong (as on a station without a trusted source) until `sync()` sets it.
     """
 
-    def __init__(self, time: float, boottime: float = 100.0, boot_id: str = "boot-a", synced: bool = False):
+    def __init__(self, time: float, boot_id: str = "boot-a", synced: bool = False):
         self._time = time
-        self._boottime = boottime
         self._boot_id = boot_id
         self._synced = synced
 
     def time(self) -> float:
         return self._time
-
-    def boottime(self) -> float:
-        return self._boottime
 
     def boot_id(self) -> str:
         return self._boot_id
@@ -31,10 +27,9 @@ class FakeClock:
 
     def advance(self, seconds: float) -> None:
         self._time += seconds
-        self._boottime += seconds
 
     def sync(self, time: float) -> None:
-        """chrony steps the wall clock; the boot clock is unaffected."""
+        """chrony steps the wall clock."""
         self._time = time
         self._synced = True
 
@@ -51,5 +46,4 @@ def sample(clock: FakeClock, collector: str = "system", values: tuple = (1.5, 2)
         values=values,
         time=datetime.datetime.fromtimestamp(round(clock.time())).astimezone(),
         synced=clock.synced(),
-        boottime=clock.boottime(),
     )

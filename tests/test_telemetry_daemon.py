@@ -1,6 +1,5 @@
 """Scheduling, failure handling and MQTT publishing of the telemetry daemon."""
 
-import json
 import logging
 
 import cbor2
@@ -80,7 +79,7 @@ async def test_a_tick_stamps_and_writes_every_reading():
 
     first, second = recorder.samples
     assert first.time == local(2026, 10, 19, 12, 0, 0)
-    assert first.synced is True and first.boottime == clock.boottime()
+    assert first.synced is True
     assert first.values == (1, None)
     assert second.values == (None, 2)
 
@@ -119,11 +118,7 @@ def test_a_broken_settings_file_falls_back_to_the_defaults(tmp_path, caplog):
 class FakeClient:
     def __init__(self):
         self.published = []
-        self.will = None
         self.on_connect = None
-
-    def will_set(self, topic, payload, qos, retain):
-        self.will = (topic, json.loads(payload), retain)
 
     def publish(self, topic, payload, qos=0, retain=False):
         self.published.append((topic, payload, retain))
@@ -136,18 +131,18 @@ def test_mqtt_publishes_each_format_on_its_own_topic():
 
     topics = [topic for topic, _payload, _retain in client.published]
     assert topics == ["station/tsconfig/system/csv", "station/tsconfig/system/cbor"]
-    assert client.published[0][1].endswith(b";True;1.5;2")
-    assert cbor2.loads(client.published[1][1])[1:] == [True, 1.5, 2]
+    # no time: the receiver stamps the reading on arrival
+    assert client.published[0][1] == b"1.5;2"
+    assert cbor2.loads(client.published[1][1]) == [1.5, 2]
     assert not any(retain for _topic, _payload, retain in client.published)
 
 
-def test_mqtt_state_is_retained_with_offline_as_last_will():
+def test_mqtt_publishes_no_state_and_no_last_will():
     client = FakeClient()
     output = MqttOutput("station", BrokerSettings(), ["json"], client=client)
-    assert client.will == ("station/tsconfig/state", {"state": "offline"}, True)
 
     class Success:
         is_failure = False
 
     output._on_connect(client, None, None, Success())
-    assert client.published == [("station/tsconfig/state", json.dumps({"state": "online"}), True)]
+    assert client.published == []
