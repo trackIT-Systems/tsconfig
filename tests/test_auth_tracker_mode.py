@@ -378,11 +378,16 @@ class TestLoginPage:
 
     def test_navbar_entries_are_present_but_inactive(self, remote):
         html = self.page(remote).text
-        for label in ("Status", "System Settings", "Radio Tracking", "Soundscapepipe", "Data"):
+        for label in ("Status", "System Settings", "Data"):
             assert label in html
-        assert html.count('class="nav-link disabled"') == 5
+        assert html.count('class="nav-link disabled"') == 3
         assert 'href="#' not in html  # nothing in the navbar is a live link
         assert 'id="globalExpertModeToggle" disabled' in html
+
+    def test_navbar_does_not_name_services(self, remote):
+        # which services the station runs is only known after login
+        html = self.page(remote).text
+        assert "Radio Tracking" not in html and "Soundscapepipe" not in html
 
     def test_uses_the_shared_footer(self, remote):
         html = self.page(remote).text

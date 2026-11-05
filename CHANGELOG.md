@@ -49,6 +49,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 
 ### Changed
 
+- Login page: the form shows the station's host name, has a button to show the password and a spinner while it is checked (the button is disabled, so the form is not sent twice). The navbar no longer shows Radio Tracking and Soundscapepipe: which services the station runs is only known after login
 - Under systemd, tsconfig and its daemons log through `python3-systemd`'s `JournalHandler` (Debian package `python3-systemd`, new extra `journal`) instead of an own implementation of the native protocol. The fields are the same, plus `LOGGER`, `THREAD_NAME`, `PROCESS_NAME`, `CODE_ARGS` and, with a traceback, `EXCEPTION_TEXT`; messages over 32 KiB are no longer cut. Without `python3-systemd` (macOS, the Docker image) they log to stderr (tsOS-base#44)
 - Status page: the OS Release card shows only the OS name and the support and bug report links (the website is in the footer; Distribution, Tryboot and Active Partition are gone, the latter two stay in `/api/system-info`). The Refresh button keeps its label while refreshing, so the header no longer re-wraps on phones
 - Tracker-mode sessions survive a restart: the signing key is kept in systemd's runtime directory (`$RUNTIME_DIRECTORY/session.key`, 0600, tmpfs) and read again at start. A reboot still logs everyone out; without a runtime directory the key stays in memory as before

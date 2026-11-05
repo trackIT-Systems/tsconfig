@@ -13,7 +13,8 @@
     <script src="{{ base_url }}/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 </head>
 <body class="d-flex flex-column h-100">
-    <!-- Navbar: same layout as the app's (partials/navbar.html), every entry inactive until logged in -->
+    <!-- Navbar: same layout as the app's (partials/navbar.html), every entry inactive until logged in.
+         The service pages are left out: which services the station runs is only known after login. -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{{ base_url or '/' }}">{{ hostname }}</a>
@@ -31,16 +32,6 @@
                     <li class="nav-item">
                         <a class="nav-link disabled" aria-disabled="true" tabindex="-1">
                             <i class="fas fa-cog me-1"></i>System Settings
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link disabled" aria-disabled="true" tabindex="-1">
-                            <i class="fas fa-broadcast-tower me-1"></i>Radio Tracking
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link disabled" aria-disabled="true" tabindex="-1">
-                            <i class="fas fa-volume-up me-1"></i>Soundscapepipe
                         </a>
                     </li>
                     <li class="nav-item">
@@ -65,19 +56,24 @@
         </div>
     </nav>
 
-    <main>
-        <div class="container mt-4">
+    <main class="flex-grow-1">
+        <div class="container mt-5 pt-md-5">
             <div class="row justify-content-center">
                 <div class="col-md-8 col-lg-5">
-                    <div class="card shadow-sm">
-                        <div class="card-body p-4">
-                            <h4 class="mb-3"><i class="fas fa-lock me-2"></i>Login</h4>
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-lock me-2"></i>Login</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">Log in to <strong>{{ hostname }}</strong>.</p>
                             {% if error %}
-                            <div class="alert alert-danger" role="alert">{{ error }}</div>
+                            <div class="alert alert-danger" role="alert">
+                                <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+                            </div>
                             {% endif %}
                             <!-- A plain username/password form that navigates on submit, so password
                                  managers recognise it and offer to save the credentials. -->
-                            <form method="post" action="{{ base_url }}/auth/login" autocomplete="on">
+                            <form method="post" action="{{ base_url }}/auth/login" autocomplete="on" id="loginForm">
                                 <input type="hidden" name="next" value="{{ next_path }}">
                                 <div class="mb-3">
                                     <label for="username" class="form-label">Username</label>
@@ -87,10 +83,18 @@
                                 </div>
                                 <div class="mb-3">
                                     <label for="password" class="form-label">Password</label>
-                                    <input type="password" class="form-control" id="password" name="password"
-                                           autocomplete="current-password" autofocus required>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="password" name="password"
+                                               autocomplete="current-password" autofocus required>
+                                        <button class="btn btn-outline-secondary" type="button" id="togglePassword"
+                                                title="Show password" aria-label="Show password" aria-pressed="false">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Log in</button>
+                                <button type="submit" class="btn btn-primary w-100" id="loginSubmit">
+                                    <span class="spinner-border spinner-border-sm me-2 d-none" aria-hidden="true"></span>Log in
+                                </button>
                             </form>
                         </div>
                     </div>
@@ -98,6 +102,27 @@
             </div>
         </div>
     </main>
+
+    <script>
+        // Show/hide the password, and keep the form from being sent twice while PAM checks it.
+        (() => {
+            const password = document.getElementById('password');
+            const toggle = document.getElementById('togglePassword');
+            toggle.addEventListener('click', () => {
+                const shown = password.type === 'password';
+                password.type = shown ? 'text' : 'password';
+                toggle.querySelector('i').className = shown ? 'fas fa-eye-slash' : 'fas fa-eye';
+                toggle.title = toggle.ariaLabel = shown ? 'Hide password' : 'Show password';
+                toggle.setAttribute('aria-pressed', String(shown));
+                password.focus();
+            });
+            document.getElementById('loginForm').addEventListener('submit', () => {
+                const submit = document.getElementById('loginSubmit');
+                submit.disabled = true;
+                submit.querySelector('.spinner-border').classList.remove('d-none');
+            });
+        })();
+    </script>
 
     {% include 'partials/footer.html' %}
 </body>
