@@ -1,0 +1,58 @@
+<!-- Tags -->
+<div class="row mb-4">
+    <div class="col" x-data="liveFskTags()">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tags me-2"></i>Tags
+                </h5>
+                {% include 'partials/live_status_badge.html' %}
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    The tags heard, a row per tag and a dot per transmission.
+                </p>
+
+                {% include 'partials/live_chart.html' %}
+
+                <div class="table-responsive mt-3" x-show="tags.length > 0" x-cloak>
+                    <table class="table table-sm table-hover align-middle mb-0 small">
+                        <thead>
+                            <tr>
+                                <th>Tag</th>
+                                <th class="text-end">Transmissions</th>
+                                <th>Last heard</th>
+                                <template x-for="slot in slots" :key="slot">
+                                    <th class="text-end text-nowrap">
+                                        <i class="fas fa-circle me-1" :style="`color: ${colorFor(slot)}`"></i>Rx <span x-text="slot"></span>
+                                    </th>
+                                </template>
+                                <th class="text-end" title="Detections of the tag whose CRC8 did not match its ID (all of them for a tag that sends no CRC8)">Bad CRC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="row in tags" :key="row.tag">
+                                <tr>
+                                    <td class="text-nowrap font-monospace">
+                                        <i class="fas fa-circle me-1" :style="`color: ${colorFor(row.tag)}`"></i><span x-text="row.tag"></span>
+                                    </td>
+                                    <td class="text-end" x-text="row.count"></td>
+                                    <td x-text="row.last"></td>
+                                    <template x-for="slot in slots" :key="slot">
+                                        <td class="text-end" :class="{ 'fw-bold': row.slots[slot] === row.best }" x-text="rssiText(row, slot)"></td>
+                                    </template>
+                                    <td class="text-end" x-text="crcText(row)"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <p class="small text-muted mt-1 mb-0">
+                        Strongest RSSI per receiver in dB (receiver scale), the strongest of all in bold.
+                        Bad CRC: detections whose CRC8 does not match the tag ID. A tag that sends no CRC8
+                        (only its ID) has them all bad: the receiver reads noise after the ID.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

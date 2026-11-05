@@ -84,6 +84,9 @@ SERVICE_MAPPING: dict[str, str] = {
     "mosquitto_conf": "mosquitto",
     "tsupdate": "tsupdate",
     "tslocation": "tslocation",
+    # Not a config type tsconfig edits: lotekfsk.yml only makes the Live page's tab available,
+    # on a device that has the unit (tsOS-fsk)
+    "lotekfsk": "lotekfskd",
 }
 
 

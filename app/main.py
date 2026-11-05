@@ -693,6 +693,7 @@ Available services may include:
 - `schedule` - Schedule configuration
 - `radiotracking` - Radio tracking configuration
 - `soundscapepipe` - Audio recording configuration
+- `lotekfsk` - Lotek FSK receivers (lotekfsk.yml, for the Live page only)
 
 In server mode, you can optionally pass a config_group parameter to check services for a specific group.
     """,
@@ -735,6 +736,14 @@ async def get_available_services(config_group: str | None = None):
             available_services.append("soundscapepipe")
     except Exception:
         logger.debug("Could not check the soundscapepipe configuration", exc_info=True)
+
+    # Check the Lotek FSK configuration: tsconfig does not edit lotekfsk.yml, but the Live page
+    # shows what lotekfskd (tsOS-fsk) publishes
+    try:
+        if ((config_dir or config_loader.get_config_dir()) / "lotekfsk.yml").exists():
+            available_services.append("lotekfsk")
+    except Exception:
+        logger.debug("Could not check the lotekfsk configuration", exc_info=True)
 
     # Check authorized_keys configuration
     try:

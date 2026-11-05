@@ -5,6 +5,9 @@ import { test } from 'node:test';
 import { configManager } from '../../app/static/js/components/configManager.js';
 import { liveDetections } from '../../app/static/js/components/liveDetections.js';
 import { liveFrequencyUsage } from '../../app/static/js/components/liveFrequencyUsage.js';
+import { liveFskReceivers } from '../../app/static/js/components/liveFskReceivers.js';
+import { liveFskSignal } from '../../app/static/js/components/liveFskSignal.js';
+import { liveFskTags } from '../../app/static/js/components/liveFskTags.js';
 import { liveInputLevels } from '../../app/static/js/components/liveInputLevels.js';
 import { liveSignalDetail } from '../../app/static/js/components/liveSignalDetail.js';
 import { liveSignalPower } from '../../app/static/js/components/liveSignalPower.js';
@@ -13,6 +16,7 @@ import { liveManager } from '../../app/static/js/managers/liveManager.js';
 import { timeTickSpace, yAxisSize } from '../../app/static/js/mixins/liveChartMixin.js';
 import { LIVE_TOPICS, WINDOW_MS, colorFor, padRange } from '../../app/static/js/utils/liveSignals.js';
 import { SOUNDSCAPE_TOPICS, detectorColor, levelColor } from '../../app/static/js/utils/liveSoundscape.js';
+import { LOTEKFSK_TOPICS } from '../../app/static/js/utils/liveLotekfsk.js';
 import { installBrowser } from './helpers.mjs';
 
 const HOST = 'tsos-test';
@@ -1089,6 +1093,137 @@ test('the Soundscapepipe panels share the connection, and ignore radiotracking',
     detections.tick();
     assert.equal(detections.count, 0);
     assert.equal(liveManager.windows.levels.length, 0);
+});
+
+// --- Lotek FSK ---------------------------------------------------------------
+
+const FSK_MATCHED = `${HOST}/lotekfsk/matched/json`;
+const FSK_STATE = `${HOST}/lotekfsk/state/json`;
+const FSK_DAEMON = `${HOST}/lotekfsk/daemon/json`;
+const fskDetectionTopic = serial => `${HOST}/lotekfsk/receiver/${serial}/json`;
+const fskTime = agoMs => new Date(Date.now() - agoMs).toISOString();
+const fskMatched = (agoMs, tag, rssi) => JSON.stringify({
+    time: fskTime(agoMs), synced: true, tag_id: 1, tag_id_hex: tag, receiver_count: Object.values(rssi).filter(value => value !== null).length, duplicates: 0,
+    ...Object.fromEntries(Object.entries(rssi).map(([slot, value]) => [`rssi_${slot}`, value])),
+});
+const fskDetection = (agoMs, slot, serial, tag, rssi, crcValid = false) => JSON.stringify({
+    time: fskTime(agoMs), synced: true, slot, receiver_serial: serial, tag_id: 1, tag_id_hex: tag, rssi_dbm: rssi, crc8: 0, crc8_valid: crcValid, raw_data: null,
+});
+const fskState = (agoMs, slot, state, extra = {}) => JSON.stringify({
+    time: fskTime(agoMs), synced: true, slot, receiver_serial: 20260010 + slot, usb_serial: `D${slot}`, port: `/dev/ttyUSB${slot}`, state,
+    uptime_s: 3600, detections: 30, last_detection: fskTime(agoMs + 1000), reconnects: 0, frame_errors: 0, error: null, ...extra,
+});
+
+test('Signal Strength draws the RSSI of each receiver, of the transmissions or of the detections', async t => {
+    const { browser, clients, mount } = setup(t);
+    const panel = await mount(liveFskSignal);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed.sort(), [LOTEKFSK_TOPICS.fskDetections, LOTEKFSK_TOPICS.fskMatched].sort());
+    assert.equal(browser.calls.filter(call => call.url.endsWith('/api/radiotracking')).length, 0, 'no radiotracking.ini');
+
+    clients[0].send(FSK_MATCHED, fskMatched(1000, '0x190C33D6', { 0: -58, 1: -70, 2: null, 3: -47 }));
+    clients[0].send(fskDetectionTopic(20260054), fskDetection(1200, 3, 20260054, '0x190C33D6', -47));
+    panel.tick();
+    panel.tick(); // the serials of the detections show in the legend from the next tick
+    assert.equal(panel.count, 1);
+    assert.equal(panel.noun, 'transmission');
+    assert.equal(panel.yLabel, 'RSSI (dB, receiver scale)');
+    assert.deepEqual(panel.legend.map(item => item.label), ['Receiver 0', 'Receiver 1', 'Receiver 3 (20260054)']);
+    assert.equal(panel.legend[0].color, colorFor('0'), 'the colours of the slots are those of the SDRs');
+    assert.deepEqual(panel.tipRows(liveManager.windows.fskMatched.events[0]).map(row => row.text), [
+        'Tag: 0x190C33D6', 'Heard by 3 receivers', 'Receiver 0: -58.0 dB', 'Receiver 1: -70.0 dB', 'Receiver 3 (20260054): -47.0 dB',
+    ]);
+    const [low, high] = panel.yRange(-70, -47);
+    assert.ok(low < -70 && high > -47);
+
+    const charts = FakeChart.instances.length;
+    panel.setSource('fskDetections');
+    assert.equal(FakeChart.instances.length, charts + 1, 'a new chart for the other source');
+    assert.equal(panel.count, 1);
+    assert.equal(panel.noun, 'detection');
+    assert.deepEqual(panel.tipRows(liveManager.windows.fskDetections.events[0]).map(row => row.text), [
+        'Tag: 0x190C33D6', 'CRC: invalid', 'Receiver 3 (20260054): -47.0 dB',
+    ]);
+    panel.setSource('nonsense');
+    assert.equal(panel.source, 'fskDetections');
+});
+
+test('Tags gives each tag in the window a row, in the order of the IDs, and a table of them', async t => {
+    const { clients, mount } = setup(t);
+    const panel = await mount(liveFskTags);
+    clients[0].open();
+    clients[0].send(FSK_MATCHED, fskMatched(3000, '0xBBBBBBBB', { 0: -60 }));
+    clients[0].send(FSK_MATCHED, fskMatched(2000, '0xAAAAAAAA', { 0: -80, 1: -50 }));
+    clients[0].send(FSK_MATCHED, fskMatched(1000, '0xBBBBBBBB', { 0: -55, 2: -65 }));
+    clients[0].send(fskDetectionTopic(1), fskDetection(1000, 0, 1, '0xBBBBBBBB', -55, false));
+    clients[0].send(fskDetectionTopic(3), fskDetection(1000, 2, 3, '0xBBBBBBBB', -65, true));
+    panel.tick();
+    panel.tick(); // the rows follow the window from the next tick
+
+    const dots = [];
+    for (const event of liveManager.windows.fskMatched.events) panel.forEachDot(event, (key, y) => dots.push([key, y]));
+    assert.deepEqual(dots, [['0xBBBBBBBB', 1], ['0xAAAAAAAA', 0], ['0xBBBBBBBB', 1]]);
+    assert.deepEqual(panel.yRange(0, 1), [-0.5, 1.5]);
+    assert.equal(panel.formatY(0), '0xAAAAAAAA');
+    assert.equal(panel.formatY(1), '0xBBBBBBBB');
+    assert.equal(panel.formatY(0.5), '', 'nothing between the rows');
+    assert.deepEqual(panel.legend, [], 'the axis names the tags');
+    assert.equal(panel.count, 3);
+
+    assert.deepEqual(panel.tags.map(row => [row.tag, row.count, row.best]), [['0xBBBBBBBB', 2, -55], ['0xAAAAAAAA', 1, -50]]);
+    assert.deepEqual(panel.slots, ['0', '1', '2']);
+    assert.equal(panel.rssiText(panel.tags[0], '0'), '-55.0');
+    assert.equal(panel.rssiText(panel.tags[0], '1'), '–');
+    assert.equal(panel.crcText(panel.tags[0]), '1 of 2');
+    assert.equal(panel.crcText(panel.tags[1]), '–', 'no detections of it');
+});
+
+test('Receivers shows the latest state of each slot, and the receivers heard before it arrives', async t => {
+    const { clients, mount } = setup(t);
+    const panel = await mount(liveFskReceivers);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed.sort(),
+        [LOTEKFSK_TOPICS.fskDaemon, LOTEKFSK_TOPICS.fskDetections, LOTEKFSK_TOPICS.fskState].sort());
+    assert.equal(panel.status, 'connected');
+
+    clients[0].send(fskDetectionTopic(20260011), fskDetection(1000, 1, 20260011, '0xA', -52));
+    panel.tick();
+    assert.equal(panel.waiting, true);
+    assert.deepEqual(panel.receivers.map(card => [card.slot, card.state, card.badge, card.serial]),
+        [['1', 'heard', 'info', 20260011]]);
+
+    clients[0].send(FSK_STATE, fskState(5000, 0, 'running'));
+    clients[0].send(FSK_STATE, fskState(4000, 1, 'running'));
+    clients[0].send(FSK_STATE, fskState(2000, 1, 'disconnected', { uptime_s: null, error: 'No receiver found' }));
+    clients[0].send(FSK_DAEMON, JSON.stringify({ time: fskTime(2000), synced: true, version: '0.2.0', uptime_s: 7200, receivers_connected: 1, receivers_total: 2, detections: 10, matched: 5, open_groups: 0, dropped_invalid_crc: 0, dropped_events: 0 }));
+    panel.tick();
+    assert.equal(panel.waiting, false);
+    assert.deepEqual(panel.receivers.map(card => [card.slot, card.state, card.badge]), [['0', 'running', 'success'], ['1', 'disconnected', 'danger']]);
+    assert.equal(panel.receivers[0].uptime, '1 h 0 min');
+    assert.equal(panel.receivers[0].port, '/dev/ttyUSB0');
+    assert.equal(panel.receivers[1].uptime, '–');
+    assert.equal(panel.receivers[1].error, 'No receiver found');
+    assert.equal(panel.daemon.version, '0.2.0');
+    assert.equal(panel.daemon.receivers_total, 2);
+
+    panel.destroy();
+    assert.equal(clients[0].ended, true, 'the last panel closes the connection');
+    assert.equal(liveManager.windows.fskState.length, 0, 'and what it read is forgotten');
+});
+
+test('the Lotek FSK panels share the connection, and ignore the other services and the CSV', async t => {
+    const { clients, mount } = setup(t);
+    const signal = await mount(liveFskSignal);
+    await mount(liveFskTags);
+    await mount(liveFskReceivers);
+    assert.equal(clients.length, 1);
+    clients[0].open();
+    clients[0].send(MATCHED, matched(1000, { 0: -60 }));
+    clients[0].send(`${HOST}/lotekfsk/matched/csv`, '2026-11-05T10:56:22.039+01:00;true;420230102;0x190C33D6;4;0;-58.0;-70.0;-47.5;-47.0');
+    clients[0].send(FSK_MATCHED, '{"not": "a transmission"}');
+    signal.tick();
+    assert.equal(signal.count, 0);
+    assert.equal(liveManager.windows.fskMatched.length, 0);
 });
 
 // --- the tabs ----------------------------------------------------------------

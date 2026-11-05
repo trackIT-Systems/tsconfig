@@ -9,6 +9,13 @@ import {
     radiotrackingLimits,
 } from '../utils/liveSignals.js';
 import { SOUNDSCAPE_TOPICS, parseDetection, parseLevels, parsePerformance } from '../utils/liveSoundscape.js';
+import {
+    LOTEKFSK_TOPICS,
+    parseFskDaemon,
+    parseFskDetection,
+    parseFskMatched,
+    parseFskState,
+} from '../utils/liveLotekfsk.js';
 
 const baseUrl = () => window.BASE_URL || '';
 
@@ -38,6 +45,10 @@ const SOURCES = {
     detections: { topic: SOUNDSCAPE_TOPICS.detections, owns: /\/soundscapepipe\/detection\/json$/, parse: parseDetection },
     levels: { topic: SOUNDSCAPE_TOPICS.levels, owns: /\/soundscapepipe\/state\/json$/, parse: parseLevels },
     performance: { topic: SOUNDSCAPE_TOPICS.performance, owns: /\/soundscapepipe\/performance\/json$/, parse: parsePerformance },
+    fskMatched: { topic: LOTEKFSK_TOPICS.fskMatched, owns: /\/lotekfsk\/matched\/json$/, parse: parseFskMatched },
+    fskDetections: { topic: LOTEKFSK_TOPICS.fskDetections, owns: /\/lotekfsk\/receiver\/[^/]+\/json$/, parse: parseFskDetection },
+    fskState: { topic: LOTEKFSK_TOPICS.fskState, owns: /\/lotekfsk\/state\/json$/, parse: parseFskState },
+    fskDaemon: { topic: LOTEKFSK_TOPICS.fskDaemon, owns: /\/lotekfsk\/daemon\/json$/, parse: parseFskDaemon },
 };
 
 /**
@@ -140,7 +151,8 @@ export class LiveManager {
     }
 
     /**
-     * Subscribe to these sources (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`) until the returned
+     * Subscribe to these sources (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`, `fskMatched`,
+     * `fskDetections`, `fskState`, `fskDaemon`) until the returned
      * function is called. Needs the libraries (`loadLibraries()`). The connection
      * opens with the first panel that wants something and closes with the last.
      */

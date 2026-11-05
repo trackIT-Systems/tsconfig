@@ -353,10 +353,11 @@ test('brokerUrl: same host as the page, ws or wss like the page, behind the base
     assert.equal(brokerUrl({ protocol: 'http:', host: 'host:8000' }, '/tsconfig'), 'ws://host:8000/tsconfig/mqtt');
 });
 
-test('the tabs: radiotracking and soundscapepipe, each offered with its service', () => {
+test('the tabs: radiotracking, soundscapepipe and Lotek FSK, each offered with its service', () => {
     assert.deepEqual(LIVE_TABS.map(tab => [tab.id, tab.service]), [
         ['radiotracking', 'radiotracking'],
         ['soundscapepipe', 'soundscapepipe'],
+        ['lotekfsk', 'lotekfsk'],
     ]);
     assert.ok(LIVE_TABS.every(tab => tab.label && tab.icon), 'each has what the tab shows');
 });

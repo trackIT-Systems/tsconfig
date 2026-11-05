@@ -89,7 +89,7 @@ status page's Restart button was missing for that reason.
 
 ## The live dashboard
 
-The **Live** tab (`live.html`, tracker mode, if radiotracking or soundscapepipe is available: `isLiveAvailable()`)
+The **Live** tab (`live.html`, tracker mode, if radiotracking, soundscapepipe or lotekfsk is available: `isLiveAvailable()`)
 reads MQTT in the browser. There is no server-side part: tsconfig subscribes to nothing and stores
 nothing. The page connects to the local broker over WebSockets at `/mqtt` on its own host (`ws:` or
 `wss:` like the page). The broker only listens on loopback; tsOS-base's Caddy serves the path behind
@@ -114,6 +114,9 @@ each tick, because Alpine cannot see the manager's.
 | Signal Detail | `liveSignalDetail` | `raw`, after Start | a value of the raw signal, chosen, one series per SDR |
 | Detections | `liveDetections` | `detections` and `performance` | the confidence of each detection, one series per species; detectors shown or hidden |
 | Input Levels | `liveInputLevels` | `levels` | peak and RMS (dBFS) of every input channel, one dot per report |
+| Signal Strength | `liveFskSignal` | `fskMatched` and `fskDetections` | the RSSI of each receiver (dB on the receiver's scale: no unit in Lotek's protocol, not calibrated), of the matched transmissions or of every detection (chosen) |
+| Tags | `liveFskTags` | `fskMatched` (and `fskDetections` for the CRC) | a row per tag, one dot per transmission; a table of the tags in the window |
+| Receivers | `liveFskReceivers` | `fskState`, `fskDaemon` and `fskDetections` | no chart: a card per receiver with its latest state, and the daemon's status |
 
 The first three are the Radiotracking tab (`partials/live_radiotracking.html`), the last two the
 Soundscapepipe tab (`partials/live_soundscapepipe.html`). soundscapepipe publishes each detection and,
@@ -142,6 +145,17 @@ the axis between reports. A detector whose load reaches 0.9 or that lost audio h
 its button (`fallsBehind()`); its button's title has the load, lag and lost audio. The species
 (with its English and German name), detector, duration, channel and, for bats, the frequencies are in the tooltip; the levels' tooltip adds the SNR
 and the capture device's ALSA state.
+
+The Lotek FSK tab (`partials/live_lotekfsk.html`) is available where `/boot/firmware/lotekfsk.yml`
+exists and the device has `lotekfskd.service` (tsOS-fsk; tsconfig does not edit the file, so there is
+no settings tab). lotekfskd publishes, as JSON on `<station>/lotekfsk/...` (pylotekfsk's docs/mqtt.md,
+read by `utils/liveLotekfsk.js`), each receiver's reports (`receiver/<serial>/json`), the reports of a tag
+matched across the receivers (`matched/json`, an `rssi_<slot>` per receiver) and, on every change and
+every `status.interval_s` (60 s), each receiver's state (`state/json`) and the daemon's (`daemon/json`).
+A receiver is its slot in lotekfsk.yml, in the colour of the SDR of the same number. The dots have one
+size (FSK reports have no duration). Tags puts each tag of the time window on a row, in the order of
+their IDs; the vertical axis names them. Receivers has no chart (`lifecycleMixin` only): until the first
+state arrives, it shows the receivers that sent detections.
 
 Each panel is a thin component (`partials/live_signal_power.html`, ...) over three shared parts:
 
