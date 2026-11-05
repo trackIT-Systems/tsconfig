@@ -53,6 +53,8 @@ class CollectorsSettings(_Strict):
     disk: DiskSettings = Field(default_factory=DiskSettings)
     pmic: CollectorSettings = Field(default_factory=CollectorSettings)
     throttled: CollectorSettings = Field(default_factory=CollectorSettings)
+    # Reset reason of the last boot: only changes at boot
+    rsts: HourlyCollectorSettings = Field(default_factory=HourlyCollectorSettings)
     clocks: CollectorSettings = Field(default_factory=CollectorSettings)
     voltages: CollectorSettings = Field(default_factory=CollectorSettings)
     wittypi: CollectorSettings = Field(default_factory=CollectorSettings)

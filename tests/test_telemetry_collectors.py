@@ -8,6 +8,7 @@ from collections import namedtuple
 import psutil
 import pytest
 
+from app.system import reset
 from app.system.modem import ModemInfo
 from app.telemetry.collectors import Unavailable
 from app.telemetry.collectors import configs as configs_collector
@@ -19,7 +20,7 @@ from app.telemetry.collectors.network import NetworkCollector
 from app.telemetry.collectors.release import ReleaseCollector
 from app.telemetry.collectors.system import SystemCollector
 from app.telemetry.collectors.thermal import ThermalCollector
-from app.telemetry.collectors.vcgencmd import PmicCollector, ThrottledCollector
+from app.telemetry.collectors.vcgencmd import PmicCollector, RstsCollector, ThrottledCollector, last_reset
 from app.telemetry.collectors.wittypi import WittyPiCollector
 from app.telemetry.settings import CollectorsSettings
 
@@ -36,6 +37,7 @@ def fake_vcgencmd(monkeypatch):
     module.temperature = lambda: {"soc": 49.4, "pmic": 46.5}
     module.pmic = lambda: {"VDD_CORE_A": 0.67, "EXT5V_V": 5.14, "NEW_RAIL_V": 1.0}
     module.throttled = lambda: {"under_voltage": False, "raw": 0}
+    module.rsts = lambda: {"power_on_reset": False, "watchdog_full_reset": True, "raw": 0x20}
     monkeypatch.setitem(sys.modules, "vcgencmd", module)
     return module
 
@@ -111,6 +113,34 @@ def test_vcgencmd_collectors_read_their_group(fake_vcgencmd):
     assert reading["VDD_CORE_A"] == 0.67
     assert "VDD_CORE_A" in PmicCollector.columns and "NEW_RAIL_V" not in PmicCollector.columns
     assert ThrottledCollector(SETTINGS.throttled).read() == [{"under_voltage": False, "raw": 0}]
+
+
+def test_rsts_adds_how_the_previous_boot_ended(fake_vcgencmd, monkeypatch):
+    monkeypatch.setattr(reset, "previous_boot_clean", lambda: False)
+    monkeypatch.setattr(reset, "crash_looks_like_power_on", lambda: False)
+    (reading,) = RstsCollector(SETTINGS.rsts).read()
+    assert reading == {
+        "power_on_reset": False,
+        "watchdog_full_reset": True,
+        "raw": 0x20,
+        "clean_shutdown": False,
+        "reason": "crash",
+    }
+    assert set(reading) <= set(RstsCollector.columns)
+
+
+def test_last_reset_for_the_status_page_is_none_without_vcgencmd(no_vcgencmd):
+    last_reset.cache_clear()
+    try:
+        assert last_reset() is None
+    finally:
+        last_reset.cache_clear()
+
+
+def test_rsts_columns_are_the_firmware_flags():
+    parsers = pytest.importorskip("vcgencmd.parsers")
+    flags = set(RstsCollector.columns) - {"raw", "clean_shutdown", "reason"}
+    assert flags == set(parsers.RSTS_FLAGS)
 
 
 def test_vcgencmd_collectors_are_unavailable_without_vcgencmd(no_vcgencmd):

@@ -7,6 +7,23 @@ import { showToastMixin } from '../mixins/showToastMixin.js';
 import { apiUrl, getJsonShared } from '../utils/apiUtils.js';
 import { formatBytes, formatDateTime, formatUptime } from '../utils/format.js';
 
+// last_reset.reason of /api/system-status (app/system/reset.py) -> text
+const RESET_REASONS = {
+    reboot: 'Reboot',
+    shutdown: 'Shutdown, then power-on',
+    crash: 'Crash (kernel panic or watchdog)',
+    power_loss: 'Power loss',
+    power_on: 'Power-on',
+    power_loss_or_crash: 'Power loss or crash',
+    power_on_or_crash: 'Power-on or crash',
+};
+
+/** The cause of the last reset as text, or '' when it is unknown. */
+export function formatResetReason(lastReset) {
+    const reason = lastReset?.reason;
+    return reason ? (RESET_REASONS[reason] ?? reason) : '';
+}
+
 /**
  * The status page: the system's state (uptime, load, memory, disks, time,
  * network, modem) and the refresh that keeps it current.
@@ -145,6 +162,7 @@ export function statusPage() {
 
         // For the templates
         formatUptime,
+        formatResetReason,
         formatDateTime,
         formatBytes,
 

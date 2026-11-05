@@ -7,7 +7,7 @@ import { powerSummary, recentBlock } from '../../app/static/js/components/powerS
 import { radiotrackingSummary } from '../../app/static/js/components/radiotrackingSummary.js';
 import { servicesList } from '../../app/static/js/components/servicesList.js';
 import { soundscapepipeSummary } from '../../app/static/js/components/soundscapepipeSummary.js';
-import { statusPage } from '../../app/static/js/components/statusPage.js';
+import { formatResetReason, statusPage } from '../../app/static/js/components/statusPage.js';
 import { serverModeManager } from '../../app/static/js/managers/serverModeManager.js';
 import { serviceManager } from '../../app/static/js/managers/serviceManager.js';
 import { systemConfigManager } from '../../app/static/js/managers/systemConfigManager.js';
@@ -449,4 +449,11 @@ test('location map: lines between the configured position, the GPS fix and the u
     component.updateLines();
     assert.deepEqual(Object.keys(component.lines), ['configuredFix']);
     assert.equal(drawn.filter(layer => layer.removed).length, 2);
+});
+
+test('formatResetReason names the cause and hides an unknown one', () => {
+    assert.equal(formatResetReason({ reason: 'crash', clean_shutdown: false, raw: 0x20 }), 'Crash (kernel panic or watchdog)');
+    assert.equal(formatResetReason({ reason: 'power_loss_or_crash' }), 'Power loss or crash');
+    assert.equal(formatResetReason({ reason: null }), '');
+    assert.equal(formatResetReason(null), '');
 });

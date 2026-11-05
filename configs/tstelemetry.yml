@@ -35,6 +35,10 @@ collectors:
   throttled:
     enabled: true
     interval: 60
+  # Reset reason of the last boot (PM_RSTS flags, clean shutdown); only changes at boot
+  rsts:
+    enabled: true
+    interval: 3600
   clocks:
     enabled: true
     interval: 60

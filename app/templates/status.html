@@ -241,6 +241,10 @@
                                 <div class="status-value text-success" 
                                      x-text="showDateTime ? formatDateTime(systemInfo?.current_datetime) : formatUptime(systemInfo?.uptime)"
                                      style="transition: all 0.2s ease;"></div>
+                                <small class="text-muted d-block mt-1"
+                                       x-show="formatResetReason(systemInfo?.last_reset)"
+                                       x-text="`Last reset: ${formatResetReason(systemInfo?.last_reset)}`"
+                                       title="Cause of the last reset, from the firmware's reset status and the previous boot's journal"></small>
                             </div>
                         </div>
                     </div>

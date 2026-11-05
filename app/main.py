@@ -1,5 +1,6 @@
 """tsOS Configuration Manager."""
 
+import asyncio
 import datetime
 import json
 import os
@@ -460,6 +461,8 @@ async def get_system_status():
 
     import psutil
 
+    from app.telemetry.collectors.vcgencmd import last_reset
+
     try:
         # Get freedesktop OS release info
         os_release_info = _get_freedesktop_os_release()
@@ -517,6 +520,9 @@ async def get_system_status():
         # Get tsupdate status information
         tsupdate_status = await _get_tsupdate_status()
 
+        # Why the device last reset (PM_RSTS and the previous boot's journal); asked once per boot
+        reset_reading = await asyncio.to_thread(last_reset)
+
         # Get system information
         system_info = {
             "operating_system": f"{platform.system()} {platform.release()}",
@@ -527,6 +533,7 @@ async def get_system_status():
             "version": __version__,
             "os_release": os_release_info,
             "hardware": hardware_info,
+            "last_reset": reset_reading,
             "cpu": {
                 "times": cpu_times,
                 "percent": cpu_percent,
