@@ -114,6 +114,7 @@ and this project uses [Calendar Versioning](https://calver.org/) (`YYYY.M.PATCH`
 ### Removed
 
 - `huaweicheck` from the default systemd service list: tsOS runs the Huawei / Brovi E3372 sticks in modem mode under ModemManager and no longer ships the service
+- `radiotracking` and `soundscapepipe` from the default systemd service list: they belong to the tsOS-vhf and tsOS-audio images, which add their own services to the list. On tsOS-base the services card no longer lists units the station does not have
 
 ## [2026.7.1] - 2026-07-14
 

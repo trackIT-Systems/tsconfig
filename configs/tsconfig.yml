@@ -23,10 +23,6 @@ features:
 services:
   - name: multi-user.target
     expert: true
-  - name: radiotracking
-    expert: false 
-  - name: soundscapepipe
-    expert: false
   - name: time-sync.target
     expert: true
   - name: tsschedule
