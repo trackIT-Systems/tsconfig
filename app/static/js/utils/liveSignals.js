@@ -22,6 +22,7 @@ export const LIVE_TABS = [
     { id: 'radiotracking', label: 'Radiotracking', icon: 'fa-broadcast-tower', service: 'radiotracking' },
     { id: 'soundscapepipe', label: 'Soundscapepipe', icon: 'fa-microphone', service: 'soundscapepipe' },
     { id: 'lotekfsk', label: 'Lotek FSK', icon: 'fa-tag', service: 'lotekfsk' },
+    { id: 'lightbarrier', label: 'Lightbarrier', icon: 'fa-door-open', service: 'lightbarrier' },
 ];
 
 /** The time windows to choose from (ms): up to the one that is kept, `WINDOW_MS`. */

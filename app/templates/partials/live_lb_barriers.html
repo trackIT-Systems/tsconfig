@@ -1,0 +1,36 @@
+<!-- Barriers -->
+<div class="row mb-4">
+    <div class="col" x-data="liveLbBarriers()">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-grip-lines-vertical me-2"></i>Barriers
+                </h5>
+                <div class="d-flex align-items-center gap-3">
+                    <select class="form-select form-select-sm w-auto" aria-label="Value"
+                            @change="setParam($event.target.value)">
+                        <template x-for="(info, name) in params" :key="name">
+                            <option :value="name" x-text="`${info.label} (${info.unit})`" :selected="name === param"></option>
+                        </template>
+                    </select>
+                    {% include 'partials/live_status_badge.html' %}
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    The state of each barrier pair (outer/inner, top/bottom), once per 60 s: the mean ambient voltage,
+                    the maximum with the LED on, and their mean difference. A pair whose difference drops below
+                    <code>threshold</code> in lightbarrier.yml is blocked.
+                </p>
+
+                <div class="alert alert-info py-2 small" x-show="ready && count === 0" x-cloak>
+                    <i class="fas fa-hourglass-half me-1"></i>
+                    Waiting for lightbarrierd's next state: it sends one per pair every 60 s, and the page shows only
+                    what arrives while it is open.
+                </div>
+
+                {% include 'partials/live_chart.html' %}
+            </div>
+        </div>
+    </div>
+</div>

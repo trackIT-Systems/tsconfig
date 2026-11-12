@@ -87,6 +87,9 @@ SERVICE_MAPPING: dict[str, str] = {
     # Not a config type tsconfig edits: lotekfsk.yml only makes the Live page's tab available,
     # on a device that has the unit (tsOS-fsk)
     "lotekfsk": "lotekfskd",
+    # Likewise: lightbarrier.yml only makes the Live page's tab available, on a device that has the
+    # unit (tsOS-audio)
+    "lightbarrier": "lightbarrier",
 }
 
 

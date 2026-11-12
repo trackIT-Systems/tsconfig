@@ -89,7 +89,7 @@ status page's Restart button was missing for that reason.
 
 ## The live dashboard
 
-The **Live** tab (`live.html`, tracker mode, if radiotracking, soundscapepipe or lotekfsk is available: `isLiveAvailable()`)
+The **Live** tab (`live.html`, tracker mode, if radiotracking, soundscapepipe, lotekfsk or lightbarrier is available: `isLiveAvailable()`)
 reads MQTT in the browser. There is no server-side part: tsconfig subscribes to nothing and stores
 nothing. The page connects to the local broker over WebSockets at `/mqtt` on its own host (`ws:` or
 `wss:` like the page). The broker only listens on loopback; tsOS-base's Caddy serves the path behind
@@ -117,6 +117,9 @@ each tick, because Alpine cannot see the manager's.
 | Signal Strength | `liveFskSignal` | `fskMatched` and `fskDetections` | the RSSI of each receiver (dB on the receiver's scale: no unit in Lotek's protocol, not calibrated), of the matched transmissions or of every detection (chosen) |
 | Tags | `liveFskTags` | `fskMatched` (and `fskDetections` for the CRC) | a row per tag, one dot per transmission; a table of the tags in the window |
 | Receivers | `liveFskReceivers` | `fskState`, `fskDaemon` and `fskDetections` | no chart: a card per receiver with its latest state, and the daemon's status |
+| Passages | `liveLbPassages` | `lbEvents` | the duration of each passage, one series per direction |
+| Barriers | `liveLbBarriers` | `lbState` | a value of each barrier pair's state (difference, active, ambient in V, or measurement time), chosen |
+| Environment | `liveEnvironment` | `envsense` | a value of the readings (temperature, humidity, ...), chosen from those that arrived, one series per sensor |
 
 The first three are the Radiotracking tab (`partials/live_radiotracking.html`), the last two the
 Soundscapepipe tab (`partials/live_soundscapepipe.html`). soundscapepipe publishes each detection and,
@@ -157,10 +160,22 @@ size (FSK reports have no duration). Tags puts each tag of the time window on a 
 their IDs; the vertical axis names them. Receivers has no chart (`lifecycleMixin` only): until the first
 state arrives, it shows the receivers that sent detections.
 
+The Lightbarrier tab (`partials/live_lightbarrier.html`) is available where `/boot/firmware/lightbarrier.yml`
+exists and the device has `lightbarrier.service` (tsOS-audio; no settings tab either). lightbarrierd
+publishes, as JSON on `<station>/lightbarrier/...` (pylightbarrier's README, read by
+`utils/liveLightbarrier.js`), each passage as it ends (`event/json`: `time`, `direction`, `duration_s`,
+`delta_t_s`, `avg_block_time_s`, `triggers`) and every 60 s a state per barrier pair (`state/json`:
+`time`, `pair`, `ambient`, `active`, `diff`, `duration_avg_s`, `duration_max_s`; lightbarrierd before
+tsOS's MQTT conventions sent `timestamp`, which is read too). The pairs are outer/inner top/bottom
+(`ot`, `ob`, `it`, `ib`), the outer in blues, the inner in oranges. The tab also shows envsensed's
+readings (tsOS-base, `<station>/envsense/<sensor id>/json` with `_time` and values named with their
+unit, `Temperature (°C)`; the sensor is only in the topic, so `parse` gets the topic too). Panels whose
+legend has a natural order (pairs, directions) set `compareLegend`.
+
 Each panel is a thin component (`partials/live_signal_power.html`, ...) over three shared parts:
 
 - **`liveManager`** (`managers/liveManager.js`) owns the one MQTT connection and, for each kind of
-  message (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`), an `EventWindow` with the signals of
+  message (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`, the `fsk*` and `lb*` sources, `envsense`), an `EventWindow` with the signals of
   the last five minutes.
   Panels `acquire(sources)` what they need and get a function to give it back; the connection opens
   with the first and closes with the last, and a topic wanted by two panels is subscribed once. The

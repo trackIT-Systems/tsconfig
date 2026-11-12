@@ -16,6 +16,7 @@ import {
     parseFskMatched,
     parseFskState,
 } from '../utils/liveLotekfsk.js';
+import { LIGHTBARRIER_TOPICS, parseEnvsense, parseLbEvent, parseLbState } from '../utils/liveLightbarrier.js';
 
 const baseUrl = () => window.BASE_URL || '';
 
@@ -37,7 +38,10 @@ function loadStyle(href) {
     document.head.appendChild(link);
 }
 
-/** What is read from the broker: the topic to subscribe to, which messages are meant, how to read them. */
+/**
+ * What is read from the broker: the topic to subscribe to, which messages are meant, how to read them
+ * (`parse(payload, topic)`: envsense names its sensor only in the topic).
+ */
 const SOURCES = {
     matched: { topic: LIVE_TOPICS.matched, owns: /\/radiotracking\/matched\/json$/, parse: parseSignal },
     calibrated: { topic: LIVE_TOPICS.calibrated, owns: /\/radiotracking\/calibrated\/json$/, parse: parseSignal },
@@ -49,6 +53,9 @@ const SOURCES = {
     fskDetections: { topic: LOTEKFSK_TOPICS.fskDetections, owns: /\/lotekfsk\/receiver\/[^/]+\/json$/, parse: parseFskDetection },
     fskState: { topic: LOTEKFSK_TOPICS.fskState, owns: /\/lotekfsk\/state\/json$/, parse: parseFskState },
     fskDaemon: { topic: LOTEKFSK_TOPICS.fskDaemon, owns: /\/lotekfsk\/daemon\/json$/, parse: parseFskDaemon },
+    lbEvents: { topic: LIGHTBARRIER_TOPICS.lbEvents, owns: /\/lightbarrier\/event\/json$/, parse: parseLbEvent },
+    lbState: { topic: LIGHTBARRIER_TOPICS.lbState, owns: /\/lightbarrier\/state\/json$/, parse: parseLbState },
+    envsense: { topic: LIGHTBARRIER_TOPICS.envsense, owns: /\/envsense\/[^/]+\/json$/, parse: parseEnvsense },
 };
 
 /**
@@ -152,7 +159,7 @@ export class LiveManager {
 
     /**
      * Subscribe to these sources (`matched`, `calibrated`, `raw`, `detections`, `levels`, `performance`, `fskMatched`,
-     * `fskDetections`, `fskState`, `fskDaemon`) until the returned
+     * `fskDetections`, `fskState`, `fskDaemon`, `lbEvents`, `lbState`, `envsense`) until the returned
      * function is called. Needs the libraries (`loadLibraries()`). The connection
      * opens with the first panel that wants something and closes with the last.
      */
@@ -223,7 +230,7 @@ export class LiveManager {
         const name = Object.keys(SOURCES).find(candidate => SOURCES[candidate].owns.test(topic));
         if (!name) return false;
         this.received[name]++;
-        const signal = SOURCES[name].parse(payload);
+        const signal = SOURCES[name].parse(payload, topic);
         // A calibrated message from a station without calibration has no powers to show
         if (!signal || Object.keys(signal.values).length === 0) return false;
         return this.windows[name].add(signal, now);

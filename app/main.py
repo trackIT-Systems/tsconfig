@@ -701,6 +701,7 @@ Available services may include:
 - `radiotracking` - Radio tracking configuration
 - `soundscapepipe` - Audio recording configuration
 - `lotekfsk` - Lotek FSK receivers (lotekfsk.yml, for the Live page only)
+- `lightbarrier` - Light barrier (lightbarrier.yml, for the Live page only)
 
 In server mode, you can optionally pass a config_group parameter to check services for a specific group.
     """,
@@ -751,6 +752,14 @@ async def get_available_services(config_group: str | None = None):
             available_services.append("lotekfsk")
     except Exception:
         logger.debug("Could not check the lotekfsk configuration", exc_info=True)
+
+    # Likewise lightbarrier.yml: the Live page shows what lightbarrierd (tsOS-audio) publishes, and
+    # the envsense readings of the same station
+    try:
+        if ((config_dir or config_loader.get_config_dir()) / "lightbarrier.yml").exists():
+            available_services.append("lightbarrier")
+    except Exception:
+        logger.debug("Could not check the lightbarrier configuration", exc_info=True)
 
     # Check authorized_keys configuration
     try:

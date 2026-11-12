@@ -154,6 +154,19 @@ class TestListingHidesUnsupportedConfigs:
             missing_units.clear()
             assert "lotekfsk" not in (await main.get_available_services())["available_services"]
 
+    async def test_lightbarrier_is_available_with_its_config_and_unit(self, tmp_path, missing_units):
+        (tmp_path / "lightbarrier.yml").write_text("hardware: {}\n")
+        with (
+            patch.object(main.config_loader, "is_server_mode", return_value=False),
+            patch.object(main.config_loader, "get_config_dir", return_value=tmp_path),
+        ):
+            assert "lightbarrier" in (await main.get_available_services())["available_services"]
+            missing_units.add("lightbarrier")
+            assert "lightbarrier" not in (await main.get_available_services())["available_services"]
+            (tmp_path / "lightbarrier.yml").unlink()
+            missing_units.clear()
+            assert "lightbarrier" not in (await main.get_available_services())["available_services"]
+
 
 @pytest.mark.asyncio
 class TestSettingsPagesRejectUnsupportedConfigs:

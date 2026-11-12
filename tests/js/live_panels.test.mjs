@@ -8,6 +8,9 @@ import { liveFrequencyUsage } from '../../app/static/js/components/liveFrequency
 import { liveFskReceivers } from '../../app/static/js/components/liveFskReceivers.js';
 import { liveFskSignal } from '../../app/static/js/components/liveFskSignal.js';
 import { liveFskTags } from '../../app/static/js/components/liveFskTags.js';
+import { liveEnvironment } from '../../app/static/js/components/liveEnvironment.js';
+import { liveLbBarriers } from '../../app/static/js/components/liveLbBarriers.js';
+import { liveLbPassages } from '../../app/static/js/components/liveLbPassages.js';
 import { liveInputLevels } from '../../app/static/js/components/liveInputLevels.js';
 import { liveSignalDetail } from '../../app/static/js/components/liveSignalDetail.js';
 import { liveSignalPower } from '../../app/static/js/components/liveSignalPower.js';
@@ -17,6 +20,7 @@ import { timeTickSpace, yAxisSize } from '../../app/static/js/mixins/liveChartMi
 import { LIVE_TOPICS, WINDOW_MS, colorFor, padRange } from '../../app/static/js/utils/liveSignals.js';
 import { SOUNDSCAPE_TOPICS, detectorColor, levelColor } from '../../app/static/js/utils/liveSoundscape.js';
 import { LOTEKFSK_TOPICS } from '../../app/static/js/utils/liveLotekfsk.js';
+import { LIGHTBARRIER_TOPICS, directionColor, pairColor } from '../../app/static/js/utils/liveLightbarrier.js';
 import { installBrowser } from './helpers.mjs';
 
 const HOST = 'tsos-test';
@@ -1519,4 +1523,83 @@ test('leaving and coming back does not add a second set of subscriptions, so Sto
     assert.equal(liveManager.wanted.raw, 0, 'and now nothing reads the raw signals');
     assert.equal(clients.at(-1).ended, true);
     assert.ok(mount);
+});
+
+// --- Lightbarrier ------------------------------------------------------------
+
+const lbTime = agoMs => new Date(Date.now() - agoMs).toISOString();
+
+test('Passages draws a dot per passage, as long as it took, in the colour of its direction', async t => {
+    const { clients, mount } = setup(t);
+    const panel = await mount(liveLbPassages);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed, [LIGHTBARRIER_TOPICS.lbEvents]);
+
+    const event = (agoMs, direction, duration, deltaT) => JSON.stringify({
+        time: lbTime(agoMs), direction, duration_s: duration, delta_t_s: deltaT, avg_block_time_s: 0.08, triggers: 'ot+it',
+    });
+    clients[0].send(`${HOST}/lightbarrier/event/json`, event(3000, 'IN_TO_OUT', 0.2, 0.05));
+    clients[0].send(`${HOST}/lightbarrier/event/json`, event(2000, 'OUT_TO_IN', 0.1, 0.04));
+    clients[0].send(`${HOST}/lightbarrier/event/json`, event(1000, 'PARTIAL_IN', 0.05, null));
+    clients[0].send(`${HOST}/lightbarrier/event/csv`, 'not read');
+    panel.tick();
+    assert.equal(panel.count, 3);
+    assert.deepEqual(panel.legend.map(item => item.key), ['OUT_TO_IN', 'IN_TO_OUT', 'PARTIAL_IN'], 'in the order of the directions');
+    assert.equal(panel.legend[0].color, directionColor('OUT_TO_IN'));
+    assert.deepEqual(panel.tipRows(liveManager.windows.lbEvents.events[2]).map(row => row.text), [
+        'Inner only', 'Duration: 0.050 s', 'Outer to inner: –', 'Blocked (mean): 0.080 s', 'Triggers: ot+it',
+    ]);
+    assert.equal(panel.yRange(0.05, 0.2)[0], 0, 'durations from 0');
+});
+
+test('Barriers draws the chosen value of each pair', async t => {
+    const { clients, mount } = setup(t);
+    const panel = await mount(liveLbBarriers);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed, [LIGHTBARRIER_TOPICS.lbState]);
+
+    for (const [pair, diff] of [['ib', 0.25], ['ot', 0.36], ['it', 0.2], ['ob', 0.38]]) {
+        clients[0].send(`${HOST}/lightbarrier/state/json`, JSON.stringify({
+            timestamp: lbTime(1000), pair, ambient: 0.013, active: diff + 0.013, diff, duration_avg_s: 0.002, duration_max_s: 0.004,
+        }));
+    }
+    panel.tick();
+    assert.equal(panel.count, 4);
+    assert.equal(panel.yLabel, 'Difference (V)');
+    assert.deepEqual(panel.legend.map(item => item.key), ['ot', 'ob', 'it', 'ib']);
+    assert.equal(panel.legend[0].color, pairColor('ot'));
+    const [low, high] = panel.yRange(0.2, 0.38);
+    assert.ok(low < 0.2 && high > 0.38);
+
+    const charts = FakeChart.instances.length;
+    panel.setParam('ambient');
+    assert.equal(panel.yLabel, 'Ambient (V)');
+    assert.equal(FakeChart.instances.length, charts + 1, 'a new chart for the other value');
+    panel.setParam('nonsense');
+    assert.equal(panel.param, 'ambient');
+});
+
+test('Environment draws a series per envsense sensor, the value chosen from what arrived', async t => {
+    const { clients, mount } = setup(t);
+    const panel = await mount(liveEnvironment);
+    clients[0].open();
+    assert.deepEqual(clients[0].subscribed, [LIGHTBARRIER_TOPICS.envsense]);
+
+    const reading = (temperature, humidity) => JSON.stringify({
+        _time: lbTime(1000).replace('T', ' ').replace('Z', '+00:00'), 'Temperature (°C)': temperature, 'Humidity (%)': humidity,
+    });
+    clients[0].send(`${HOST}/envsense/inside/json`, reading(21.5, 48));
+    clients[0].send(`${HOST}/envsense/outside/json`, reading(12.25, 80));
+    panel.tick();
+    assert.equal(panel.count, 2);
+    assert.equal(liveManager.windows.envsense.skipped, 0, 'envsense\'s time is read');
+    assert.deepEqual(panel.legend.map(item => item.label), ['inside', 'outside']);
+    assert.deepEqual(panel.paramOptions, ['Temperature (°C)', 'Humidity (%)']);
+    assert.deepEqual(panel.tipRows(liveManager.windows.envsense.events[1]).map(row => row.text), [
+        'Sensor: outside', 'Temperature: 12.25 °C', 'Humidity: 80.00 %',
+    ]);
+    panel.setParam('Humidity (%)');
+    assert.equal(panel.yLabel, 'Humidity (%)');
+    const [low, high] = panel.yRange(48, 80);
+    assert.ok(low < 48 && high > 80);
 });

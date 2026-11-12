@@ -61,6 +61,7 @@ export function yAxisSize(values) {
  * - `legendLabel(key)`: the legend's text for a series, null for none
  * - `tipRows(event, hit)`: the rows of the tooltip, `{text, color?}`
  * - `colorOf(key)`: the colour of a series (default `colorFor`)
+ * - `compareLegend(a, b)`: the order of the legend's series (default `compareKeys`)
  * - `loadLimits()`: what the axes need from the service's configuration (default radiotracking's)
  * - `clockToleranceMs`: how late a signal may arrive before the clock warning shows
  * - `spans(edge)`: boxes the height of the plot under the dots, `{from, to, color}` (s; `edge` is the axis' end)
@@ -129,6 +130,9 @@ export function liveChartMixin() {
         },
         colorOf(key) {
             return colorFor(key);
+        },
+        compareLegend(a, b) {
+            return compareKeys(a, b);
         },
         spans() {
             return [];
@@ -227,7 +231,7 @@ export function liveChartMixin() {
             for (let i = this.firstShown(signals, Date.now()); i < events.length; i++) {
                 this.forEachDot(events[i], key => keys.add(key));
             }
-            const legend = [...keys].sort(compareKeys)
+            const legend = [...keys].sort((a, b) => this.compareLegend(a, b))
                 .map(key => ({ key, label: this.legendLabel(key), color: this.colorOf(key) }))
                 .filter(item => item.label !== null);
             if (JSON.stringify(legend) !== JSON.stringify(this.legend)) this.legend = legend;

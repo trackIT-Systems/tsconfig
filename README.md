@@ -29,7 +29,7 @@ The web interface and API for configuring and monitoring trackIT Systems sensor 
 
 ### Live dashboard
 
-The **Live** page reads the station's own MQTT broker over WebSockets at `/mqtt` (tsOS-base serves it behind the login) and draws what arrives. tsconfig itself subscribes to nothing and stores nothing: the last five minutes are held in the browser and cleared when the page or tab is left. There is a tab for each service that is available, and a time window selector (30 seconds to 5 minutes). Radiotracking has three panels:
+The **Live** page reads the station's own MQTT broker over WebSockets at `/mqtt` (tsOS-base serves it behind the login) and draws what arrives. tsconfig itself subscribes to nothing and stores nothing: the last five minutes are held in the browser and cleared when the page or tab is left. There is a tab for each service that is available (Radiotracking, Soundscapepipe, Lotek FSK, Lightbarrier with the envsense readings), and a time window selector (30 seconds to 5 minutes). Radiotracking has three panels:
 
 - **Signal Power**: matched signals in dBW, or calibrated in dBm
 - **Frequency Usage**: the frequency of the matched signals over time
