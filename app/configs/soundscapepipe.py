@@ -7,6 +7,7 @@ import yaml
 from pydantic import BaseModel
 
 from app.configs import BaseConfig
+from app.configs.model_paths import resolve_config_models
 
 
 class DetectorEntry(BaseModel):
@@ -88,10 +89,17 @@ class SoundscapepipeConfig(BaseConfig):
 
         return data
 
-    def save(self, config: dict[str, Any]) -> None:
-        """Save the soundscapepipe configuration to disk."""
+    def save(self, config: dict[str, Any]) -> dict[str, Any] | None:
+        """Save the soundscapepipe configuration to disk.
+
+        Model paths from older images (`/home/pi/...`) or given only by name are
+        rewritten to the installed models (app.configs.model_paths); the rewrites
+        are returned as `model_paths_resolved` {old: new}.
+        """
+        resolved = resolve_config_models(config)
         with open(self.config_file, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
+        return {"model_paths_resolved": resolved} if resolved else None
 
     def validate(self, config: dict[str, Any]) -> list[str]:
         """Validate the soundscapepipe configuration."""
