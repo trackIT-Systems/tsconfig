@@ -3,6 +3,7 @@ the login/logout/check routes, rate limiting and the websocket guard, run
 against a minimal app (the real middleware + auth router, plus probe routes)."""
 
 import base64
+import ipaddress
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -35,6 +36,18 @@ def make_app():
     @app.get("/api/secret")
     async def secret():
         return {"ok": True}
+
+    @app.get("/api/configs/")
+    async def configs_version():
+        return {"most_recent_mtime": "2026-11-24T00:00:00Z"}
+
+    @app.post("/api/configs.zip")
+    async def configs_upload():
+        return {"success": True}
+
+    @app.get("/api/configs.zip")
+    async def configs_download():
+        return {"secrets": True}
 
     @app.post("/api/change")
     async def change():
@@ -115,6 +128,42 @@ class TestGate:
         remote.cookies = session_cookie()
         r = remote.get("/api/secret")
         assert "set-cookie" not in r.headers
+
+
+DEPLOYER = {"X-Forwarded-For": "172.16.0.1", "X-Forwarded-Proto": "http", "X-Forwarded-Host": "172.16.0.42"}
+
+
+class TestDeployer:
+    """ecohub deploys from the WireGuard server: version check and upload only."""
+
+    @pytest.fixture(autouse=True)
+    def deploy_hosts(self, monkeypatch):
+        monkeypatch.setattr(config_loader, "get_deploy_hosts", lambda: frozenset({ipaddress.ip_address("172.16.0.1")}))
+
+    @pytest.fixture
+    def deployer(self):
+        return TestClient(make_app(), follow_redirects=False, headers=DEPLOYER)
+
+    def test_version_check_and_upload_need_no_login(self, deployer):
+        assert deployer.get("/api/configs/").status_code == 200
+        assert deployer.post("/api/configs.zip").status_code == 200
+
+    def test_everything_else_still_needs_a_login(self, deployer):
+        assert deployer.get("/api/configs.zip").status_code == 401
+        assert deployer.get("/api/secret").status_code == 401
+        assert deployer.post("/api/change").status_code == 401
+
+    def test_other_addresses_need_a_login(self, remote):
+        assert remote.get("/api/configs/").status_code == 401
+        assert remote.post("/api/configs.zip").status_code == 401
+
+    def test_an_upload_from_another_site_is_refused(self, deployer):
+        r = deployer.post("/api/configs.zip", headers={"Origin": "http://evil.example"})
+        assert r.status_code == 403
+
+    def test_without_deploy_hosts_the_upload_needs_a_login(self, deployer, monkeypatch):
+        monkeypatch.setattr(config_loader, "get_deploy_hosts", lambda: frozenset())
+        assert deployer.post("/api/configs.zip").status_code == 401
 
 
 class TestCrossOrigin:

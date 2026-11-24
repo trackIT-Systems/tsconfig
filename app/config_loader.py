@@ -1,5 +1,6 @@
 """Configuration loader for tsOS main configuration."""
 
+import ipaddress
 import os
 import re
 from datetime import datetime
@@ -7,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Files copied forward into a new versioned config-group directory (server
 # mode) when any one of them is edited - a deliberate subset of
@@ -49,6 +54,7 @@ class ConfigLoader:
     def __init__(self, config_path: Path | None = None):
         self.config_path = config_path or _default_main_config_path()
         self._config_cache: dict[str, Any] | None = None
+        self._deploy_hosts_cache: frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address] | None = None
 
     def load_config(self) -> dict[str, Any]:
         """Load the main configuration file.
@@ -107,6 +113,30 @@ class ConfigLoader:
             config = ConfigLoader(SHIPPED_MAIN_CONFIG).load_config()
         return (config.get("map") or {}).get("mapbox_token") or None
 
+    def get_deploy_hosts(self) -> frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        """Addresses that may deploy a config bundle without login (tracker mode).
+
+        From `deploy.hosts` in tsconfig.yml. Like the Mapbox token, a device
+        config without a `deploy` section (a copy from before it existed) uses
+        the shipped one, so a code update brings the default along. `hosts: []`
+        turns it off. Entries that are not an IP address are skipped.
+        """
+        if self._deploy_hosts_cache is None:
+            config = self.load_config()
+            if "deploy" not in config and self.config_path.resolve() != SHIPPED_MAIN_CONFIG:
+                config = ConfigLoader(SHIPPED_MAIN_CONFIG).load_config()
+            hosts = (config.get("deploy") or {}).get("hosts") or []
+            if not isinstance(hosts, list):
+                hosts = [hosts]
+            parsed = set()
+            for host in hosts:
+                try:
+                    parsed.add(ipaddress.ip_address(str(host).strip()))
+                except ValueError:
+                    logger.warning("Ignoring deploy host %r in %s: not an IP address", host, self.config_path)
+            self._deploy_hosts_cache = frozenset(parsed)
+        return self._deploy_hosts_cache
+
     def is_feature_enabled(self, feature: str) -> bool:
         """Check if a feature flag is enabled in tsconfig.yml."""
         config = self.load_config()
@@ -115,6 +145,7 @@ class ConfigLoader:
     def reload_config(self):
         """Force reload of the configuration."""
         self._config_cache = None
+        self._deploy_hosts_cache = None
 
     def is_server_mode(self) -> bool:
         """Check if server mode is enabled via environment variable.

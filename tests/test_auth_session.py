@@ -1,7 +1,9 @@
 """Tests for app.auth.session: signed session cookie, login backoff, the
-trusted-local-request rule and the post-login redirect sanitizer."""
+trusted-local-request and trusted-deployer rules and the post-login redirect
+sanitizer."""
 
 import base64
+import ipaddress
 import time
 from types import SimpleNamespace
 
@@ -12,6 +14,7 @@ from app.auth.session import (
     BackoffLimiter,
     CredentialCache,
     create_session_token,
+    is_trusted_deployer,
     is_trusted_local,
     load_signing_key,
     parse_basic_auth,
@@ -102,6 +105,47 @@ class TestTrustedLocal:
 
     def test_missing_client_is_untrusted(self):
         assert not is_trusted_local(_conn(None))
+
+
+DEPLOY_HOSTS = frozenset({ipaddress.ip_address("172.16.0.1"), ipaddress.ip_address("fd00::1")})
+
+
+def _request(method, path, forwarded_for=None):
+    headers = {"x-forwarded-for": forwarded_for} if forwarded_for is not None else {}
+    return SimpleNamespace(scope={"method": method}, url=SimpleNamespace(path=path), headers=headers)
+
+
+class TestTrustedDeployer:
+    @pytest.mark.parametrize(("method", "path"), [("GET", "/api/configs/"), ("POST", "/api/configs.zip")])
+    def test_version_check_and_upload_from_a_deploy_host_are_trusted(self, method, path):
+        assert is_trusted_deployer(_request(method, path, "172.16.0.1"), DEPLOY_HOSTS)
+
+    def test_ipv6_addresses_are_compared_normalised(self):
+        assert is_trusted_deployer(_request("GET", "/api/configs/", "fd00:0::0001"), DEPLOY_HOSTS)
+
+    @pytest.mark.parametrize("forwarded", ["172.16.0.2", "203.0.113.7", "", "not an ip", None])
+    def test_other_or_missing_addresses_are_untrusted(self, forwarded):
+        assert not is_trusted_deployer(_request("GET", "/api/configs/", forwarded), DEPLOY_HOSTS)
+
+    @pytest.mark.parametrize("forwarded", ["172.16.0.1, 203.0.113.7", "203.0.113.7, 172.16.0.1"])
+    def test_a_forwarding_chain_is_untrusted(self, forwarded):
+        assert not is_trusted_deployer(_request("POST", "/api/configs.zip", forwarded), DEPLOY_HOSTS)
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("GET", "/api/configs.zip"),  # downloads the configs, secrets included
+            ("POST", "/api/configs/update"),
+            ("GET", "/api/configs"),
+            ("POST", "/api/configs/"),
+            ("GET", "/api/secret"),
+        ],
+    )
+    def test_only_the_two_deploy_requests_are_trusted(self, method, path):
+        assert not is_trusted_deployer(_request(method, path, "172.16.0.1"), DEPLOY_HOSTS)
+
+    def test_no_deploy_hosts_trusts_nobody(self):
+        assert not is_trusted_deployer(_request("GET", "/api/configs/", "172.16.0.1"), frozenset())
 
 
 class TestSanitizeNext:

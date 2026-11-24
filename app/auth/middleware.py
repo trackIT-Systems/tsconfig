@@ -18,6 +18,7 @@ from app.auth.session import (
     client_source,
     has_valid_session,
     is_cross_origin,
+    is_trusted_deployer,
     is_trusted_local,
     login_retry_after,
     parse_basic_auth,
@@ -79,7 +80,8 @@ class AuthenticationMiddleware:
 
     In tracker mode: requires the operator's session cookie (PAM login of `pi`),
     except for requests made directly by a process on the device itself
-    (loopback without proxy headers - tsconfig-ble) and the public
+    (loopback without proxy headers - tsconfig-ble), ecohub's config
+    deployment from a deploy host (`is_trusted_deployer`) and the public
     paths below
     In server mode: Validates JWT token for all non-public endpoints
 
@@ -209,6 +211,12 @@ class AuthenticationMiddleware:
                 media_type="application/json",
             )
         if self._is_tracker_public_path(request.url.path) or is_trusted_local(request):
+            return Proceed()
+        if is_trusted_deployer(request, config_loader.get_deploy_hosts()):
+            if method == "POST":
+                logger.info("Config deployment from %s", client_source(request))
+            else:
+                logger.debug("Config version check from %s", client_source(request))
             return Proceed()
 
         issued = has_valid_session(request)

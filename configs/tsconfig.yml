@@ -16,6 +16,13 @@ system:
 map:
   mapbox_token: "pk.eyJ1IjoidHJhY2tpdHN5c3RlbXMiLCJhIjoiY21iaHEwbXcwMDEzcTJqc2JhNzdobDluaSJ9.NLRmiJEDHQgPJEyceCA57g"
 
+# Config deployment by ecohub over WireGuard: requests from these addresses
+# may read the config version (GET /api/configs/) and upload a config bundle
+# (POST /api/configs.zip) without login, nothing else. 172.16.0.1 is the
+# WireGuard server ecohub runs on. An empty list turns it off.
+deploy:
+  hosts: ["172.16.0.1"]
+
 # Feature flags
 features:
   audioprotopnet: false  # set true to enable AudioProtoPNet detector UI

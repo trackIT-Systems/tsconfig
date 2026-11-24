@@ -1,5 +1,5 @@
 """Operator sessions for tracker mode: signed cookie, login backoff, and the
-"trusted local request" rule.
+"trusted local request" and "trusted deployer" rules.
 
 The signing key never reaches persistent storage: it is kept in systemd's
 RuntimeDirectory= (/run/tsconfig, tmpfs, readable by pi only), so sessions
@@ -12,6 +12,7 @@ gateway) the key lives in memory only. Everything else here is in memory.
 import base64
 import binascii
 import hmac
+import ipaddress
 import os
 import re
 import secrets
@@ -129,6 +130,36 @@ def is_trusted_local(conn: HTTPConnection) -> bool:
     if client is None or client.host not in LOOPBACK_HOSTS:
         return False
     return not any(h in conn.headers for h in _PROXY_HEADERS)
+
+
+# The only requests a deploy host may make without login: ecohub's version
+# check and its bundle upload. Not GET /api/configs.zip, which downloads the
+# configs, secrets included.
+DEPLOY_REQUESTS = frozenset({("GET", "/api/configs/"), ("POST", "/api/configs.zip")})
+
+
+def is_trusted_deployer(conn: HTTPConnection, hosts: frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address]) -> bool:
+    """True for ecohub deploying a config bundle from one of `hosts` (the
+    WireGuard server, see `deploy.hosts` in tsconfig.yml).
+
+    Rule: the request is one of DEPLOY_REQUESTS and its X-Forwarded-For is
+    exactly one of `hosts`. tsconfig listens on loopback only, so every request
+    comes either from Caddy, which sets X-Forwarded-For to the client's address
+    and drops any value the client sent, or from a local process, which is
+    trusted anyway. The address itself is only as good as the network: on the
+    WireGuard server each peer may only send from its own address. uvicorn
+    rewrites `conn.client` to the forwarded address too; the header is read,
+    like `client_source`, so the rule does not depend on that.
+    """
+    if not hosts or (conn.scope.get("method"), conn.url.path) not in DEPLOY_REQUESTS:
+        return False
+    forwarded = conn.headers.get("x-forwarded-for", "")
+    if "," in forwarded:
+        return False
+    try:
+        return ipaddress.ip_address(forwarded.strip()) in hosts
+    except ValueError:
+        return False
 
 
 def is_cross_origin(conn: HTTPConnection) -> bool:

@@ -47,7 +47,7 @@ A second separate service, `tstelemetry` (`app/telemetry`), publishes the statio
 
 ### Two modes
 
-In **tracker mode** (on a station) the login is the `pi` password, checked through PAM. In **server mode** it runs centrally, keeps configuration per group of stations to deploy to them, and logs in through OIDC.
+In **tracker mode** (on a station) the login is the `pi` password, checked through PAM. In **server mode** it runs centrally, keeps configuration per group of stations to deploy to them, and logs in through OIDC. ecohub deploys a group's configuration from the WireGuard server, whose address (`deploy.hosts` in `tsconfig.yml`, default `172.16.0.1`) may check a station's config version and upload a bundle without login.
 
 ## Installation
 
