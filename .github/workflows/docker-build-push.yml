@@ -15,7 +15,7 @@ env:
 
 jobs:
   tsconfig:
-    runs-on: ${{ fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -72,7 +72,7 @@ jobs:
 
   zot-copy:
     needs: tsconfig
-    runs-on: ${{ fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       packages: read
