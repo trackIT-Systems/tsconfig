@@ -41,7 +41,9 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/trackit-systems/${{ env.IMG }}
-          # latest only on release tags, not on test or pre-release tags (0.0.0-registry-test)
+          # latest only on release tags, not on test or pre-release tags (0.0.0-rc1);
+          # latest=false stops metadata-action from adding latest on every tag push itself.
+          flavor: latest=false
           tags: |
             type=ref,event=branch
             type=ref,event=tag
